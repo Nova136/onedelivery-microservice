@@ -1,0 +1,29 @@
+{
+  "name": "onedelivery-microservice",
+  "version": "1.0.0",
+  "private": true,
+  "description": "OneDelivery microservices - Order, Logistics, Payment, Audit",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "order:start": "npm run start --workspace=order",
+    "order:start:dev": "npm run start:dev --workspace=order",
+    "logistics:start": "npm run start --workspace=logistics",
+    "logistics:start:dev": "npm run start:dev --workspace=logistics",
+    "payment:start": "npm run start --workspace=payment",
+    "payment:start:dev": "npm run start:dev --workspace=payment",
+    "audit:start": "npm run start --workspace=audit",
+    "audit:start:dev": "npm run start:dev --workspace=audit",
+    "start:all": "concurrently -n order,logistics,payment,audit -c blue,green,magenta,yellow \"npm run order:start:dev\" \"npm run logistics:start:dev\" \"npm run payment:start:dev\" \"npm run audit:start:dev\"",
+    "start-db": "npm run stop-db && docker-compose -f docker-compose.yml up",
+    "stop-db": "docker-compose -f docker-compose.yml down -v"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}
