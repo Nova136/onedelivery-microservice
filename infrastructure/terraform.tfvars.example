@@ -1,0 +1,13 @@
+# Copy to terraform.tfvars and set values. Do not commit terraform.tfvars.
+
+aws_region   = "ap-southeast-1"
+environment  = "dev"
+db_username  = "postgres"
+db_password  = "REDACTED_DB_PASSWORD"  # Use a strong password
+
+# Optional overrides
+# aws_account_id      = "542829982577"
+# aurora_min_capacity = 0.5
+# aurora_max_capacity = 4
+# ecs_desired_count   = 1
+# enable_alb          = false   # set to false to save ~$32/mo (no ALB, API Gateway, VPC Link)
