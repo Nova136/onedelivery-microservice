@@ -1,6 +1,6 @@
 # OneDelivery Infrastructure (Terraform)
 
-Terraform for AWS: **Aurora Serverless v2 (PostgreSQL)**, **ECS Fargate** (order, logistics, payment, audit), **Application Load Balancer** (path-based routing), and **API Gateway HTTP API** (public entry).
+Terraform for AWS: **Aurora Serverless v2 (PostgreSQL)**, **ECS Fargate** (order, logistics, payment, audit, user), **Application Load Balancer** (path-based routing), and **API Gateway HTTP API** (public entry).
 
 Account: `542829982577` (default in variables).
 
@@ -10,8 +10,8 @@ Account: `542829982577` (default in variables).
 |----------|--------|
 | **VPC** | Public subnets (ALB, ECS), private subnets (RDS only), internet gateway; **no NAT** |
 | **Aurora Serverless v2** | PostgreSQL 15, one cluster + one serverless instance, private subnets |
-| **ECS Fargate** | Cluster + 4 services in **public subnets** (public IP; ECR/internet via IGW) |
-| **ALB** | Listener 80, path-based rules: `/order*`, `/logistics*`, `/payment*`, `/audit*` → respective ECS target groups |
+| **ECS Fargate** | Cluster + 5 services in **public subnets** (public IP; ECR/internet via IGW) |
+| **ALB** | Listener 80, path-based rules: `/order*`, `/logistics*`, `/payment*`, `/audit*`, `/user*` → respective ECS target groups |
 | **API Gateway HTTP API** | Routes `ANY /` and `ANY /{proxy+}` to the ALB |
 
 Flow: **Client → API Gateway URL → ALB → ECS** (by path).
@@ -49,7 +49,7 @@ For **default setup** (no NAT, ECS at 0): expect roughly **~87–105 USD/month**
 
 - Terraform >= 1.0
 - AWS credentials (see below)
-- ECR repositories already created (e.g. by GitHub Actions): `onedelivery-order`, `onedelivery-logistics`, `onedelivery-payment`, `onedelivery-audit`, each with at least one image (e.g. `:latest`)
+- ECR repositories already created (e.g. by GitHub Actions): `onedelivery-order`, `onedelivery-logistics`, `onedelivery-payment`, `onedelivery-audit`, `onedelivery-user`, each with at least one image (e.g. `:latest`)
 
 ## AWS credentials (export / configure)
 

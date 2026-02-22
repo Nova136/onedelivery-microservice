@@ -12,7 +12,7 @@ export class Payment {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column()
+  @Column({ type: 'uuid' })
   orderId: string;
 
   @Column('decimal', { precision: 12, scale: 2 })
@@ -27,7 +27,7 @@ export class Payment {
   @Column({ length: 50 })
   method: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', length: 255, nullable: true })
   externalId: string | null;
 
   @CreateDateColumn()

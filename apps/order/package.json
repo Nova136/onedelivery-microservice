@@ -1,27 +1,13 @@
 {
-  "name": "order",
-  "version": "1.0.0",
-  "private": true,
   "scripts": {
-    "build": "nest build",
-    "start": "nest start",
-    "start:dev": "nest start --watch",
-    "start:debug": "nest start --debug --watch"
-  },
-  "dependencies": {
-    "@nestjs/common": "^10.4.15",
-    "@nestjs/core": "^10.4.15",
-    "@nestjs/microservices": "^10.4.15",
-    "@nestjs/platform-express": "^10.4.15",
-    "@nestjs/typeorm": "^10.0.2",
-    "pg": "^8.13.1",
-    "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.1",
-    "typeorm": "^0.3.20"
-  },
-  "devDependencies": {
-    "@nestjs/cli": "^10.4.9",
-    "@types/node": "^22.10.2",
-    "typescript": "^5.7.2"
+    "typeorm-migration": "cd .. && cd .. &&  ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js",
+    "typeorm-migration-gen:order": "npm run typeorm-migration -- -d apps/order/typeorm-config.ts migration:generate apps/order/src/database/migrations/Migrations",
+    "typeorm-migration-run:order": "npm run typeorm-migration -- -d apps/order/typeorm-config.ts migration:run",
+    "typeorm-migration-revert:order": "npm run typeorm-migration -- -d apps/order/typeorm-config.ts migration:revert",
+    "test:unit": "jest --testMatch \"**/+(*.)+(spec).+(ts)\" ",
+    "test:e2e:watch": "jest --watchAll",
+    "test:e2e": "jest --testMatch \"**/+(*.)+(e2e-spec).+(ts)\"",
+    "test:e2e:coverage": "jest --coverage",
+    "seed:run": "ts-node -r tsconfig-paths/register seed"
   }
 }

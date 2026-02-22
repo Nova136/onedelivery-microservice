@@ -57,13 +57,14 @@ resource "aws_security_group" "ecs_tasks" {
 
 # Task definition and service per microservice
 locals {
-  services = toset(["order", "logistics", "payment", "audit"])
+  services = toset(["order", "logistics", "payment", "audit", "user"])
   # Container port 80 so ALB path-based routing works when apps expose HTTP
   service_ports = {
     order     = 80
     logistics = 80
     payment   = 80
     audit     = 80
+    user      = 80
   }
 }
 
@@ -92,7 +93,11 @@ resource "aws_ecs_task_definition" "service" {
     }]
     environment = [
       { name = "NODE_ENV", value = "production" },
-      { name = "DATABASE_URL", value = "postgresql://${var.db_username}:${var.db_password}@${aws_rds_cluster.aurora.endpoint}:5432/${var.db_name}" }
+      { name = "DATABASE_URL", value = "postgresql://${var.db_username}:${var.db_password}@${aws_rds_cluster.aurora.endpoint}:5432/${var.db_name}" },
+      { name = "JWT_SECRET", value = "ffa32c3d40342bec6c1bcfba7b4f8197" },
+      { name = "RABBITMQ_URL", value = "amqps://grdulrnl:FLkurItpuAPeOM-VfalX5iGxQkRxuYVi@armadillo.rmq.cloudamqp.com:5671/grdulrnl" },
+
+
     ]
     logConfiguration = {
       logDriver = "awslogs"

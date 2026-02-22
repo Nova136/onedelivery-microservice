@@ -1,0 +1,23 @@
+FROM node:24-alpine
+# RUN apk add autoconf libtool automake build-base
+
+
+
+
+
+# COPY package*.json ./
+
+# RUN npm install --omit=dev
+
+# Copy source code then build
+COPY . .
+# RUN npm install -g @nestjs/cli
+# RUN ./node_modules/@nestjs/cli/bin/nest.js build user
+
+# Clean up build tools, to reduce docker image size
+# RUN npm uninstall -g @nestjs/cli
+# RUN apk del autoconf libtool automake build-base
+
+EXPOSE 9004
+# Start the server using the production build
+CMD [ "node", "./dist/apps/payment/main.js" ]

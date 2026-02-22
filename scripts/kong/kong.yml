@@ -1,0 +1,41 @@
+# Kong DB-less declarative config. Gateway for local dev.
+# Frontend and clients call http://localhost:8000/<service>/... ; Kong strips the prefix and proxies to the microservice.
+# Microservices run on host (npm run start:all) at 3001-3005; Kong uses host.docker.internal.
+
+_format_version: "3.0"
+
+services:
+  - name: order
+    url: http://host.docker.internal:3001
+    routes:
+      - name: order-route
+        paths: ["/order"]
+        strip_path: true
+
+  - name: logistics
+    url: http://host.docker.internal:3002
+    routes:
+      - name: logistics-route
+        paths: ["/logistics"]
+        strip_path: true
+
+  - name: payment
+    url: http://host.docker.internal:3003
+    routes:
+      - name: payment-route
+        paths: ["/payment"]
+        strip_path: true
+
+  - name: audit
+    url: http://host.docker.internal:3004
+    routes:
+      - name: audit-route
+        paths: ["/audit"]
+        strip_path: true
+
+  - name: user
+    url: http://host.docker.internal:3005
+    routes:
+      - name: user-route
+        paths: ["/user"]
+        strip_path: true

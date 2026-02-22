@@ -1,0 +1,39 @@
+const dotenv = require('dotenv');
+import setIdNextVal from '@libs/utils/seeding-setid-max';
+import { DataSource, DataSourceOptions } from 'typeorm';
+import { runSeeders, SeederOptions } from 'typeorm-extension';
+import { SnakeNamingStrategy } from 'typeorm-naming-strategies';
+dotenv.config({ path: '../../.env' });
+
+const { DB_TYPE, DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME } = process.env;
+
+const options: DataSourceOptions & SeederOptions = {
+  type: DB_TYPE as any,
+  host: DB_HOST,
+  port: Number(DB_PORT),
+  username: DB_USER,
+  password: DB_PASSWORD,
+  database: DB_NAME,
+  entities: [(__dirname + '/**/*.entity{.ts,.js}').replace(/\\/g, '/')],
+  seeds: [
+    (__dirname + '/**/audit-record.seed{.ts,.js}').replace(/\\/g, '/'),
+    (__dirname + '/**/historical-user-activity.seed{.ts,.js}').replace(/\\/g, '/'),
+    (__dirname + '/**/user-activity-logging-page-mapping.entity.seed{.ts,.js}').replace(/\\/g, '/'),
+    (__dirname + '/**/user-activity-logging.entity.seed{.ts,.js}').replace(/\\/g, '/'),
+  ],
+  namingStrategy: new SnakeNamingStrategy(),
+};
+
+const dataSource = new DataSource(options);
+
+dataSource.initialize().then(async () => {
+  await dataSource.query(`CREATE SCHEMA IF NOT EXISTS audit;`);
+  await dataSource.synchronize(true);
+  await runSeeders(dataSource);
+  await setIdNextVal(dataSource, 'audit', 'audit_record');
+  await setIdNextVal(dataSource, 'audit', 'historical_user_activity');
+  await setIdNextVal(dataSource, 'audit', 'user_activity_logging_page_mapping');
+  await setIdNextVal(dataSource, 'audit', 'user_activity_logging');
+  process.exit();
+});
+

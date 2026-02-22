@@ -5,10 +5,10 @@ export class Incident {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column()
+  @Column({ type: 'varchar', length: 64 })
   type: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'uuid', nullable: true })
   orderId: string | null;
 
   @Column('text')
