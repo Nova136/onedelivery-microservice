@@ -60,7 +60,7 @@ onedelivery-microservice/
 │   ├── init-schemas.sql     # Postgres: create order, logistics, payment, audit schemas
 │   └── localstack-init.sh   # LocalStack: create S3 bucket + SNS topic
 ├── infrastructure/          # Terraform: Aurora Serverless v2, ECS, ALB, API Gateway
-├── docker-compose.yml       # Postgres, RabbitMQ, LocalStack
+├── docker-compose.yml       # Postgres, RabbitMQ, LocalStack, Kong (API gateway)
 ├── .env.example             # Env vars for compose and apps
 ├── package.json             # Workspaces + scripts
 ├── .nvmrc                   # Node 24
@@ -78,6 +78,8 @@ Clients (e.g. API gateway or agent orchestrator) send messages to the correspond
 
 Use `ClientProxy` from `@nestjs/microservices` (e.g. with `ClientProxyFactory.create()` and TCP options) to call these from another Nest app.
 
+**Health check:** Each service exposes **GET /health** on its HTTP port (port 80 in containers; 3001–3004 when running locally via `npm run *:start:dev`). Returns `200` and `{ status: 'ok', service: 'order' }` (or logistics/payment/audit). Used by the ALB target group health checks when deployed.
+
 ## Database (per-service schemas and tables)
 
 Each microservice uses the same Postgres database with **its own schema** and tables:
@@ -91,15 +93,18 @@ Each microservice uses the same Postgres database with **its own schema** and ta
 
 Set `DATABASE_URL` (e.g. in `.env`) so all apps connect to the same DB. TypeORM is configured with `schema` and `synchronize: true` in development so tables are created/updated on startup.
 
-## Local stack (Postgres, RabbitMQ, LocalStack)
+## Local stack (Postgres, RabbitMQ, LocalStack, Kong)
 
-Docker Compose runs **PostgreSQL**, **RabbitMQ** (event bus), and **LocalStack** (S3 + SNS) for local development.
+Docker Compose runs **PostgreSQL**, **RabbitMQ** (event bus), **LocalStack** (S3 + SNS), and **Kong** (API gateway) for local development.
 
 | Service    | Port(s)        | Purpose                    |
 |-----------|----------------|----------------------------|
+| **Kong**  | 8000 (proxy), 8001 (admin) | API gateway — **point the frontend to http://localhost:8000** |
 | Postgres  | 5432           | Database                   |
 | RabbitMQ  | 5672 (AMQP), 15672 (Management UI) | Event bus / message broker |
 | LocalStack| 4566           | S3 and SNS (AWS-compatible) |
+
+**Kong routes (path prefix stripped when proxying):** `/order` → order:3001, `/logistics` → logistics:3002, `/payment` → payment:3003, `/audit` → audit:3004, `/user` → user:3005. Run microservices on the host with `npm run start:all`, then the frontend can call e.g. `http://localhost:8000/order/health`, `http://localhost:8000/user/login`, etc.
 
 **Start the stack:**
 
@@ -112,6 +117,7 @@ docker compose up -d
 
 **Endpoints:**
 
+- **Kong (gateway):** `http://localhost:8000` — Use this as the base URL for the frontend. Routes: `/order`, `/logistics`, `/payment`, `/audit`, `/user`.
 - **Postgres:** `postgresql://postgres:postgres@localhost:5432/onedelivery`
 - **RabbitMQ:** `amqp://rabbit:rabbit@localhost:5672` — Management UI: http://localhost:15672
 - **LocalStack:** `http://localhost:4566` — Use with AWS SDK: `AWS_ENDPOINT_URL=http://localhost:4566`, region `us-east-1`, dummy keys. After startup, init creates S3 bucket `onedelivery-bucket` and SNS topic `onedelivery-events`.

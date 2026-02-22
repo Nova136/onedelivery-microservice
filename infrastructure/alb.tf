@@ -123,3 +123,16 @@ resource "aws_lb_listener_rule" "audit" {
     path_pattern { values = ["/audit", "/audit/*"] }
   }
 }
+
+resource "aws_lb_listener_rule" "user" {
+  count        = var.enable_alb ? 1 : 0
+  listener_arn = aws_lb_listener.http[0].arn
+  priority     = 140
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.service["user"].arn
+  }
+  condition {
+    path_pattern { values = ["/user", "/user/*"] }
+  }
+}

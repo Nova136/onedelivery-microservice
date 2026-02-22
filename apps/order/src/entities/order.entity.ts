@@ -13,13 +13,13 @@ export class Order {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column()
+  @Column({ type: 'varchar', length: 255 })
   customerId: string;
 
-  @Column({ default: 'PENDING' })
+  @Column({ type: 'varchar', length: 32, default: 'PENDING' })
   status: string;
 
-  @Column()
+  @Column({ type: 'varchar', length: 512 })
   deliveryAddress: string;
 
   @CreateDateColumn()

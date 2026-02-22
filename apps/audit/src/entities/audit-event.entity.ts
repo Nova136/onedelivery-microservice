@@ -5,16 +5,16 @@ export class AuditEvent {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column()
+  @Column({ type: 'varchar', length: 64 })
   action: string;
 
-  @Column()
+  @Column({ type: 'varchar', length: 64 })
   entityType: string;
 
-  @Column()
+  @Column({ type: 'varchar', length: 255 })
   entityId: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', length: 255, nullable: true })
   userId: string | null;
 
   @Column({ type: 'jsonb', nullable: true })

@@ -1,8 +1,37 @@
-# Local dev stack: Postgres, RabbitMQ (event bus), LocalStack (S3 + SNS).
+# Local dev stack: Postgres, RabbitMQ (event bus), LocalStack (S3 + SNS), Kong (API gateway).
 # Run: docker compose up -d
 # See .env.example for variables.
+#
+# Gateway: Kong listens on 8000 (proxy). Point the frontend to http://localhost:8000 .
+# Routes: /order -> order:3001, /logistics -> logistics:3002, /payment -> payment:3003, /audit -> audit:3004, /user -> user:3005
+# (Microservices run on host via npm run start:all; Kong uses host.docker.internal.)
 
 services:
+  kong:
+    image: kong:3.6
+    container_name: onedelivery-kong
+    restart: unless-stopped
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /usr/local/kong/kong.yml
+      KONG_PROXY_ACCESS_LOG: /dev/stdout
+      KONG_ADMIN_ACCESS_LOG: /dev/stdout
+      KONG_PROXY_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_ERROR_LOG: /dev/stderr
+    ports:
+      - "${KONG_PROXY_PORT:-8000}:8000"   # Proxy (frontend points here)
+      - "${KONG_ADMIN_PORT:-8001}:8001"   # Admin API (optional)
+    volumes:
+      - ./scripts/kong/kong.yml:/usr/local/kong/kong.yml:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "kong", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
   postgres:
     image: postgres:16-alpine
     container_name: onedelivery-postgres

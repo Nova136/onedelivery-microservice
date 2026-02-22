@@ -42,6 +42,7 @@ variable "ecr_repository_names" {
     logistics = "onedelivery-logistics"
     payment   = "onedelivery-payment"
     audit     = "onedelivery-audit"
+    user      = "onedelivery-user"
   }
 }
 

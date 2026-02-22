@@ -1,19 +1,46 @@
 import { NestFactory } from '@nestjs/core';
+import { ConfigService } from '@nestjs/config';
 import { Transport, MicroserviceOptions } from '@nestjs/microservices';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
-  const app = await NestFactory.createMicroservice<MicroserviceOptions>(
-    AppModule,
-    {
-      transport: Transport.TCP,
-      options: {
-        host: '127.0.0.1',
-        port: 3003,
-      },
+  const app = await NestFactory.create(AppModule);
+  const configService = app.get(ConfigService);
+
+  const config = new DocumentBuilder()
+    .setTitle('Payment API')
+    .setDescription('Payment microservice – health and internal RPC')
+    .setVersion('1.0')
+    .addTag('payment')
+    .build();
+  const document = SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup('api', app, document);
+
+  app.connectMicroservice<MicroserviceOptions>({
+    transport: Transport.TCP,
+    options: {
+      host: configService.get('PAYMENT_TCP_HOST', '127.0.0.1'),
+      port: configService.get('PAYMENT_TCP_PORT', 3003),
     },
+  });
+  const rabbitUrl = configService.get('RABBITMQ_URL', 'amqp://rabbit:rabbit@localhost:5672');
+  const rabbitQueue = configService.get('RABBITMQ_PAYMENT_QUEUE', 'payment_queue');
+  app.connectMicroservice<MicroserviceOptions>({
+    transport: Transport.RMQ,
+    options: {
+      urls: rabbitUrl.split(','),
+      queue: rabbitQueue,
+      queueOptions: { durable: false },
+      prefetchCount: 1,
+    },
+  });
+
+  await app.startAllMicroservices();
+  await app.listen(configService.get('PAYMENT_PORT'));
+  console.log(
+    `🚀🚀🚀 Payment service running on port ${configService.get('PAYMENT_PORT')},RabbitMQ ${rabbitQueue}}`,
   );
-  await app.listen();
-  console.log('Payment microservice listening on 127.0.0.1:3003');
+  
 }
 bootstrap();

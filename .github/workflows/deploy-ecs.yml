@@ -1,25 +1,15 @@
-# Build microservices into Docker images, push to ECR, and redeploy ECS services.
+# Build microservices into Docker images and push to ECR.
+# Task definition updates and ECS deploy are done separately via: node scripts/deploy-task-definitions.js
+#
+# Microservices are read from .github/workflows/microservice.list (one name per line).
+# ECR repository per service: onedelivery-<name>.
 #
 # --- GitHub configuration (Settings → Secrets and variables → Actions) ---
 #
-# REQUIRED (Secret):
-#   AWS_ROLE_ARN    IAM role ARN for OIDC (e.g. arn:aws:iam::542829982577:role/github-actions-ecs)
-#                   The role must allow sts:AssumeRoleWithWebIdentity from GitHub OIDC and have
-#                   ECR push + ECS update-service permissions.
+# REQUIRED (Secret): AWS_ROLE_ARN (IAM role for OIDC + ECR push)
+# OPTIONAL (Variables): AWS_REGION (ap-southeast-1), ECS_CLUSTER (onedelivery-cluster)
 #
-# OPTIONAL (Variables; defaults shown):
-#   AWS_REGION                ap-southeast-1
-#   ECS_CLUSTER               onedelivery-cluster
-#   ECR_REPOSITORY_ORDER      onedelivery-order
-#   ECR_REPOSITORY_LOGISTICS  onedelivery-logistics
-#   ECR_REPOSITORY_PAYMENT    onedelivery-payment
-#   ECR_REPOSITORY_AUDIT      onedelivery-audit
-#   ECS_SERVICE_ORDER         order
-#   ECS_SERVICE_LOGISTICS     logistics
-#   ECS_SERVICE_PAYMENT       payment
-#   ECS_SERVICE_AUDIT         audit
-#
-name: Build and Deploy to ECS
+name: Build and Push to ECR
 
 on:
   push:
@@ -29,14 +19,7 @@ on:
 env:
   AWS_REGION: ${{ vars.AWS_REGION || 'ap-southeast-1' }}
   ECS_CLUSTER: ${{ vars.ECS_CLUSTER || 'onedelivery-cluster' }}
-  ECR_REPOSITORY_ORDER: ${{ vars.ECR_REPOSITORY_ORDER || 'onedelivery-order' }}
-  ECR_REPOSITORY_LOGISTICS: ${{ vars.ECR_REPOSITORY_LOGISTICS || 'onedelivery-logistics' }}
-  ECR_REPOSITORY_PAYMENT: ${{ vars.ECR_REPOSITORY_PAYMENT || 'onedelivery-payment' }}
-  ECR_REPOSITORY_AUDIT: ${{ vars.ECR_REPOSITORY_AUDIT || 'onedelivery-audit' }}
-  ECS_SERVICE_ORDER: ${{ vars.ECS_SERVICE_ORDER || 'order' }}
-  ECS_SERVICE_LOGISTICS: ${{ vars.ECS_SERVICE_LOGISTICS || 'logistics' }}
-  ECS_SERVICE_PAYMENT: ${{ vars.ECS_SERVICE_PAYMENT || 'payment' }}
-  ECS_SERVICE_AUDIT: ${{ vars.ECS_SERVICE_AUDIT || 'audit' }}
+  IMAGE_TAG: ${{ github.sha }}
 
 permissions:
   id-token: write
@@ -60,85 +43,16 @@ jobs:
         id: ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build and push Order
+      - name: Build and push microservices
         env:
           ECR_REGISTRY: ${{ steps.ecr.outputs.registry }}
-          ECR_REPOSITORY: ${{ env.ECR_REPOSITORY_ORDER }}
-          IMAGE_TAG: ${{ github.sha }}
         run: |
-          docker build -f apps/order/Dockerfile -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
-
-      - name: Build and push Logistics
-        env:
-          ECR_REGISTRY: ${{ steps.ecr.outputs.registry }}
-          ECR_REPOSITORY: ${{ env.ECR_REPOSITORY_LOGISTICS }}
-          IMAGE_TAG: ${{ github.sha }}
-        run: |
-          docker build -f apps/logistics/Dockerfile -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
-
-      - name: Build and push Payment
-        env:
-          ECR_REGISTRY: ${{ steps.ecr.outputs.registry }}
-          ECR_REPOSITORY: ${{ env.ECR_REPOSITORY_PAYMENT }}
-          IMAGE_TAG: ${{ github.sha }}
-        run: |
-          docker build -f apps/payment/Dockerfile -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
-
-      - name: Build and push Audit
-        env:
-          ECR_REGISTRY: ${{ steps.ecr.outputs.registry }}
-          ECR_REPOSITORY: ${{ env.ECR_REPOSITORY_AUDIT }}
-          IMAGE_TAG: ${{ github.sha }}
-        run: |
-          docker build -f apps/audit/Dockerfile -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
-
-  deploy:
-    name: Deploy to ECS
-    runs-on: ubuntu-latest
-    needs: build-and-push
-    steps:
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Force new deployment - Order
-        run: |
-          aws ecs update-service \
-            --cluster ${{ env.ECS_CLUSTER }} \
-            --service ${{ env.ECS_SERVICE_ORDER }} \
-            --force-new-deployment \
-            --no-cli-pager
-
-      - name: Force new deployment - Logistics
-        run: |
-          aws ecs update-service \
-            --cluster ${{ env.ECS_CLUSTER }} \
-            --service ${{ env.ECS_SERVICE_LOGISTICS }} \
-            --force-new-deployment \
-            --no-cli-pager
-
-      - name: Force new deployment - Payment
-        run: |
-          aws ecs update-service \
-            --cluster ${{ env.ECS_CLUSTER }} \
-            --service ${{ env.ECS_SERVICE_PAYMENT }} \
-            --force-new-deployment \
-            --no-cli-pager
-
-      - name: Force new deployment - Audit
-        run: |
-          aws ecs update-service \
-            --cluster ${{ env.ECS_CLUSTER }} \
-            --service ${{ env.ECS_SERVICE_AUDIT }} \
-            --force-new-deployment \
-            --no-cli-pager
+          while IFS= read -r name || [[ -n "$name" ]]; do
+            name=$(echo "$name" | tr -d '\r' | xargs)
+            [[ -z "$name" ]] && continue
+            repo="onedelivery-$name"
+            echo "Building and pushing $name..."
+            docker build -f .docker/Dockerfile.$name -t $ECR_REGISTRY/$repo:${{ env.IMAGE_TAG }} -t $ECR_REGISTRY/$repo:latest .
+            docker push $ECR_REGISTRY/$repo:${{ env.IMAGE_TAG }}
+            docker push $ECR_REGISTRY/$repo:latest
+          done < .github/workflows/microservice.list
