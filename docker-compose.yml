@@ -25,6 +25,8 @@ services:
       - ./scripts/kong/kong.yml:/usr/local/kong/kong.yml:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    networks:
+      - backend
     healthcheck:
       test: ["CMD", "kong", "health"]
       interval: 10s
@@ -50,6 +52,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - backend
 
   rabbitmq:
     image: rabbitmq:3.13-management-alpine
@@ -68,6 +72,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - backend
 
   localstack:
     image: localstack/localstack:3.6
@@ -94,3 +100,8 @@ volumes:
   postgres_data:
   rabbitmq_data:
   localstack_data:
+
+networks:
+  backend:
+    name: onedelivery-backend
+    driver: bridge

@@ -1,0 +1,96 @@
+version: '3'
+
+# Debug stack: 5 microservices using Postgres (and RabbitMQ) from docker-compose.yml.
+# Start the main stack first: docker compose up -d
+# Then: docker compose -f docker-compose.debug.yml up --build
+services:
+  # Host:container = 300x:900x so Kong (host.docker.internal:300x) matches.
+  order:
+    build:
+      dockerfile: .docker/Dockerfile.order
+    restart: unless-stopped
+    hostname: order
+    ports:
+      - '3003:9003'
+    env_file:
+      - .env
+    environment:
+      - ORDER_PORT=9003
+      - DB_HOST=postgres
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-onedelivery}
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER:-rabbit}:${RABBITMQ_PASSWORD:-rabbit}@rabbitmq:5672 #gitleaks:allow
+      - ZIPKIN_URL=http://zipkin:9411/api/v2/spans
+    networks:
+      - backend
+  logistics:
+    build:
+      dockerfile: .docker/Dockerfile.logistics
+    restart: unless-stopped
+    hostname: logistics
+    ports:
+      - '3002:9002'
+    env_file:
+      - .env
+    environment:
+      - LOGISTICS_PORT=9002
+      - DB_HOST=postgres
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-onedelivery}
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER:-rabbit}:${RABBITMQ_PASSWORD:-rabbit}@rabbitmq:5672 #gitleaks:allow
+      - ZIPKIN_URL=http://zipkin:9411/api/v2/spans
+    networks:
+      - backend
+  payment:
+    build:
+      dockerfile: .docker/Dockerfile.payment
+    restart: unless-stopped
+    hostname: payment
+    ports:
+      - '3004:9004'
+    env_file:
+      - .env
+    environment:
+      - PAYMENT_PORT=9004
+      - DB_HOST=postgres
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-onedelivery}
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER:-rabbit}:${RABBITMQ_PASSWORD:-rabbit}@rabbitmq:5672 #gitleaks:allow
+      - ZIPKIN_URL=http://zipkin:9411/api/v2/spans
+    networks:
+      - backend
+  audit:
+    build:
+      dockerfile: .docker/Dockerfile.audit
+    restart: unless-stopped
+    hostname: audit
+    ports:
+      - '3001:9001'
+    env_file:
+      - .env
+    environment:
+      - AUDIT_PORT=9001
+      - DB_HOST=postgres
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-onedelivery}
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER:-rabbit}:${RABBITMQ_PASSWORD:-rabbit}@rabbitmq:5672 #gitleaks:allow
+      - ZIPKIN_URL=http://zipkin:9411/api/v2/spans
+    networks:
+      - backend
+  user:
+    build:
+      dockerfile: .docker/Dockerfile.user
+    restart: unless-stopped
+    hostname: user
+    ports:
+      - '3005:9005'
+    env_file:
+      - .env
+    environment:
+      - USER_PORT=9005
+      - DB_HOST=postgres
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-onedelivery}
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER:-rabbit}:${RABBITMQ_PASSWORD:-rabbit}@rabbitmq:5672 #gitleaks:allow
+    networks:
+      - backend
+
+networks:
+  backend:
+    external: true
+    name: onedelivery-backend

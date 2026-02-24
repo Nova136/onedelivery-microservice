@@ -21,6 +21,13 @@ async function bootstrap() {
   const rabbitUrl = configService.get('RABBITMQ_URL', 'amqp://rabbit:rabbit@localhost:5672');
   const rabbitQueue = configService.get('RABBITMQ_USER_QUEUE', 'user_queue');
   app.connectMicroservice<MicroserviceOptions>({
+    transport: Transport.TCP,
+    options: {
+      host: configService.get('USER_TCP_HOST', '127.0.0.1'),
+      port: configService.get('USER_TCP_PORT', 3005),
+    },
+  });
+  app.connectMicroservice<MicroserviceOptions>({
     transport: Transport.RMQ,
     options: {
       urls: rabbitUrl.split(','),
