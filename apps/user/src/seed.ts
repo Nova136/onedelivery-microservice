@@ -3,6 +3,7 @@ import { DataSource } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { User } from './entities/user.entity';
 import { seedUsers } from '../../../seed/data/user.users';
+import { Role } from './entities/role.enum';
 
 const SALT_ROUNDS = 10;
 
@@ -28,7 +29,7 @@ async function runSeed() {
   const users = await Promise.all(
     seedUsers.map(async (u) => {
       const passwordHash = await bcrypt.hash(u.plainPassword, SALT_ROUNDS);
-      return userRepo.create({ email: u.email, passwordHash, role: u.role });
+      return userRepo.create({ email: u.email, passwordHash, role: u.role as Role });
     }),
   );
   await userRepo.save(users);

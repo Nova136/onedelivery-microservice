@@ -4,6 +4,7 @@ import { GetUser, type JwtPayload } from '@libs/utils/decorators/get-user.decora
 import { Roles } from '@libs/utils/decorators/roles.decorator';
 import { AuthService } from './auth.service';
 import { AllowUnauthorizedRequest } from '@libs/utils/decorators/allow.unauthorized.decorator';
+import { Role } from '../entities/role.enum';
 
 export class RegisterDto {
   @ApiProperty({ example: 'user@example.com' })
@@ -36,7 +37,7 @@ export class AuthController {
     if (!dto.email || !dto.password) {
       throw new BadRequestException('email and password are required');
     }
-    const role = dto.role === 'Admin' ? 'Admin' : 'User';
+    const role = dto.role === 'Admin' ? Role.Admin : Role.User;
     return this.authService.register(dto.email, dto.password, role);
   }
 

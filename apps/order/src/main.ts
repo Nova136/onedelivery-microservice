@@ -21,7 +21,7 @@ async function bootstrap() {
     transport: Transport.TCP,
     options: {
       host: configService.get('ORDER_TCP_HOST', '127.0.0.1'),
-      port: configService.get('ORDER_TCP_PORT', 3001),
+      port: configService.get('ORDER_TCP_PORT', 3003),
     },
   });
   const rabbitUrl = configService.get('RABBITMQ_URL', 'amqp://rabbit:rabbit@localhost:5672');

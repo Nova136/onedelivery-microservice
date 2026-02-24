@@ -5,9 +5,7 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
 } from 'typeorm';
-
-export const ROLES = ['Admin', 'User'] as const;
-export type Role = (typeof ROLES)[number];
+import { Role } from './role.enum';
 
 @Entity({ name: 'users', schema: 'user' })
 export class User {
@@ -20,7 +18,7 @@ export class User {
   @Column({ type: 'varchar', length: 255 })
   passwordHash: string;
 
-  @Column({ type: 'varchar', length: 32, default: 'User' })
+  @Column({ type: 'varchar', length: 32, default: Role.User })
   role: Role;
 
   @CreateDateColumn()

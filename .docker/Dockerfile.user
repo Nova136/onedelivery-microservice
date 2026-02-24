@@ -1,23 +1,12 @@
 FROM node:24-alpine
-# RUN apk add autoconf libtool automake build-base
 
+WORKDIR /app
 
-
-
-
-# COPY package*.json ./
-
-# RUN npm install --omit=dev
-
-# Copy source code then build
+# Copy repo (node_modules excluded by .dockerignore)
 COPY . .
-# RUN npm install -g @nestjs/cli
-# RUN ./node_modules/@nestjs/cli/bin/nest.js build user
 
-# Clean up build tools, to reduce docker image size
-# RUN npm uninstall -g @nestjs/cli
-# RUN apk del autoconf libtool automake build-base
+# Install deps so runtime can resolve @nestjs/core etc. (webpack bundle still requires them)
+RUN npm ci --omit=dev
 
 EXPOSE 9005
-# Start the server using the production build
 CMD [ "node", "./dist/apps/user/main.js" ]

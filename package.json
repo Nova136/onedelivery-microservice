@@ -26,7 +26,10 @@
     "seed-logistics": "cd apps/logistics && npm run seed:run",
     "seed-order": "cd apps/order && npm run seed:run",
     "seed-payment": "cd apps/payment && npm run seed:run",
-    "seed-user": "cd apps/user && npm run seed:run"
+    "seed-user": "cd apps/user && npm run seed:run",
+    "nest-build-all": "concurrently \"nest build audit && cp .env dist/apps/audit\" \"nest build logistics && cp .env dist/apps/logistics\" \"nest build order && cp .env dist/apps/order\" \"nest build payment && cp .env dist/apps/payment\" \"nest build user && cp .env dist/apps/user\"",
+    "start-debug-docker": "npm install && npm run nest-build-all && docker-compose -f docker-compose.debug.yml up --build",
+    "stop-debug-docker": "docker-compose -f docker-compose.debug.yml down"
   },
   "dependencies": {
     "@nestjs/axios": "^4.0.1",
@@ -50,6 +53,7 @@
     "jsonwebtoken": "^9.0.3",
     "moment": "^2.29.4",
     "moment-timezone": "^0.5.43",
+    "pg": "^8.13.1",
     "pg-mem": "^3.0.5"
   },
   "devDependencies": {

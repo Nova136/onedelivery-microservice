@@ -5,7 +5,7 @@ node_modules
 .env
 .env.*
 !.env.example
-dist
+# dist is NOT ignored - required for debug Docker (nest-build-all runs on host, then COPY . includes dist)
 coverage
 .nyc_output
 *.log

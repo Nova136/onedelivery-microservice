@@ -3,7 +3,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
-import { User, type Role } from '../entities/user.entity';
+import { Role } from '../entities/role.enum';
+import { User } from '../entities/user.entity';
 
 const SALT_ROUNDS = 10;
 
@@ -18,7 +19,7 @@ export class AuthService {
   async register(
     email: string,
     password: string,
-    role: Role = 'User',
+    role: Role = Role.User,
   ): Promise<{ id: string; email: string; role: Role }> {
     const normalized = email.trim().toLowerCase();
     const existing = await this.userRepo.findOne({ where: { email: normalized } });
