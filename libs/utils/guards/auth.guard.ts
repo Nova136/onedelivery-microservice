@@ -7,6 +7,11 @@ export class ClientAuthGuard implements CanActivate {
     '/signup',
     '/api',
     '/health',
+    '/user/api',
+    '/order/api',
+    '/logistics/api',
+    '/payment/api',
+    '/audit/api',
     '/api-docs',
     '/create',
     '/health-check',
@@ -25,20 +30,24 @@ export class ClientAuthGuard implements CanActivate {
       if (this.exlcudeRequests.includes(request.url.split('?')[0])) {
         return true;
       }
-      const Owner = request.headers['owner'];
-      //Check if Owner is null or empty
-      // if (!Owner) {
-      //   throw new UnauthorizedException();
-      // }
-      let tokenDecoded;
-      const token = request.headers['token'];
-
+      // Accept token from custom header or Authorization: Bearer <token>
+      let token = request.headers['token'];
+      if (!token && request.headers['authorization']) {
+        const auth = request.headers['authorization'] as string;
+        if (auth.startsWith('Bearer ')) {
+          token = auth.slice(7);
+        }
+      }
       if (!token) {
         throw new UnauthorizedException();
       }
-      tokenDecoded = decode(token);
-      // Add user id from decoded token into request.userId
-      request.userId = tokenDecoded?.userId;
+      const tokenDecoded = decode(token) as { sub?: string; userId?: string } | null;
+      if (!tokenDecoded) {
+        throw new UnauthorizedException();
+      }
+      // JWT from user service uses 'sub' for user id; support both
+      request.userId = tokenDecoded.sub ?? tokenDecoded.userId;
+      request.user = tokenDecoded; // for RolesGuard if used
 
       return true;
     } catch (e) {

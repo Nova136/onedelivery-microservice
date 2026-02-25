@@ -8,6 +8,14 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
 
+  const corsOrigin = configService.get('CORS_ORIGIN', 'http://localhost:5173');
+  app.enableCors({
+    origin: corsOrigin.includes(',') ? corsOrigin.split(',').map((o) => o.trim()) : corsOrigin,
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'token', 'owner'],
+  });
+
   const config = new DocumentBuilder()
     .setTitle('User API')
     .setDescription('User microservice – auth (register, login), profile, admin')
@@ -16,7 +24,7 @@ async function bootstrap() {
     .addBearerAuth()
     .build();
   const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api', app, document);
+  SwaggerModule.setup('user/api', app, document);
 
   const rabbitUrl = configService.get('RABBITMQ_URL', 'amqp://rabbit:rabbit@localhost:5672');
   const rabbitQueue = configService.get('RABBITMQ_USER_QUEUE', 'user_queue');

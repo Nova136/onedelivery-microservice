@@ -7,6 +7,14 @@ import { AppModule } from './app.module';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
+  
+  const corsOrigin = configService.get('CORS_ORIGIN', 'http://localhost:5173');
+  app.enableCors({
+    origin: corsOrigin.includes(',') ? corsOrigin.split(',').map((o) => o.trim()) : corsOrigin,
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'token', 'owner'],
+  });
 
   const config = new DocumentBuilder()
     .setTitle('Logistics API')
@@ -16,7 +24,7 @@ async function bootstrap() {
     .addTag('products')
     .build();
   const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api', app, document);
+  SwaggerModule.setup('logistics/api', app, document);
 
   app.connectMicroservice<MicroserviceOptions>({
     transport: Transport.TCP,

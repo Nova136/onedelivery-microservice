@@ -1,26 +1,11 @@
 import { Body, Controller, Get, Post, BadRequestException } from '@nestjs/common';
-import { ApiBearerAuth, ApiBody, ApiOperation, ApiProperty, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiBody, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { GetUser, type JwtPayload } from '@libs/utils/decorators/get-user.decorator';
 import { Roles } from '@libs/utils/decorators/roles.decorator';
 import { AuthService } from './auth.service';
 import { AllowUnauthorizedRequest } from '@libs/utils/decorators/allow.unauthorized.decorator';
 import { Role } from '../entities/role.enum';
-
-export class RegisterDto {
-  @ApiProperty({ example: 'user@example.com' })
-  email!: string;
-  @ApiProperty({ example: 'secret123', minLength: 1 })
-  password!: string;
-  @ApiProperty({ enum: ['Admin', 'User'], required: false })
-  role?: 'Admin' | 'User';
-}
-
-export class LoginDto {
-  @ApiProperty({ example: 'user@example.com' })
-  email!: string;
-  @ApiProperty({ example: 'secret123', minLength: 1 })
-  password!: string;
-}
+import { RegisterDto, LoginDto } from '../core/dto';
 
 @ApiTags('Auth')
 @Controller('user')
@@ -63,7 +48,7 @@ export class AuthController {
     return { userId: user.sub, email: user.email, role: user.role };
   }
 
-  @Roles('Admin')
+  @Roles(Role.Admin)
   @Get('admin-only')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Admin-only endpoint' })

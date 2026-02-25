@@ -21,19 +21,29 @@ export class PaymentController {
 
   @MessagePattern({ cmd: 'payment.process' })
   async processPayment(@Payload() data: ProcessPaymentDto) {
-    const payment = await this.paymentService.process(
-      data.orderId,
-      data.amount,
-      data.currency,
-      data.method,
-    );
-    return {
-      paymentId: payment.id,
-      orderId: payment.orderId,
-      status: payment.status,
-      amount: Number(payment.amount),
-      message: 'Payment microservice: payment processed',
-    };
+    try {
+      const payment = await this.paymentService.process(
+        data.orderId,
+        data.amount,
+        data.currency,
+        data.method,
+      );
+      return {
+        success: true,
+        transactionId: payment.id,
+        paymentId: payment.id,
+        orderId: payment.orderId,
+        status: payment.status,
+        amount: Number(payment.amount),
+        message: 'Payment microservice: payment processed',
+      };
+    } catch (err) {
+      return {
+        success: false,
+        transactionId: null,
+        message: err instanceof Error ? err.message : 'Payment processing failed',
+      };
+    }
   }
 
   @MessagePattern({ cmd: 'payment.refund' })

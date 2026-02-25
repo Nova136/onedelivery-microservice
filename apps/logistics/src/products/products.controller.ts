@@ -1,9 +1,11 @@
-import { Controller, Get, Query, ParseIntPipe, DefaultValuePipe } from '@nestjs/common';
+import { Controller, Get, Query } from '@nestjs/common';
 import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { ProductsService } from './products.service';
+import { ListProductsRequestDto, ListProductsResponseDto } from '../core/dto';
+import { IListProductsResponse } from '../core/interface';
 
 @ApiTags('Products')
-@Controller()
+@Controller('logistics')
 export class ProductsController {
   constructor(private readonly productsService: ProductsService) {}
 
@@ -11,13 +13,12 @@ export class ProductsController {
   @ApiOperation({ summary: 'List products with pagination' })
   @ApiQuery({ name: 'page', required: false, type: Number, description: 'Page number (default: 1)' })
   @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Items per page (default: 20)' })
-  @ApiResponse({ status: 200, description: 'Paginated list of products' })
-  async listProducts(
-    @Query('page', new DefaultValuePipe(1), new ParseIntPipe()) page: number,
-    @Query('limit', new DefaultValuePipe(20), new ParseIntPipe()) limit: number,
-  ) {
+  @ApiResponse({ status: 200, description: 'Paginated list of products', type: ListProductsResponseDto })
+  async listProducts(@Query() query: ListProductsRequestDto): Promise<IListProductsResponse> {
+    const page = Number(query?.page) || 1;
+    const limit = Number(query?.limit) || 20;
     const result = await this.productsService.findPaginated(page, limit);
-    return {
+    const response: IListProductsResponse = {
       data: result.data.map((p) => ({
         id: p.id,
         name: p.name,
@@ -35,5 +36,6 @@ export class ProductsController {
         totalPages: result.totalPages,
       },
     };
+    return response;
   }
 }

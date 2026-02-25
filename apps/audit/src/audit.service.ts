@@ -32,6 +32,27 @@ export class AuditService {
     return qb.getMany();
   }
 
+  async findPaginated(page: number, limit: number) {
+    const safePage = page > 0 ? page : 1;
+    const safeLimit = limit > 0 ? limit : 20;
+    const qb = this.auditRepo
+      .createQueryBuilder('e')
+      .orderBy('e.createdAt', 'DESC')
+      .skip((safePage - 1) * safeLimit)
+      .take(safeLimit);
+
+    const [data, total] = await qb.getManyAndCount();
+    const totalPages = Math.ceil(total / safeLimit) || 1;
+
+    return {
+      data,
+      page: safePage,
+      limit: safeLimit,
+      total,
+      totalPages,
+    };
+  }
+
   async logIncident(type: string, summary: string, orderId?: string) {
     const incident = this.incidentRepo.create({ type, summary, orderId: orderId ?? null });
     return this.incidentRepo.save(incident);

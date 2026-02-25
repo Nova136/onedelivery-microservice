@@ -1,6 +1,17 @@
-import { Controller } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Query,
+  DefaultValuePipe,
+  ParseIntPipe,
+  UseGuards,
+} from '@nestjs/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
 import { AuditService } from './audit.service';
+import { Roles } from '@libs/utils/decorators/roles.decorator';
+import { ClientAuthGuard } from '@libs/utils/guards/auth.guard';
+import { RolesGuard } from '@libs/utils/guards/roles.guard';
+import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 
 export interface LogEventDto {
   action: string;
@@ -18,8 +29,47 @@ export interface QueryAuditDto {
 }
 
 @Controller()
+@ApiTags('Audit')
 export class AuditController {
   constructor(private readonly auditService: AuditService) {}
+
+  @Get('audit/logs')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get audit logs (Admin only)' })
+  @ApiQuery({ name: 'page', required: false, type: Number, description: 'Page number (default: 1)' })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Items per page (default: 20)',
+  })
+  @ApiResponse({ status: 200, description: 'Paginated list of audit logs' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
+  @UseGuards(ClientAuthGuard, RolesGuard)
+  @Roles('Admin')
+  async listAuditLogs(
+    @Query('page', new DefaultValuePipe(1), new ParseIntPipe()) page: number,
+    @Query('limit', new DefaultValuePipe(20), new ParseIntPipe()) limit: number,
+  ) {
+    const result = await this.auditService.findPaginated(page, limit);
+    return {
+      data: result.data.map((e) => ({
+        id: e.id,
+        action: e.action,
+        entityType: e.entityType,
+        entityId: e.entityId,
+        userId: e.userId,
+        createdAt: e.createdAt.toISOString(),
+      })),
+      pagination: {
+        page: result.page,
+        limit: result.limit,
+        total: result.total,
+        totalPages: result.totalPages,
+      },
+    };
+  }
 
   @MessagePattern({ cmd: 'audit.log' })
   async logEvent(@Payload() data: LogEventDto) {

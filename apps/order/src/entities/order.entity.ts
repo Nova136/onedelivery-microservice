@@ -22,6 +22,9 @@ export class Order {
   @Column({ type: 'varchar', length: 512 })
   deliveryAddress: string;
 
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  transactionId: string | null;
+
   @CreateDateColumn()
   createdAt: Date;
 
