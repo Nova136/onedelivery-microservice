@@ -96,6 +96,7 @@ resource "aws_ecs_task_definition" "service" {
       { name = "DATABASE_URL", value = "postgresql://${var.db_username}:${var.db_password}@${aws_rds_cluster.aurora.endpoint}:5432/${var.db_name}" },
       { name = "JWT_SECRET", value = "REDACTED_JWT_SECRET" },
       { name = "RABBITMQ_URL", value = "amqps://grdulrnl:REDACTED_CLOUDAMQP_PASSWORD@armadillo.rmq.cloudamqp.com:5671/grdulrnl" },
+      { name = "CORS_ORIGIN", value = "*" }
 
 
     ]

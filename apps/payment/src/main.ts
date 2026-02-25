@@ -8,6 +8,14 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
 
+  const corsOrigin = configService.get('CORS_ORIGIN', 'http://localhost:5173');
+  app.enableCors({
+    origin: corsOrigin.includes(',') ? corsOrigin.split(',').map((o) => o.trim()) : corsOrigin,
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'token', 'owner'],
+  });
+  
   const config = new DocumentBuilder()
     .setTitle('Payment API')
     .setDescription('Payment microservice – health and internal RPC')
@@ -15,13 +23,13 @@ async function bootstrap() {
     .addTag('payment')
     .build();
   const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api', app, document);
+  SwaggerModule.setup('payment/api', app, document);
 
   app.connectMicroservice<MicroserviceOptions>({
     transport: Transport.TCP,
     options: {
       host: configService.get('PAYMENT_TCP_HOST', '127.0.0.1'),
-      port: configService.get('PAYMENT_TCP_PORT', 13003),
+      port: configService.get('PAYMENT_TCP_PORT', 3004),
     },
   });
   const rabbitUrl = configService.get('RABBITMQ_URL', 'amqp://rabbit:rabbit@localhost:5672');

@@ -26,6 +26,7 @@ export class AuthService {
     if (existing) {
       throw new ConflictException('Email already registered');
     }
+    console.log(`Password before hash: ${password}`);
     const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
     const user = this.userRepo.create({ email: normalized, passwordHash, role });
     const saved = await this.userRepo.save(user);

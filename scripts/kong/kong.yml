@@ -5,38 +5,61 @@
 
 _format_version: "3.0"
 
+# Global CORS so browser requests from e.g. http://localhost:5173 are allowed
+plugins:
+  - name: cors
+    config:
+      origins:
+        - http://localhost:5173
+        - http://127.0.0.1:5173
+      methods:
+        - GET
+        - POST
+        - PUT
+        - PATCH
+        - DELETE
+        - OPTIONS
+      headers:
+        - Content-Type
+        - Authorization
+        - token
+        - owner
+      credentials: true
+      exposed_headers: []
+      max_age: 3600
+
 services:
   - name: order
     url: http://host.docker.internal:3003
     routes:
       - name: order-route
         paths: ["/order"]
-        strip_path: true
+        strip_path: false
 
   - name: logistics
     url: http://host.docker.internal:3002
     routes:
       - name: logistics-route
         paths: ["/logistics"]
-        strip_path: true
+        strip_path: false
 
   - name: payment
     url: http://host.docker.internal:3004
     routes:
       - name: payment-route
         paths: ["/payment"]
-        strip_path: true
+        strip_path: false
 
   - name: audit
     url: http://host.docker.internal:3001
     routes:
       - name: audit-route
         paths: ["/audit"]
-        strip_path: true
+        strip_path: false
 
   - name: user
     url: http://host.docker.internal:3005
     routes:
       - name: user-route
         paths: ["/user"]
-        strip_path: true
+        strip_path: false

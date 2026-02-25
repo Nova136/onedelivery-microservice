@@ -1,17 +1,10 @@
 import { Controller } from '@nestjs/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
+import { ApiTags } from '@nestjs/swagger';
 import { LogisticsService } from './logistics.service';
+import { TrackDeliveryDto, UpdateDeliveryDto } from './core/dto';
 
-export interface TrackDeliveryDto {
-  orderId: string;
-}
-
-export interface UpdateDeliveryDto {
-  orderId: string;
-  status: string;
-  location?: { lat: number; lng: number };
-}
-
+@ApiTags('Logistics')
 @Controller()
 export class LogisticsController {
   constructor(private readonly logisticsService: LogisticsService) {}
