@@ -1,13 +1,32 @@
-/*************  Auditlog Service  ************/
 
 
-export interface insert_audit_record_interface {
-  UserId: string;
-  ActionTaken: string;
-  IsSuccess: boolean;
-  Data: string;
+
+// Response returned from payment microservice for { cmd: 'payment.process' }
+export interface PaymentProcessResponse {
+  success: boolean;
+  transactionId: string | null;
+  paymentId?: string;
+  orderId?: string;
+  status?: string;
+  amount?: number;
+  message?: string;
 }
 
-export interface update_audit_record_interface {
-  userId: string;
+// Request payload for audit.log messages
+export interface AuditLogRequest {
+  action: string;
+  entityType: string;
+  entityId: string;
+  userId?: string;
+  metadata?: Record<string, unknown>;
+}
+
+// Response returned from audit microservice for { cmd: 'audit.log' }
+export interface AuditLogResponse {
+  auditId: string;
+  action: string;
+  entityType: string;
+  entityId: string;
+  timestamp: string;
+  message: string;
 }

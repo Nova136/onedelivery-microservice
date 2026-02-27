@@ -2,13 +2,15 @@ import { Injectable, Inject } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ClientProxy } from '@nestjs/microservices';
-import { firstValueFrom } from 'rxjs';
 import { Order } from './entities/order.entity';
 import { OrderItem } from './entities/order-item.entity';
+import { CommonService } from '@libs/modules/common/common.service';
 import {
-  CreateOrderDto,
-  CreateOrderWithPaymentResultDto,
-} from './core/dto';
+  payment_process_response_interface,
+  audit_log_request_interface,
+  AuditLogResponse,
+} from '@libs/utils/rabbitmq-interfaces';
+import { CreateOrderDto, CreateOrderWithPaymentResultDto } from './core/dto';
 
 @Injectable()
 export class OrderService {
@@ -19,6 +21,9 @@ export class OrderService {
     private readonly orderItemRepo: Repository<OrderItem>,
     @Inject('PAYMENT_SERVICE')
     private readonly paymentClient: ClientProxy,
+    @Inject('AUDIT_SERVICE')
+    private readonly auditClient: ClientProxy,
+    private readonly commonService: CommonService,
   ) {}
 
   async getById(orderId: string) {
@@ -63,18 +68,17 @@ export class OrderService {
       0,
     );
 
-    let paymentResult: { success: boolean; transactionId?: string | null; message?: string };
+    let paymentResult: payment_process_response_interface;
     try {
-      paymentResult = await firstValueFrom(
-        this.paymentClient.send(
-          { cmd: 'payment.process' },
-          {
-            orderId: order.id,
-            amount: totalAmount,
-            currency,
-            method,
-          },
-        ),
+      paymentResult = await this.commonService.sendViaRMQ<payment_process_response_interface>(
+        this.paymentClient,
+        { cmd: 'payment.process' },
+        {
+          orderId: order.id,
+          amount: totalAmount,
+          currency,
+          method,
+        },
       );
     } catch {
       paymentResult = { success: false, transactionId: null, message: 'Payment service unavailable' };
@@ -91,6 +95,25 @@ export class OrderService {
       where: { id: order.id },
       relations: ['items'],
     });
+
+    // Fire-and-forget audit log; failures should not break order flow
+    const auditPayload: audit_log_request_interface = {
+      action: paymentSuccess ? 'ORDER_PAYMENT_COMPLETED' : 'ORDER_PAYMENT_FAILED',
+      entityType: 'Order',
+      entityId: order.id,
+      userId: order.customerId,
+      metadata: {
+        totalAmount,
+        transactionId,
+      },
+    };
+    this.commonService
+      .sendViaRMQ<AuditLogResponse>(this.auditClient, { cmd: 'audit.log' }, auditPayload)
+      .catch((err) => {
+        // eslint-disable-next-line no-console
+        console.error('Failed to send audit log for order', err?.message ?? err);
+      });
+
     return {
       order: updated!,
       paymentSuccess,
