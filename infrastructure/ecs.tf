@@ -57,7 +57,7 @@ resource "aws_security_group" "ecs_tasks" {
 
 # Task definition and service per microservice
 locals {
-  services = toset(["order", "logistics", "payment", "audit", "user"])
+  services = toset(["order", "logistics", "payment", "audit", "user", "incident"])
   # Container port 80 so ALB path-based routing works when apps expose HTTP
   service_ports = {
     order     = 80
@@ -65,6 +65,7 @@ locals {
     payment   = 80
     audit     = 80
     user      = 80
+    incident  = 80
   }
 }
 

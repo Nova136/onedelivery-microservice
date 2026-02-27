@@ -89,9 +89,12 @@ Each microservice uses the same Postgres database with **its own schema** and ta
 | `order`    | `orders`, `order_items` | Order    |
 | `logistics`| `deliveries`, `delivery_tracking` | Logistics |
 | `payment`  | `payments`, `refunds`   | Payment  |
-| `audit`    | `audit_events`, `incidents` | Audit   |
+| `audit`    | `audit_events` | Audit   |
+| `incident` | `incidents`    | Incident |
 
 Set `DATABASE_URL` (e.g. in `.env`) so all apps connect to the same DB. TypeORM is configured with `schema` and `synchronize: true` in development so tables are created/updated on startup.
+
+**Incident migration:** If you had data in `audit.incidents` before moving to the incident microservice, run once: `node scripts/migrate-incidents-to-incident-schema.js` (with `DATABASE_URL` set). This creates the `incident` schema and copies rows from `audit.incidents` to `incident.incidents`.
 
 ## Local stack (Postgres, RabbitMQ, LocalStack, Kong)
 
@@ -177,4 +180,9 @@ After this, pushing to `main` (or running the workflow manually) will build the 
 - Add persistence (DB) and shared DTOs per service.
 - Wire in **Order & Logistics** and **Resolution & Refund** agents from the practice module.
 
-
+## Updating ECS Variable 
+Update new variable on ./infrastructure/ecs.tf
+Then execute the update
+export AWS_PROFILE=onedelivery
+terraform plan -out=tfplan  
+terraform apply tfplan

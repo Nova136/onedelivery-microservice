@@ -1,15 +1,10 @@
-import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ClientProxy } from '@nestjs/microservices';
 import { firstValueFrom } from 'rxjs';
 // import crypto from 'crypto';
 const { randomInt } = require('crypto');
-const unzipper = require('unzipper');
-const moment = require('moment');
-const momentTimezone = require('moment-timezone');
-var cronParser = require('cron-parser');
 const crypto = require('crypto');
-const util = require('util');
 
 @Injectable()
 export class CommonService {

@@ -6,9 +6,11 @@ import { Order } from './entities/order.entity';
 import { OrderItem } from './entities/order-item.entity';
 import { CommonService } from '@libs/modules/common/common.service';
 import {
-  payment_process_response_interface,
-  audit_log_request_interface,
+  PaymentProcessResponse,
+  AuditLogRequest,
   AuditLogResponse,
+  LogIncidentRequest,
+  LogIncidentResponse,
 } from '@libs/utils/rabbitmq-interfaces';
 import { CreateOrderDto, CreateOrderWithPaymentResultDto } from './core/dto';
 
@@ -23,6 +25,8 @@ export class OrderService {
     private readonly paymentClient: ClientProxy,
     @Inject('AUDIT_SERVICE')
     private readonly auditClient: ClientProxy,
+    @Inject('INCIDENT_SERVICE')
+    private readonly incidentClient: ClientProxy,
     private readonly commonService: CommonService,
   ) {}
 
@@ -68,9 +72,9 @@ export class OrderService {
       0,
     );
 
-    let paymentResult: payment_process_response_interface;
+    let paymentResult: PaymentProcessResponse;
     try {
-      paymentResult = await this.commonService.sendViaRMQ<payment_process_response_interface>(
+      paymentResult = await this.commonService.sendViaRMQ<PaymentProcessResponse>(
         this.paymentClient,
         { cmd: 'payment.process' },
         {
@@ -97,7 +101,7 @@ export class OrderService {
     });
 
     // Fire-and-forget audit log; failures should not break order flow
-    const auditPayload: audit_log_request_interface = {
+    const auditPayload: AuditLogRequest = {
       action: paymentSuccess ? 'ORDER_PAYMENT_COMPLETED' : 'ORDER_PAYMENT_FAILED',
       entityType: 'Order',
       entityId: order.id,
@@ -113,6 +117,24 @@ export class OrderService {
         // eslint-disable-next-line no-console
         console.error('Failed to send audit log for order', err?.message ?? err);
       });
+
+    // When payment fails, log incident for tracking
+    if (!paymentSuccess) {
+      const incidentPayload: LogIncidentRequest = {
+        type: 'PAYMENT_FAILED',
+        summary: paymentResult.message ?? 'Order payment could not be completed',
+        orderId: order.id,
+      };
+      console.log('[OrderService] Sending incident log (payment failed)', { orderId: order.id });
+      this.commonService
+        .sendViaRMQ<LogIncidentResponse>(this.incidentClient, { cmd: 'incident.log' }, incidentPayload)
+        .then((res) => {
+          console.log('[OrderService] Incident log sent', res?.incidentId ?? res);
+        })
+        .catch((err) => {
+          console.error('[OrderService] Failed to send incident log for order', err?.message ?? err);
+        });
+    }
 
     return {
       order: updated!,

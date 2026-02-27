@@ -12,6 +12,7 @@ export class ClientAuthGuard implements CanActivate {
     '/logistics/api',
     '/payment/api',
     '/audit/api',
+    '/incident/api',
     '/api-docs',
     '/create',
     '/health-check',
@@ -20,7 +21,8 @@ export class ClientAuthGuard implements CanActivate {
     '/logistics/health-check',
     '/order/health-check',
     '/payment/health-check',
-    '/audit/health-check'
+    '/audit/health-check',
+    '/incident/health-check'
   ];
   public constructor() {}
 

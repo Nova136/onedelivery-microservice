@@ -45,6 +45,15 @@
         "tsConfigPath": "apps/order/tsconfig.app.json"
       }
     },
+    "incident": {
+      "type": "application",
+      "root": "apps/incident",
+      "entryFile": "main",
+      "sourceRoot": "apps/incident/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/incident/tsconfig.app.json"
+      }
+    },
     "payment": {
       "type": "application",
       "root": "apps/payment",
