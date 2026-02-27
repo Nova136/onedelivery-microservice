@@ -46,6 +46,8 @@
     "@nestjs/terminus": "^11.1.1",
     "@nestjs/testing": "^11.1.14",
     "@nestjs/typeorm": "^11.0.0",
+    "@swc/jest": "^0.2.39",
+    "@types/passport-jwt": "^4.0.1",
     "amqp-connection-manager": "^4.1.7",
     "amqplib": "^0.10.3",
     "bcrypt": "^6.0.0",
@@ -55,16 +57,21 @@
     "jsonwebtoken": "^9.0.3",
     "moment": "^2.29.4",
     "moment-timezone": "^0.5.43",
+    "passport": "^0.7.0",
+    "passport-jwt": "^4.0.1",
     "pg": "^8.13.1",
     "pg-mem": "^3.0.5"
   },
   "devDependencies": {
+    "@swc/cli": "^0.8.0",
+    "@swc/core": "^1.15.17",
     "@swc/jest": "^0.2.39",
     "@types/amqplib": "^0.10.7",
     "@types/jest": "^29.5.14",
     "concurrently": "^9.2.1",
     "ts-jest": "^29.3.3",
     "ts-loader": "^9.5.4",
+    "tsconfig-paths": "^4.2.0",
     "typeorm-extension": "^2.2.0",
     "typeorm-naming-strategies": "^4.1.0"
   }

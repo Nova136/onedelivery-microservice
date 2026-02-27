@@ -4,7 +4,7 @@ import { GetUser, type JwtPayload } from '@libs/utils/decorators/get-user.decora
 import { Roles } from '@libs/utils/decorators/roles.decorator';
 import { AuthService } from './auth.service';
 import { AllowUnauthorizedRequest } from '@libs/utils/decorators/allow.unauthorized.decorator';
-import { Role } from '../entities/role.enum';
+import { Role } from '../database/entities/role.enum';
 import { RegisterDto, LoginDto } from '../core/dto';
 
 @ApiTags('Auth')

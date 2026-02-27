@@ -7,8 +7,8 @@ import { ClientsModule, Transport } from '@nestjs/microservices';
 import { CommonModule } from '@libs/modules/common/common.module';
 import { OrderController } from './order.controller';
 import { OrderService } from './order.service';
-import { Order } from './entities/order.entity';
-import { OrderItem } from './entities/order-item.entity';
+import { Order } from './database/entities/order.entity';
+import { OrderItem } from './database/entities/order-item.entity';
 import { HealthModule } from '@libs/modules/health-check/health-check.module';
 import { ClientAuthGuard } from '@libs/utils/guards/auth.guard';
 

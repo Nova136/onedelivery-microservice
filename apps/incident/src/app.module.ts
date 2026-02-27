@@ -3,7 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { IncidentController } from './incident.controller';
 import { IncidentService } from './incident.service';
-import { Incident } from './entities/incidents.entity';
+import { Incident } from './database/entities/incidents.entity';
 import { HealthModule } from '@libs/modules/health-check/health-check.module';
 
 @Module({

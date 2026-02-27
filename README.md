@@ -96,6 +96,30 @@ Set `DATABASE_URL` (e.g. in `.env`) so all apps connect to the same DB. TypeORM 
 
 **Incident migration:** If you had data in `audit.incidents` before moving to the incident microservice, run once: `node scripts/migrate-incidents-to-incident-schema.js` (with `DATABASE_URL` set). This creates the `incident` schema and copies rows from `audit.incidents` to `incident.incidents`.
 
+## Seeding data per microservice
+
+Each microservice has its own **seed script** and **TypeORM seeder**:
+
+- **Order**: seed entry `apps/order/seed.ts`, data in `apps/order/src/database/seeds/order.seed.ts`
+- **Logistics**: seed entry `apps/logistics/seed.ts`, data in `apps/logistics/src/database/seeds/product.seed.ts`
+- **Payment**: seed entry `apps/payment/seed.ts`, data in `apps/payment/src/database/seeds/payment.seed.ts`
+- **User**: seed entry `apps/user/seed.ts`, data in `apps/user/src/database/seeds/user.seed.ts`
+- **Incident**: seed entry `apps/incident/seed.ts`, data in `apps/incident/src/database/seeds/incidents.seed.ts`
+- **Audit**: seed entry `apps/audit/seed.ts`, data in `apps/audit/src/database/seeds/audit-event.seed.ts`
+
+All seeders implement the `Seeder` interface from `typeorm-extension` and insert rows via a repository. To **change the initial data**:
+
+1. **Edit the seeder file** for the service and adjust the array of objects (e.g. add products in `product.seed.ts`, change seed users in `user.seed.ts`, etc.).
+2. **Keep the guard that checks for existing rows** (the `repo.count()` check) so running the seeder twice does not duplicate data. If you want to re-seed from scratch, truncate the table (or drop/recreate the DB) before running again.
+3. **Run the service-specific seed script** from the repo root (Docker compose + `.env` must already be up):
+   - `npm run seed-order`
+   - `npm run seed-logistics`
+   - `npm run seed-payment`
+   - `npm run seed-user`
+   - `npm run seed-incident`
+   - `npm run seed-audit`
+4. To seed **everything at once**, run: `npm run seeding-all-datas`.
+
 ## Local stack (Postgres, RabbitMQ, LocalStack, Kong)
 
 Docker Compose runs **PostgreSQL**, **RabbitMQ** (event bus), **LocalStack** (S3 + SNS), and **Kong** (API gateway) for local development.

@@ -3,8 +3,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
-import { Role } from '../entities/role.enum';
-import { User } from '../entities/user.entity';
+import { Role } from '../database/entities/role.enum';
+import { User } from '../database/entities/user.entity';
 
 const SALT_ROUNDS = 10;
 

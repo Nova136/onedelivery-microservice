@@ -6,11 +6,11 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { PaymentController } from './payment.controller';
 import { PaymentService } from './payment.service';
-import { Payment } from './entities/payment.entity';
-import { Refund } from './entities/refund.entity';
+import { Refund } from './database/entities/refund.entity';
 import { HealthModule } from '@libs/modules/health-check/health-check.module';
 import { ClientAuthGuard } from '@libs/utils/guards/auth.guard';
 import { CommonModule } from '@libs/modules/common/common.module';
+import { Payment } from './database/entities/payment.entity';
 
 @Module({
   imports: [

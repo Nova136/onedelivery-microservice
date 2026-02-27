@@ -1,4 +1,15 @@
 
+export interface insert_audit_record_interface {
+  UserId: string;
+  ActionTaken: string;
+  IsSuccess: boolean;
+  Data: string;
+}
+
+export interface update_audit_record_interface {
+  userId: string;
+}
+
 // Response returned from payment microservice for { cmd: 'payment.process' }
 export interface PaymentProcessResponse {
   success: boolean;
@@ -29,14 +40,14 @@ export interface AuditLogResponse {
   message: string;
 }
 
-// Request payload for incident.log messages (and audit.incident for backward compat)
+// Request payload for incident.log messages
 export interface LogIncidentRequest {
   type: string;
   summary: string;
   orderId?: string;
 }
 
-// Response returned from incident microservice for { cmd: 'incident.log' } or { cmd: 'audit.incident' }
+// Response returned from incident microservice for { cmd: 'incident.log' }
 export interface LogIncidentResponse {
   incidentId: string;
   type: string;
