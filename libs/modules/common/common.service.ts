@@ -105,7 +105,12 @@ export class CommonService {
       });
     });
   }
-  public async sendViaRMQ<T>(client: ClientProxy, messagePattern: string, data: any, maxRetries: number = 5): Promise<T> {
+  public async sendViaRMQ<T>(
+    client: ClientProxy,
+    messagePattern: any,
+    data: any,
+    maxRetries: number = 5,
+  ): Promise<T> {
     let attempt = 0;
     while (attempt < maxRetries) {
       try {
@@ -114,7 +119,11 @@ export class CommonService {
         attempt++;
         console.error(`Attempt ${attempt} failed. Retrying...`);
         if (attempt >= maxRetries) {
-          console.log(`Max retries reached. Failed to send ${messagePattern} with message: ${e.message}`);
+          console.log(
+            `Max retries reached. Failed to send ${JSON.stringify(
+              messagePattern,
+            )} with message: ${e.message}`,
+          );
         }
         const delay = await this.getRandomSecureDelay(1000, 3000);
         await new Promise((res) => setTimeout(res, delay));

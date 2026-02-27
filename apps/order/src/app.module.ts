@@ -4,6 +4,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { PassportModule } from '@nestjs/passport';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ClientsModule, Transport } from '@nestjs/microservices';
+import { CommonModule } from '@libs/modules/common/common.module';
 import { OrderController } from './order.controller';
 import { OrderService } from './order.service';
 import { Order } from './entities/order.entity';
@@ -17,6 +18,7 @@ import { ClientAuthGuard } from '@libs/utils/guards/auth.guard';
       envFilePath: ['.env'],
     }),
     HealthModule,
+    CommonModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     ClientsModule.registerAsync([
       {
@@ -27,6 +29,18 @@ import { ClientAuthGuard } from '@libs/utils/guards/auth.guard';
           options: {
             host: config.get('PAYMENT_TCP_HOST', '127.0.0.1'),
             port: config.get('PAYMENT_TCP_PORT', 3004),
+          },
+        }),
+        inject: [ConfigService],
+      },
+      {
+        name: 'AUDIT_SERVICE',
+        imports: [ConfigModule],
+        useFactory: (config: ConfigService) => ({
+          transport: Transport.TCP,
+          options: {
+            host: config.get('AUDIT_TCP_HOST', '127.0.0.1'),
+            port: config.get('AUDIT_TCP_PORT', 3001),
           },
         }),
         inject: [ConfigService],
