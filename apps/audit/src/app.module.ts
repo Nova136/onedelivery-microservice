@@ -5,7 +5,7 @@ import { PassportModule } from '@nestjs/passport';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuditController } from './audit.controller';
 import { AuditService } from './audit.service';
-import { AuditEvent } from './entities/audit-event.entity';
+import { AuditEvent } from './database/entities/audit-event.entity';
 import { RolesGuard } from '@libs/utils/guards/roles.guard';
 import { HealthModule } from '@libs/modules/health-check/health-check.module';
 import { ClientAuthGuard } from '@libs/utils/guards/auth.guard';

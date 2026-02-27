@@ -27,7 +27,7 @@ dataSource.initialize().then(async () => {
   await dataSource.query(`CREATE SCHEMA IF NOT EXISTS audit;`);
   await dataSource.synchronize(true);
   await runSeeders(dataSource);
-  await setIdNextVal(dataSource, 'audit', 'audit_events');
+  // await setIdNextVal(dataSource, 'audit', 'audit_events');
   process.exit();
 });
 

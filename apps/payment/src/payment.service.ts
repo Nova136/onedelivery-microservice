@@ -2,8 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ClientProxy } from '@nestjs/microservices';
 import { Repository } from 'typeorm';
-import { Payment } from './entities/payment.entity';
-import { Refund } from './entities/refund.entity';
+import { Refund } from './database/entities/refund.entity';
 import { CommonService } from '@libs/modules/common/common.service';
 import {
   AuditLogRequest,
@@ -11,6 +10,7 @@ import {
   LogIncidentRequest,
   LogIncidentResponse,
 } from '@libs/utils/rabbitmq-interfaces';
+import { Payment } from './database/entities/payment.entity';
 
 @Injectable()
 export class PaymentService {

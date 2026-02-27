@@ -16,10 +16,7 @@ const options: DataSourceOptions & SeederOptions = {
   database: DB_NAME,
   entities: [(__dirname + '/**/*.entity{.ts,.js}').replace(/\\/g, '/')],
   seeds: [
-    (__dirname + '/**/audit-record.seed{.ts,.js}').replace(/\\/g, '/'),
-    (__dirname + '/**/historical-user-activity.seed{.ts,.js}').replace(/\\/g, '/'),
-    (__dirname + '/**/user-activity-logging-page-mapping.entity.seed{.ts,.js}').replace(/\\/g, '/'),
-    (__dirname + '/**/user-activity-logging.entity.seed{.ts,.js}').replace(/\\/g, '/'),
+    (__dirname + '/**/*.seed{.ts,.js}').replace(/\\/g, '/'),
   ],
   namingStrategy: new SnakeNamingStrategy(),
 };
@@ -27,13 +24,9 @@ const options: DataSourceOptions & SeederOptions = {
 const dataSource = new DataSource(options);
 
 dataSource.initialize().then(async () => {
-  await dataSource.query(`CREATE SCHEMA IF NOT EXISTS auditlog;`);
+  await dataSource.query(`CREATE SCHEMA IF NOT EXISTS logistics;`);
   await dataSource.synchronize(true);
   await runSeeders(dataSource);
-  await setIdNextVal(dataSource, 'auditlog', 'audit_record');
-  await setIdNextVal(dataSource, 'auditlog', 'historical_user_activity');
-  await setIdNextVal(dataSource, 'auditlog', 'user_activity_logging_page_mapping');
-  await setIdNextVal(dataSource, 'auditlog', 'user_activity_logging');
   process.exit();
 });
 

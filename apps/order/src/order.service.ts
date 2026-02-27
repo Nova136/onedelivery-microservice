@@ -2,8 +2,8 @@ import { Injectable, Inject } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ClientProxy } from '@nestjs/microservices';
-import { Order } from './entities/order.entity';
-import { OrderItem } from './entities/order-item.entity';
+import { Order } from './database/entities/order.entity';
+import { OrderItem } from './database/entities/order-item.entity';
 import { CommonService } from '@libs/modules/common/common.service';
 import {
   PaymentProcessResponse,

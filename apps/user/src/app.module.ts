@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { User } from './entities/user.entity';
+import { User } from './database/entities/user.entity';
 import { AuthModule } from './auth/auth.module';
 import { ClientAuthGuard } from '@libs/utils/guards/auth.guard';
 import { HealthModule } from '@libs/modules/health-check/health-check.module';

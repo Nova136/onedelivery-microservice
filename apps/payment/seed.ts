@@ -16,10 +16,7 @@ const options: DataSourceOptions & SeederOptions = {
   database: DB_NAME,
   entities: [(__dirname + '/**/*.entity{.ts,.js}').replace(/\\/g, '/')],
   seeds: [
-    (__dirname + '/**/payment-record.seed{.ts,.js}').replace(/\\/g, '/'),
-    (__dirname + '/**/historical-user-activity.seed{.ts,.js}').replace(/\\/g, '/'),
-    (__dirname + '/**/user-activity-logging-page-mapping.entity.seed{.ts,.js}').replace(/\\/g, '/'),
-    (__dirname + '/**/user-activity-logging.entity.seed{.ts,.js}').replace(/\\/g, '/'),
+    (__dirname + '/**/*.seed{.ts,.js}').replace(/\\/g, '/'),
   ],
   namingStrategy: new SnakeNamingStrategy(),
 };
@@ -30,10 +27,6 @@ dataSource.initialize().then(async () => {
   await dataSource.query(`CREATE SCHEMA IF NOT EXISTS payment;`);
   await dataSource.synchronize(true);
   await runSeeders(dataSource);
-  await setIdNextVal(dataSource, 'payment', 'payment_record');
-  await setIdNextVal(dataSource, 'payment', 'historical_user_activity');
-  await setIdNextVal(dataSource, 'payment', 'user_activity_logging_page_mapping');
-  await setIdNextVal(dataSource, 'payment', 'user_activity_logging');
   process.exit();
 });
 

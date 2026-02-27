@@ -1,4 +1,4 @@
-import { Order } from '../../entities/order.entity';
+import { Order } from '../../database/entities/order.entity';
 
 /** Internal result from createWithPayment (order entity + payment outcome) */
 export interface CreateOrderWithPaymentResultDto {
