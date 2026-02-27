@@ -110,20 +110,4 @@ export class AuditController {
       message: 'Audit microservice: audit trail returned',
     };
   }
-
-  @MessagePattern({ cmd: 'audit.incident' })
-  async logIncident(@Payload() data: { type: string; orderId?: string; summary: string }) {
-    const incident = await this.auditService.logIncident(
-      data.type,
-      data.summary,
-      data.orderId,
-    );
-    return {
-      incidentId: incident.id,
-      type: incident.type,
-      summary: incident.summary,
-      timestamp: incident.createdAt.toISOString(),
-      message: 'Audit microservice: incident logged',
-    };
-  }
 }

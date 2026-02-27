@@ -1,6 +1,4 @@
 
-
-
 // Response returned from payment microservice for { cmd: 'payment.process' }
 export interface PaymentProcessResponse {
   success: boolean;
@@ -27,6 +25,22 @@ export interface AuditLogResponse {
   action: string;
   entityType: string;
   entityId: string;
+  timestamp: string;
+  message: string;
+}
+
+// Request payload for incident.log messages (and audit.incident for backward compat)
+export interface LogIncidentRequest {
+  type: string;
+  summary: string;
+  orderId?: string;
+}
+
+// Response returned from incident microservice for { cmd: 'incident.log' } or { cmd: 'audit.incident' }
+export interface LogIncidentResponse {
+  incidentId: string;
+  type: string;
+  summary: string;
   timestamp: string;
   message: string;
 }

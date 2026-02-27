@@ -45,6 +45,18 @@ import { ClientAuthGuard } from '@libs/utils/guards/auth.guard';
         }),
         inject: [ConfigService],
       },
+      {
+        name: 'INCIDENT_SERVICE',
+        imports: [ConfigModule],
+        useFactory: (config: ConfigService) => ({
+          transport: Transport.TCP,
+          options: {
+            host: config.get('INCIDENT_TCP_HOST', '127.0.0.1'),
+            port: config.get('INCIDENT_TCP_PORT', 3006),
+          },
+        }),
+        inject: [ConfigService],
+      },
     ]),
     TypeOrmModule.forRoot({
       type: 'postgres',

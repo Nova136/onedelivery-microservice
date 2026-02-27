@@ -1,19 +1,19 @@
 import 'reflect-metadata';
 import { DataSource } from 'typeorm';
-import { AuditEvent } from './entities/audit-event.entity';
-import { seedAuditEvents } from '../../../seed/data/audit.events';
+import { Incident } from './entities/incidents.entity';
+import { seedIncidents } from 'seed/data/incident.incidents';
 
 async function runSeed() {
   const dataSource = new DataSource({
     type: 'postgres',
     url: process.env.DATABASE_URL ?? 'postgresql://postgres:postgres@localhost:5432/onedelivery',
     schema: 'audit',
-    entities: [AuditEvent],
+    entities: [Incident],
     synchronize: false,
   });
 
   await dataSource.initialize();
-  const eventRepo = dataSource.getRepository(AuditEvent);
+  const eventRepo = dataSource.getRepository(Incident);
 
   const existingEvents = await eventRepo.count();
   if (existingEvents > 0) {
@@ -22,7 +22,7 @@ async function runSeed() {
     process.exit(0);
   }
 
-  const events = eventRepo.create(seedAuditEvents);
+  const events = eventRepo.create(seedIncidents);
   await eventRepo.save(events);
   console.log(`[audit] Seeded ${events.length} audit events.`);
   await dataSource.destroy();

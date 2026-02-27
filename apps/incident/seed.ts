@@ -16,7 +16,7 @@ const options: DataSourceOptions & SeederOptions = {
   database: DB_NAME,
   entities: [(__dirname + '/**/*.entity{.ts,.js}').replace(/\\/g, '/')],
   seeds: [
-    (__dirname + '/**/audit-events.seed{.ts,.js}').replace(/\\/g, '/'),
+    (__dirname + '/**/incidents.seed{.ts,.js}').replace(/\\/g, '/'),
   ],
   namingStrategy: new SnakeNamingStrategy(),
 };
@@ -24,10 +24,10 @@ const options: DataSourceOptions & SeederOptions = {
 const dataSource = new DataSource(options);
 
 dataSource.initialize().then(async () => {
-  await dataSource.query(`CREATE SCHEMA IF NOT EXISTS audit;`);
+  await dataSource.query(`CREATE SCHEMA IF NOT EXISTS incident;`);
   await dataSource.synchronize(true);
   await runSeeders(dataSource);
-  await setIdNextVal(dataSource, 'audit', 'audit_events');
+  await setIdNextVal(dataSource, 'incident', 'incidents');
   process.exit();
 });
 

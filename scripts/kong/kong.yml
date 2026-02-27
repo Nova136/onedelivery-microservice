@@ -63,3 +63,10 @@ services:
       - name: user-route
         paths: ["/user"]
         strip_path: false
+
+  - name: incident
+    url: http://host.docker.internal:3006
+    routes:
+      - name: incident-route
+        paths: ["/incident"]
+        strip_path: false
