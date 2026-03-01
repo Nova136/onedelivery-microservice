@@ -6,8 +6,11 @@ db_username  = "postgres"
 db_password  = "64M4YXh08pe7"  # Use a strong password
 
 # Optional overrides
-# aws_account_id      = "542829982577"
-# aurora_min_capacity = 0.5
-# aurora_max_capacity = 4
-# ecs_desired_count   = 1
-# enable_alb          = false   # set to false to save ~$32/mo (no ALB, API Gateway, VPC Link)
+# aws_account_id                  = "542829982577"
+# postgres_instance_class         = "db.t3.micro"  # Free tier: db.t3.micro or db.t2.micro
+# postgres_engine_version         = "17.6"
+# postgres_allocated_storage      = 20              # Free tier: 20 GB
+# postgres_max_allocated_storage  = 20
+# postgres_backup_retention_period = 7              # Free tier: 0-7 days
+# ecs_desired_count               = 1
+# enable_alb                      = false           # set to false to save ~$32/mo (no ALB, API Gateway, VPC Link)

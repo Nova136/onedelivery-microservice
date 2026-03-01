@@ -13,15 +13,20 @@ output "vpc_id" {
   value       = aws_vpc.main.id
 }
 
-output "aurora_cluster_endpoint" {
-  description = "Aurora cluster writer endpoint (use for DATABASE_URL)"
-  value       = aws_rds_cluster.aurora.endpoint
+output "postgres_endpoint" {
+  description = "RDS PostgreSQL endpoint (use for DATABASE_URL)"
+  value       = aws_db_instance.postgres.endpoint
   sensitive   = true
 }
 
-output "aurora_cluster_reader_endpoint" {
-  description = "Aurora cluster reader endpoint"
-  value       = aws_rds_cluster.aurora.reader_endpoint
+output "postgres_address" {
+  description = "RDS PostgreSQL address (hostname only, without port)"
+  value       = aws_db_instance.postgres.address
+}
+
+output "postgres_port" {
+  description = "RDS PostgreSQL port"
+  value       = aws_db_instance.postgres.port
 }
 
 output "ecs_cluster_name" {

@@ -17,19 +17,19 @@ variable "environment" {
 }
 
 variable "db_name" {
-  description = "Aurora database name"
+  description = "PostgreSQL database name"
   type        = string
   default     = "onedelivery"
 }
 
 variable "db_username" {
-  description = "Master username for Aurora (stored in SSM or set via TF_VAR)"
+  description = "Master username for PostgreSQL (stored in SSM or set via TF_VAR)"
   type        = string
   sensitive   = true
 }
 
 variable "db_password" {
-  description = "Master password for Aurora (set via TF_VAR_db_password)"
+  description = "Master password for PostgreSQL (set via TF_VAR_db_password)"
   type        = string
   sensitive   = true
 }
@@ -65,16 +65,34 @@ variable "ecs_desired_count" {
   default     = 0
 }
 
-variable "aurora_min_capacity" {
-  description = "Aurora Serverless v2 minimum capacity (ACUs)"
-  type        = number
-  default     = 0.5
+variable "postgres_instance_class" {
+  description = "RDS PostgreSQL instance class (db.t3.micro or db.t2.micro for free tier)"
+  type        = string
+  default     = "db.t3.micro"
 }
 
-variable "aurora_max_capacity" {
-  description = "Aurora Serverless v2 maximum capacity (ACUs)"
+variable "postgres_engine_version" {
+  description = "PostgreSQL engine version"
+  type        = string
+  default     = "17.6"
+}
+
+variable "postgres_allocated_storage" {
+  description = "Initial allocated storage in GB (20 GB for free tier)"
   type        = number
-  default     = 4
+  default     = 20
+}
+
+variable "postgres_max_allocated_storage" {
+  description = "Maximum allocated storage for autoscaling in GB"
+  type        = number
+  default     = 20
+}
+
+variable "postgres_backup_retention_period" {
+  description = "Number of days to retain backups (0-7 for free tier, 0 disables automated backups)"
+  type        = number
+  default     = 7
 }
 
 variable "enable_alb" {
