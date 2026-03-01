@@ -9,6 +9,35 @@ export const routeToResolutionTool = tool(
         // { action: "check_refund_status", userId: "user123", orderId: "999" }
         // { action: "check_policy", userId: "user123", question: "What is the refund policy for late deliveries?" }
 
+        // --- MOCK DATA FOR TESTING ---
+        console.log(
+            "Resolution Tool Mock called with:",
+            JSON.stringify(payload, null, 2),
+        );
+
+        if (payload.action === "check_policy") {
+            return JSON.stringify({
+                policy: "We offer full refunds for missing items or wrong orders. Quality issues are reviewed on a case-by-case basis.",
+            });
+        }
+
+        if (payload.action === "request_refund") {
+            return JSON.stringify({
+                ticketId: "REF-998877",
+                status: "Processing",
+                message: `We have received your refund request for ${payload.issueCategory || "your issue"}.`,
+            });
+        }
+
+        if (payload.action === "check_refund_status") {
+            return JSON.stringify({
+                status: "Approved",
+                amount: 15.5,
+                date: new Date().toISOString(),
+            });
+        }
+
+        /*
         try {
             const agentUrls = JSON.parse(process.env.AGENT_URLS || "{}");
             const url = agentUrls.resolutionRefund;
@@ -21,6 +50,7 @@ export const routeToResolutionTool = tool(
         } catch (error) {
             return "System Error: Resolution Agent unreachable.";
         }
+        */
     },
     {
         name: "Route_To_Refund",

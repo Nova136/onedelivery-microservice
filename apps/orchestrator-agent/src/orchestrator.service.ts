@@ -26,9 +26,6 @@ export class OrchestratorService {
     };
 
     constructor(private memoryService: MemoryService) {
-        console.log("API Key");
-        console.log(process.env.OPENAI_API_KEY);
-
         // 1. Initialize the LLM
         this.llm = new ChatOpenAI({
             modelName: "gpt-4o",
@@ -94,6 +91,7 @@ Your role is to triage customer requests and route them to the appropriate speci
                 input: message,
                 agent_scratchpad: scratchpad,
                 userId: userId,
+                sessionId: sessionId,
             });
 
             const response =

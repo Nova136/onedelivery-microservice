@@ -9,6 +9,35 @@ export const routeToLogisticsTool = tool(
         // { action: "track_order", userId: "user123", orderId: "123" }
         // { action: "cancel_order", userId: "user123", orderId: "123" }
 
+        // --- MOCK DATA FOR TESTING ---
+        console.log(
+            "Logistics Tool Mock called with:",
+            JSON.stringify(payload, null, 2),
+        );
+
+        if (payload.action === "check_policy") {
+            return JSON.stringify({
+                policy: "You can cancel orders within 10 minutes of placement. Standard delivery time is 30-45 minutes.",
+            });
+        }
+
+        if (payload.action === "track_order") {
+            return JSON.stringify({
+                status: "Out for Delivery",
+                eta: "12 mins",
+                driver: "Sam",
+                currentLocation: "Main St & 4th Ave",
+            });
+        }
+
+        if (payload.action === "cancel_order") {
+            return JSON.stringify({
+                status: "Cancelled",
+                message: `Order ${payload.orderId || "unknown"} has been successfully cancelled.`,
+            });
+        }
+
+        /*
         try {
             const agentUrls = JSON.parse(process.env.AGENT_URLS || "{}");
             const url = agentUrls.logistics;
@@ -21,6 +50,7 @@ export const routeToLogisticsTool = tool(
         } catch (error) {
             return "System Error: Logistics Agent unreachable.";
         }
+        */
     },
     {
         name: "Route_To_Logistics",
