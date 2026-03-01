@@ -1,11 +1,11 @@
-# Aurora Serverless v2 (PostgreSQL) - one cluster, one writer instance
-resource "aws_db_subnet_group" "aurora" {
-  name       = "${local.name}-aurora"
+# RDS PostgreSQL Free Tier - single instance
+resource "aws_db_subnet_group" "postgres" {
+  name       = "${local.name}-postgres"
   subnet_ids = aws_subnet.private[*].id
 }
 
-resource "aws_security_group" "aurora" {
-  name_prefix = "${local.name}-aurora-"
+resource "aws_security_group" "postgres" {
+  name_prefix = "${local.name}-postgres-"
   vpc_id     = aws_vpc.main.id
   ingress {
     from_port       = 5432
@@ -22,28 +22,43 @@ resource "aws_security_group" "aurora" {
   }
 }
 
-resource "aws_rds_cluster" "aurora" {
-  cluster_identifier     = "${local.name}-aurora"
-  engine                 = "aurora-postgresql"
-  engine_mode            = "provisioned"
-  engine_version         = "17.4"
-  database_name          = var.db_name
-  master_username        = var.db_username
-  master_password        = var.db_password
-  db_subnet_group_name   = aws_db_subnet_group.aurora.name
-  vpc_security_group_ids = [aws_security_group.aurora.id]
-  serverlessv2_scaling_configuration {
-    min_capacity = var.aurora_min_capacity
-    max_capacity = var.aurora_max_capacity
+resource "aws_db_instance" "postgres" {
+  identifier     = "${local.name}-postgres"
+  engine         = "postgres"
+  engine_version = var.postgres_engine_version
+  instance_class = var.postgres_instance_class
+  
+  allocated_storage     = var.postgres_allocated_storage
+  max_allocated_storage = var.postgres_max_allocated_storage
+  storage_type         = "gp3"
+  storage_encrypted    = true
+  
+  db_name  = var.db_name
+  username = var.db_username
+  password = var.db_password
+  
+  db_subnet_group_name   = aws_db_subnet_group.postgres.name
+  vpc_security_group_ids = [aws_security_group.postgres.id]
+  
+  # Free tier: single-AZ, no Multi-AZ
+  multi_az               = false
+  publicly_accessible    = false
+  
+  # Backup settings
+  backup_retention_period = var.postgres_backup_retention_period
+  backup_window          = "03:00-04:00"
+  maintenance_window     = "mon:04:00-mon:05:00"
+  
+  # Free tier: enable auto minor version upgrade
+  auto_minor_version_upgrade = true
+  
+  skip_final_snapshot = var.environment != "prod"
+  deletion_protection = var.environment == "prod"
+  
+  # Performance insights (optional, can be disabled for free tier)
+  performance_insights_enabled = false
+  
+  tags = {
+    Name = "${local.name}-postgres"
   }
-  skip_final_snapshot    = var.environment != "prod"
-  deletion_protection    = var.environment == "prod"
-}
-
-resource "aws_rds_cluster_instance" "aurora" {
-  identifier         = "${local.name}-aurora-1"
-  cluster_identifier = aws_rds_cluster.aurora.id
-  instance_class     = "db.serverless"
-  engine             = aws_rds_cluster.aurora.engine
-  engine_version     = aws_rds_cluster.aurora.engine_version
 }

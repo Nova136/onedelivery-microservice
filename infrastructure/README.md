@@ -1,6 +1,6 @@
 # OneDelivery Infrastructure (Terraform)
 
-Terraform for AWS: **Aurora Serverless v2 (PostgreSQL)**, **ECS Fargate** (order, logistics, payment, audit, user), **Application Load Balancer** (path-based routing), and **API Gateway HTTP API** (public entry).
+Terraform for AWS: **RDS PostgreSQL Free Tier**, **ECS Fargate** (order, logistics, payment, audit, user), **Application Load Balancer** (path-based routing), and **API Gateway HTTP API** (public entry).
 
 Account: `542829982577` (default in variables).
 
@@ -9,7 +9,7 @@ Account: `542829982577` (default in variables).
 | Resource | Purpose |
 |----------|--------|
 | **VPC** | Public subnets (ALB, ECS), private subnets (RDS only), internet gateway; **no NAT** |
-| **Aurora Serverless v2** | PostgreSQL 15, one cluster + one serverless instance, private subnets |
+| **RDS PostgreSQL** | PostgreSQL 17.6, db.t3.micro instance (free tier eligible), private subnets, 20 GB storage |
 | **ECS Fargate** | Cluster + 5 services in **public subnets** (public IP; ECR/internet via IGW) |
 | **ALB** | Listener 80, path-based rules: `/order*`, `/logistics*`, `/payment*`, `/audit*`, `/user*` → respective ECS target groups |
 | **API Gateway HTTP API** | Routes `ANY /` and `ANY /{proxy+}` to the ALB |
@@ -18,19 +18,19 @@ Flow: **Client → API Gateway URL → ALB → ECS** (by path).
 
 ## Estimated monthly cost (ap-southeast-1)
 
-Rough estimate for **default Terraform settings** (ECS desired count **0**, Aurora min 0.5 ACU, **no NAT gateways** — ECS runs in public subnets). Prices are approximate and vary by region and usage.
+Rough estimate for **default Terraform settings** (ECS desired count **0**, RDS PostgreSQL free tier, **no NAT gateways** — ECS runs in public subnets). Prices are approximate and vary by region and usage.
 
 | Resource | Assumption | Est. USD/month |
 |----------|------------|----------------|
 | **NAT Gateway** | None (ECS in public subnets) | **0** |
-| **Aurora Serverless v2** | 0.5 ACU avg × ~$0.13/ACU-hr × 730 hr + ~20 GB storage | **~50** |
+| **RDS PostgreSQL Free Tier** | db.t3.micro instance (750 hrs/month free for 12 months) + 20 GB storage (free for 12 months) | **~0** (free tier) or **~15** (after free tier) |
 | **ECS Fargate** | 0 tasks (default); 4 × (0.25 vCPU, 0.5 GB) if set to 1 each | **0** (or ~38) |
 | **Application Load Balancer** | 1 ALB hourly + ~1 LCU | **~25** |
 | **API Gateway HTTP API** | Low request volume (first 1M requests free for 12 months) | **~0–2** |
 | **VPC Link** | 1 link for API Gateway → ALB | **~7** |
 | **Data transfer** | Outbound/in-region (depends on traffic) | **~5–20** |
-| **Total (default, 0 tasks)** | | **~87–105** |
-| **Total (enable_alb = false, 0 tasks)** | No ALB, no API Gateway, no VPC Link | **~55–73** |
+| **Total (default, 0 tasks, free tier)** | | **~32–50** |
+| **Total (enable_alb = false, 0 tasks, free tier)** | No ALB, no API Gateway, no VPC Link | **~0–15** (RDS free tier) |
 
 **Why NAT gateway?** ECS tasks run in **private subnets** (no public IP). To pull images from ECR or reach the internet they need outbound access; that traffic goes through a NAT Gateway. So NAT is only needed **when ECS tasks are running** and are in private subnets.
 
@@ -41,9 +41,9 @@ Rough estimate for **default Terraform settings** (ECS desired count **0**, Auro
 - **ECS at 0:** Default `ecs_desired_count` is **0** so you don’t pay for Fargate until you scale up. Set to `1` (or more) in `terraform.tfvars` when you need the services.
 - **No NAT:** ECS runs in **public subnets** with a public IP, so tasks reach ECR and the internet via the Internet Gateway. NAT gateways are not used; RDS stays in private subnets and does not need internet.
 - **Turn off ALB and API Gateway when not needed:** Set **`enable_alb = false`** in `terraform.tfvars` to skip creating the ALB and API Gateway (and VPC Link). Saves **~\$32/month** (ALB + API Gateway + VPC Link). ECS and RDS still exist; you just have no external HTTP entry until you set `enable_alb = true` and apply again.
-- Lower **Aurora** usage: keep `aurora_min_capacity = 0.5`; scale down when idle if your workload allows.
+- **RDS Free Tier:** Using `db.t3.micro` instance class qualifies for AWS free tier (750 hours/month for 12 months). After free tier expires, expect ~$15/month for the instance.
 
-For **default setup** (no NAT, ECS at 0): expect roughly **~87–105 USD/month**. With **`enable_alb = false`** as well: **~55–73 USD/month** (Aurora + data transfer only).
+For **default setup** (no NAT, ECS at 0, free tier): expect roughly **~32–50 USD/month** (free tier) or **~47–65 USD/month** (after free tier). With **`enable_alb = false`** as well: **~0–15 USD/month** (free tier) or **~15–30 USD/month** (after free tier).
 
 ## Prerequisites
 
@@ -111,8 +111,8 @@ Check which profile is active: `echo $AWS_PROFILE` (empty means `[default]` in c
 
 ## Required Terraform variables
 
-- **`db_username`** – Aurora master username (e.g. `postgres`)
-- **`db_password`** – Aurora master password (do not commit)
+- **`db_username`** – PostgreSQL master username (e.g. `postgres`)
+- **`db_password`** – PostgreSQL master password (do not commit)
 
 Set via environment:
 
@@ -174,7 +174,7 @@ Terraform will list every resource it plans to delete and ask for confirmation. 
 
 - **Same variables:** Use the same `terraform.tfvars` (or `TF_VAR_*`) and AWS credentials as when you applied, so Terraform can match and remove resources.
 - **Order:** Terraform destroys in a safe order (e.g. ECS services and ALB before the VPC). If something fails (e.g. dependency or protection), fix the cause and run `terraform destroy` again.
-- **Aurora:** If the cluster has `deletion_protection = true` (e.g. prod), turn it off in the Terraform config and apply before destroying, or remove protection in the AWS console.
+- **RDS:** If the instance has `deletion_protection = true` (e.g. prod), turn it off in the Terraform config and apply before destroying, or remove protection in the AWS console.
 - **State:** After a full destroy, your `terraform.tfstate` will be empty. To recreate later, run `terraform apply` again.
 
 To preview what would be destroyed without deleting:
@@ -189,7 +189,7 @@ After apply:
 
 - **`api_gateway_invoke_url`** – Public API base URL (e.g. `https://xxx.execute-api.ap-southeast-1.amazonaws.com`). Call e.g. `{url}/order/...`, `{url}/logistics/...`, etc.
 - **`alb_dns_name`** – ALB hostname (optional direct access, same path-based routing).
-- **`aurora_cluster_endpoint`** – RDS host for `DATABASE_URL` (used by ECS tasks).
+- **`postgres_endpoint`** – RDS PostgreSQL endpoint for `DATABASE_URL` (used by ECS tasks).
 - **`ecs_cluster_name`** – For GitHub Actions / deploy pipelines.
 
 ## App requirements for this setup
@@ -197,7 +197,7 @@ After apply:
 1. **HTTP on port 80** – The ALB forwards HTTP to container port 80. Your NestJS apps should expose an HTTP server on port 80 (in addition to or instead of TCP) so that path-based routing works (e.g. add an HTTP listener in `main.ts` and route `/order/*` to order service logic).
 2. **Health check** – ALB target groups use **HTTP GET /health** with expected 200. Add a `GET /health` endpoint that returns 200 so ECS tasks pass health checks.
 3. **Database** – Each app already uses its own schema (`order`, `logistics`, `payment`, `audit`). Terraform passes a single `DATABASE_URL` (no schema in URL); keep using your TypeORM `schema` option per app.
-4. **Schemas in Aurora** – Run your `scripts/init-schemas.sql` once against the Aurora cluster (e.g. from a bastion or one-off task) so the four schemas exist.
+4. **Schemas in PostgreSQL** – Run your `scripts/init-schemas.sql` once against the RDS PostgreSQL instance (e.g. from a bastion or one-off task) so the four schemas exist.
 
 ## Optional: remote state
 
