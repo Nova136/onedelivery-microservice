@@ -94,7 +94,7 @@ resource "aws_ecs_task_definition" "service" {
     }]
     environment = [
       { name = "NODE_ENV", value = "production" },
-      { name = "DATABASE_URL", value = "postgresql://${var.db_username}:${var.db_password}@${aws_rds_cluster.aurora.endpoint}:5432/${var.db_name}" },
+      { name = "DATABASE_URL", value = "postgresql://${var.db_username}:${var.db_password}@${aws_db_instance.postgres.address}:${aws_db_instance.postgres.port}/${var.db_name}" },
       { name = "JWT_SECRET", value = "ffa32c3d40342bec6c1bcfba7b4f8197" },
       { name = "RABBITMQ_URL", value = "amqps://grdulrnl:FLkurItpuAPeOM-VfalX5iGxQkRxuYVi@armadillo.rmq.cloudamqp.com:5671/grdulrnl" },
       { name = "CORS_ORIGIN", value = "*" }
