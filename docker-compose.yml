@@ -34,21 +34,21 @@ services:
       retries: 5
       start_period: 10s
 
-  postgres:
+  database:
     image: postgres:16-alpine
-    container_name: onedelivery-postgres
+    container_name: postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_DB: ${POSTGRES_DB:-onedelivery}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-onedelivery}
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./scripts/init-schemas.sql:/docker-entrypoint-initdb.d/01-schemas.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-onedelivery}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-onedelivery}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -95,6 +95,8 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+    networks:
+      - backend
 
 volumes:
   postgres_data:
@@ -103,5 +105,4 @@ volumes:
 
 networks:
   backend:
-    name: onedelivery-backend
     driver: bridge

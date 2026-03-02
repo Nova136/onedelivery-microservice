@@ -1,12 +1,12 @@
-# RDS PostgreSQL Free Tier - single instance
+# RDS PostgreSQL Free Tier - single instance (uses existing private subnets)
 resource "aws_db_subnet_group" "postgres" {
   name       = "${local.name}-postgres"
-  subnet_ids = aws_subnet.private[*].id
+  subnet_ids = var.private_subnet_ids
 }
 
 resource "aws_security_group" "postgres" {
   name_prefix = "${local.name}-postgres-"
-  vpc_id     = aws_vpc.main.id
+  vpc_id     = data.aws_vpc.main.id
   ingress {
     from_port       = 5432
     to_port         = 5432

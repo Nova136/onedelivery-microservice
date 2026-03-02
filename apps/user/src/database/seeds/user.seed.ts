@@ -21,24 +21,18 @@ export default class UserSeeder implements Seeder {
         email: 'admin@onedelivery.demo',
         role: Role.Admin,
         plainPassword: 'Admin123!',
+        passwordHash: await bcrypt.hash('User123!', SALT_ROUNDS),
+
       },
       {
         email: 'user@onedelivery.demo',
         role: Role.User,
         plainPassword: 'User123!',
+        passwordHash: await bcrypt.hash('User123!', SALT_ROUNDS),
       },
     ];
 
-    const toInsert: Partial<User>[] = [];
-    for (const u of users) {
-      const passwordHash = await bcrypt.hash(u.plainPassword, SALT_ROUNDS);
-      toInsert.push({
-        email: u.email.toLowerCase(),
-        role: u.role,
-        passwordHash,
-      });
-    }
 
-    await repo.insert(toInsert);
+    await repo.insert(users);
   }
 }
