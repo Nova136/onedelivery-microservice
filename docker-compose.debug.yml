@@ -1,8 +1,9 @@
 version: '3'
 
-# Debug stack: 5 microservices using Postgres (and RabbitMQ) from docker-compose.yml.
+# Debug stack: microservices + agents using Postgres (and RabbitMQ) from docker-compose.yml.
 # Start the main stack first: docker compose up -d
 # Then: docker compose -f docker-compose.debug.yml up --build
+# Ports: 3001 audit, 3002 logistics, 3003 order, 3004 payment, 3005 user, 3006 incident; 3010 orchestrator-agent, 3011 logistic-agent, 3012 resolution-agent, 3013 guardian-agent, 3014 qa-agent.
 services:
   # Host:container = 300x:900x so Kong (host.docker.internal:300x) matches.
   order:
@@ -101,6 +102,91 @@ services:
       - .env
     environment:
       - INCIDENT_PORT=9006
+      - DB_HOST=postgres
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-onedelivery}
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER:-rabbit}:${RABBITMQ_PASSWORD:-rabbit}@rabbitmq:5672 #gitleaks:allow
+    networks:
+      - backend
+
+  orchestrator-agent:
+    build:
+      dockerfile: .docker/Dockerfile.orchestrator-agent
+    restart: unless-stopped
+    hostname: orchestrator-agent
+    ports:
+      - '3010:3010'
+    env_file:
+      - .env
+    environment:
+      - ORCHESTRATOR_AGENT_PORT=3010
+      - DB_HOST=postgres
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-onedelivery}
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER:-rabbit}:${RABBITMQ_PASSWORD:-rabbit}@rabbitmq:5672 #gitleaks:allow
+    networks:
+      - backend
+
+  guardian-agent:
+    build:
+      dockerfile: .docker/Dockerfile.guardian-agent
+    restart: unless-stopped
+    hostname: guardian-agent
+    ports:
+      - '3013:3013'
+    env_file:
+      - .env
+    environment:
+      - GUARDIAN_AGENT_PORT=3013
+      - DB_HOST=postgres
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-onedelivery}
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER:-rabbit}:${RABBITMQ_PASSWORD:-rabbit}@rabbitmq:5672 #gitleaks:allow
+    networks:
+      - backend
+
+  logistic-agent:
+    build:
+      dockerfile: .docker/Dockerfile.logistic-agent
+    restart: unless-stopped
+    hostname: logistic-agent
+    ports:
+      - '3011:3011'
+    env_file:
+      - .env
+    environment:
+      - LOGISTIC_AGENT_PORT=3011
+      - DB_HOST=postgres
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-onedelivery}
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER:-rabbit}:${RABBITMQ_PASSWORD:-rabbit}@rabbitmq:5672 #gitleaks:allow
+    networks:
+      - backend
+
+  resolution-agent:
+    build:
+      dockerfile: .docker/Dockerfile.resolution-agent
+    restart: unless-stopped
+    hostname: resolution-agent
+    ports:
+      - '3012:3012'
+    env_file:
+      - .env
+    environment:
+      - RESOLUTION_AGENT_PORT=3012
+      - DB_HOST=postgres
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-onedelivery}
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER:-rabbit}:${RABBITMQ_PASSWORD:-rabbit}@rabbitmq:5672 #gitleaks:allow
+    networks:
+      - backend
+
+  qa-agent:
+    build:
+      dockerfile: .docker/Dockerfile.qa-agent
+    restart: unless-stopped
+    hostname: qa-agent
+    ports:
+      - '3014:3014'
+    env_file:
+      - .env
+    environment:
+      - QA_AGENT_PORT=3014
       - DB_HOST=postgres
       - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-onedelivery}
       - RABBITMQ_URL=amqp://${RABBITMQ_USER:-rabbit}:${RABBITMQ_PASSWORD:-rabbit}@rabbitmq:5672 #gitleaks:allow

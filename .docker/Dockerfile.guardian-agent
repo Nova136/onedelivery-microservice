@@ -1,0 +1,12 @@
+FROM node:24-alpine
+
+WORKDIR /app
+
+# Copy repo (node_modules excluded by .dockerignore)
+COPY . .
+
+# Install deps so runtime can resolve @nestjs/core etc. (webpack bundle still requires them)
+RUN npm ci --omit=dev
+
+EXPOSE 3013
+CMD [ "node", "./dist/apps/guardian-agent/main.js" ]

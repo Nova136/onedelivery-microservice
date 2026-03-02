@@ -3,7 +3,7 @@ resource "aws_apigatewayv2_vpc_link" "alb" {
   count               = var.enable_alb ? 1 : 0
   name                = "${local.name}-vpc-link"
   security_group_ids  = [aws_security_group.alb[0].id]
-  subnet_ids          = aws_subnet.public[*].id
+  subnet_ids          = var.public_subnet_ids
 }
 
 # API Gateway HTTP API - integrates with ALB via VPC Link
