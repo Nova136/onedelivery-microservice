@@ -17,22 +17,22 @@ async function bootstrap() {
   });
 
   const config = new DocumentBuilder()
-        .setTitle("OneDelivery Orchestrator")
-        .setDescription("API documentation for the AI Orchestrator Agent")
+        .setTitle("OneDelivery RESOLUTION")
+        .setDescription("API documentation for the AI Resolution Agent")
         .setVersion("1.0")
         .build();
   const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('orchestrator-agent/api', app, document);
+  SwaggerModule.setup('resolution-agent/api', app, document);
 
   app.connectMicroservice<MicroserviceOptions>({
     transport: Transport.TCP,
     options: {
-      host: configService.get('ORCHESTRATOR_AGENT_TCP_HOST', '127.0.0.1'),
-      port: configService.get('ORCHESTRATOR_AGENT_TCP_HOST', 3010),
+      host: configService.get('RESOLUTION_AGENT_TCP_HOST', '127.0.0.1'),
+      port: configService.get('RESOLUTION_AGENT_TCP_HOST', 3012),
     },
   });
   const rabbitUrl = configService.get('RABBITMQ_URL', 'amqp://rabbit:rabbit@localhost:5672');
-  const rabbitQueue = configService.get('RABBITMQ_ORCHESTRATOR_AGENT_QUEUE', 'orchestrator_agent_queue');
+  const rabbitQueue = configService.get('RABBITMQ_RESOLUTION_AGENT_QUEUE', 'resolution_agent_queue');
   app.connectMicroservice<MicroserviceOptions>({
     transport: Transport.RMQ,
     options: {
@@ -44,9 +44,9 @@ async function bootstrap() {
   });
 
   await app.startAllMicroservices();
-  await app.listen(configService.get('ORCHESTRATOR_AGENT_PORT'));
+  await app.listen(configService.get('RESOLUTION_AGENT_PORT'));
   console.log(
-    `🚀🚀🚀 Orchestrator service running on port ${configService.get('ORCHESTRATOR_AGENT_PORT')},RabbitMQ ${rabbitQueue}}`,
+    `🚀🚀🚀 Resolution service running on port ${configService.get('RESOLUTION_AGENT_PORT')},RabbitMQ ${rabbitQueue}}`,
   );
 }
 bootstrap();
