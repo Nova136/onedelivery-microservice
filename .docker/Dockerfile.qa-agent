@@ -8,5 +8,5 @@ COPY . .
 # Install deps so runtime can resolve @nestjs/core etc. (webpack bundle still requires them)
 RUN npm ci --omit=dev
 
-EXPOSE 3014
+EXPOSE 9014
 CMD [ "node", "./dist/apps/qa-agent/main.js" ]

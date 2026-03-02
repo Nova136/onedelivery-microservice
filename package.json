@@ -35,7 +35,7 @@
     "seed-payment": "cd apps/payment && npm run seed:run",
     "seed-user": "cd apps/user && npm run seed:run",
     "seed-incident": "cd apps/incident && npm run seed:run",
-    "nest-build-all": "concurrently \"nest build audit && cp .env dist/apps/audit\" \"nest build logistics && cp .env dist/apps/logistics\" \"nest build order && cp .env dist/apps/order\" \"nest build payment && cp .env dist/apps/payment\" \"nest build user && cp .env dist/apps/user\" \"nest build incident && cp .env dist/apps/incident\"",
+    "nest-build-all": "concurrently \"nest build audit && cp .env dist/apps/audit\" \"nest build logistics && cp .env dist/apps/logistics\" \"nest build order && cp .env dist/apps/order\" \"nest build payment && cp .env dist/apps/payment\" \"nest build user && cp .env dist/apps/user\" \"nest build incident && cp .env dist/apps/incident\" \"nest build logistic-agent && cp .env dist/apps/logistic-agent\" \"nest build resolution-agent && cp .env dist/apps/resolution-agent\" \"nest build guardian-agent && cp .env dist/apps/guardian-agent\" \"nest build qa-agent && cp .env dist/apps/qa-agent\"",
     "start-debug-docker": "npm install && npm run nest-build-all && docker-compose -f docker-compose.debug.yml up --build",
     "stop-debug-docker": "docker-compose -f docker-compose.debug.yml down"
   },
