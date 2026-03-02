@@ -38,12 +38,17 @@ variable "ecr_repository_names" {
   description = "ECR repository names for each microservice"
   type        = map(string)
   default = {
-    order     = "onedelivery-order"
-    logistics = "onedelivery-logistics"
-    payment   = "onedelivery-payment"
-    audit     = "onedelivery-audit"
-    user      = "onedelivery-user"
-    incident  = "onedelivery-incident"
+    order             = "onedelivery-order"
+    logistics         = "onedelivery-logistics"
+    payment           = "onedelivery-payment"
+    audit             = "onedelivery-audit"
+    user              = "onedelivery-user"
+    incident          = "onedelivery-incident"
+    orchestrator-agent = "onedelivery-orchestrator-agent"
+    guardian-agent     = "onedelivery-guardian-agent"
+    logistic-agent     = "onedelivery-logistic-agent"
+    resolution-agent   = "onedelivery-resolution-agent"
+    qa-agent          = "onedelivery-qa-agent"
   }
 }
 
@@ -99,4 +104,50 @@ variable "enable_alb" {
   description = "Create ALB and API Gateway (set to false to save ~$32/month when not needed; ECS will have no external HTTP entry)"
   type        = bool
   default     = false
+}
+
+variable "vpc_cidr" {
+  description = "CIDR block for the VPC. When reusing an existing VPC, this must match its actual CIDR (for example 172.16.94.0/24)."
+  type        = string
+  default     = "10.0.0.0/16"
+}
+
+variable "vpc_id" {
+  description = "Existing VPC ID to use (e.g. vpc-0eeecdaacba51204a). Prevents Terraform from creating a new VPC."
+  type        = string
+}
+
+variable "public_subnet_ids" {
+  description = "List of existing public subnet IDs for ECS Fargate and ALB (e.g. [\"subnet-xxx\", \"subnet-yyy\"]). Must be in the VPC specified by vpc_id."
+  type        = list(string)
+}
+
+variable "private_subnet_ids" {
+  description = "List of existing private subnet IDs for RDS (e.g. [\"subnet-aaa\", \"subnet-bbb\"]). Must be in the VPC specified by vpc_id."
+  type        = list(string)
+}
+
+# Optional: CIDR references (not used by Terraform; for documentation / other tooling)
+variable "alb_cidr" {
+  description = "Optional CIDR for ALB subnet (not used by Terraform when using existing subnets)"
+  type        = string
+  default     = null
+}
+
+variable "fargate_subnet_cidr" {
+  description = "Optional CIDR for Fargate subnets (not used by Terraform when using existing subnets)"
+  type        = string
+  default     = null
+}
+
+variable "endpoints_subnet_cidr" {
+  description = "Optional CIDR for VPC endpoints subnet (not used by Terraform when using existing subnets)"
+  type        = string
+  default     = null
+}
+
+variable "rds_subnet_cidr" {
+  description = "Optional CIDR for RDS subnets (not used by Terraform when using existing subnets)"
+  type        = string
+  default     = null
 }

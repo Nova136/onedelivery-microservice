@@ -3,7 +3,7 @@
 resource "aws_security_group" "alb" {
   count       = var.enable_alb ? 1 : 0
   name_prefix = "${local.name}-alb-"
-  vpc_id      = aws_vpc.main.id
+  vpc_id      = data.aws_vpc.main.id
   ingress {
     from_port   = 80
     to_port     = 80
@@ -32,7 +32,7 @@ resource "aws_lb" "main" {
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb[0].id]
-  subnets            = aws_subnet.public[*].id
+  subnets            = var.public_subnet_ids
 }
 
 resource "aws_lb_target_group" "service" {
@@ -40,7 +40,7 @@ resource "aws_lb_target_group" "service" {
   name        = "${local.name}-${each.key}"
   port        = local.service_ports[each.key]
   protocol    = "HTTP"
-  vpc_id      = aws_vpc.main.id
+  vpc_id      = data.aws_vpc.main.id
   target_type = "ip"
 
   health_check {
@@ -147,5 +147,70 @@ resource "aws_lb_listener_rule" "incident" {
   }
   condition {
     path_pattern { values = ["/incident", "/incident/*"] }
+  }
+}
+
+resource "aws_lb_listener_rule" "orchestrator_agent" {
+  count        = var.enable_alb ? 1 : 0
+  listener_arn = aws_lb_listener.http[0].arn
+  priority     = 160
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.service["orchestrator-agent"].arn
+  }
+  condition {
+    path_pattern { values = ["/orchestrator-agent", "/orchestrator-agent/*"] }
+  }
+}
+
+resource "aws_lb_listener_rule" "guardian_agent" {
+  count        = var.enable_alb ? 1 : 0
+  listener_arn = aws_lb_listener.http[0].arn
+  priority     = 170
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.service["guardian-agent"].arn
+  }
+  condition {
+    path_pattern { values = ["/guardian-agent", "/guardian-agent/*"] }
+  }
+}
+
+resource "aws_lb_listener_rule" "logistic_agent" {
+  count        = var.enable_alb ? 1 : 0
+  listener_arn = aws_lb_listener.http[0].arn
+  priority     = 180
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.service["logistic-agent"].arn
+  }
+  condition {
+    path_pattern { values = ["/logistic-agent", "/logistic-agent/*"] }
+  }
+}
+
+resource "aws_lb_listener_rule" "resolution_agent" {
+  count        = var.enable_alb ? 1 : 0
+  listener_arn = aws_lb_listener.http[0].arn
+  priority     = 190
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.service["resolution-agent"].arn
+  }
+  condition {
+    path_pattern { values = ["/resolution-agent", "/resolution-agent/*"] }
+  }
+}
+
+resource "aws_lb_listener_rule" "qa_agent" {
+  count        = var.enable_alb ? 1 : 0
+  listener_arn = aws_lb_listener.http[0].arn
+  priority     = 200
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.service["qa-agent"].arn
+  }
+  condition {
+    path_pattern { values = ["/qa-agent", "/qa-agent/*"] }
   }
 }

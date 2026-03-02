@@ -8,11 +8,6 @@ export default class PaymentSeeder implements Seeder {
   public async run(dataSource: DataSource): Promise<void> {
     const repo = dataSource.getRepository(Payment);
 
-    // Avoid duplicating seed data if it already exists
-    const existing = await repo.count();
-    if (existing > 0) {
-      return;
-    }
 
     const payments: Partial<Payment>[] = [
       {

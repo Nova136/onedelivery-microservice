@@ -36,7 +36,7 @@ resource "aws_iam_role" "ecs_task" {
 
 resource "aws_security_group" "ecs_tasks" {
   name_prefix = "${local.name}-ecs-"
-  vpc_id      = aws_vpc.main.id
+  vpc_id      = data.aws_vpc.main.id
   dynamic "ingress" {
     for_each = var.enable_alb ? [1] : []
     content {
@@ -57,15 +57,20 @@ resource "aws_security_group" "ecs_tasks" {
 
 # Task definition and service per microservice
 locals {
-  services = toset(["order", "logistics", "payment", "audit", "user", "incident"])
+  services = toset(["order", "logistics", "payment", "audit", "user", "incident", "orchestrator-agent", "guardian-agent", "logistic-agent", "resolution-agent", "qa-agent"])
   # Container port 80 so ALB path-based routing works when apps expose HTTP
   service_ports = {
-    order     = 80
-    logistics = 80
-    payment   = 80
-    audit     = 80
-    user      = 80
-    incident  = 80
+    order             = 80
+    logistics         = 80
+    payment           = 80
+    audit             = 80
+    user              = 80
+    incident          = 80
+    orchestrator-agent = 80
+    guardian-agent     = 80
+    logistic-agent     = 80
+    resolution-agent   = 80
+    qa-agent          = 80
   }
 }
 
@@ -97,7 +102,12 @@ resource "aws_ecs_task_definition" "service" {
       { name = "DATABASE_URL", value = "postgresql://${var.db_username}:${var.db_password}@${aws_db_instance.postgres.address}:${aws_db_instance.postgres.port}/${var.db_name}" },
       { name = "JWT_SECRET", value = "ffa32c3d40342bec6c1bcfba7b4f8197" },
       { name = "RABBITMQ_URL", value = "amqps://grdulrnl:FLkurItpuAPeOM-VfalX5iGxQkRxuYVi@armadillo.rmq.cloudamqp.com:5671/grdulrnl" },
-      { name = "CORS_ORIGIN", value = "*" }
+      { name = "CORS_ORIGIN", value = "*" },
+      { name = "DB_HOST", value = "postgres" },
+      { name = "DB_PORT", value = "5432" },
+      { name = "DB_NAME", value = "onedelivery" },
+      { name = "DB_USER", value = "postgres" },
+      { name = "DB_PASSWORD", value = "postgres" },
 
 
     ]
@@ -115,7 +125,11 @@ resource "aws_ecs_task_definition" "service" {
 resource "aws_cloudwatch_log_group" "ecs" {
   for_each          = local.services
   name              = "/ecs/${local.name}-${each.key}"
-  retention_in_days  = 14
+  retention_in_days = 14
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "aws_ecs_service" "service" {
@@ -127,7 +141,7 @@ resource "aws_ecs_service" "service" {
   launch_type     = "FARGATE"
 
   network_configuration {
-    subnets          = aws_subnet.public[*].id
+    subnets          = var.public_subnet_ids
     security_groups  = [aws_security_group.ecs_tasks.id]
     assign_public_ip = true
   }
