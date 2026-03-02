@@ -81,13 +81,13 @@
         "tsConfigPath": "apps/guardian-agent/tsconfig.app.json"
       }
     },
-    "logistics-agent": {
+    "logistic-agent": {
       "type": "application",
-      "root": "apps/logistics-agent",
+      "root": "apps/logistic-agent",
       "entryFile": "main",
-      "sourceRoot": "apps/logistics-agent/src",
+      "sourceRoot": "apps/logistic-agent/src",
       "compilerOptions": {
-        "tsConfigPath": "apps/logistics-agent/tsconfig.app.json"
+        "tsConfigPath": "apps/logistic-agent/tsconfig.app.json"
       }
     },
     "resolution-agent": {
