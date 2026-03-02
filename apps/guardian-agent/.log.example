@@ -1,0 +1,73 @@
+[Nest] 27584  - 01/03/2026, 9:36:54 pm     LOG [NestFactory] Starting Nest application...
+[Nest] 27584  - 01/03/2026, 9:36:54 pm     LOG [InstanceLoader] MemoryModule dependencies initialized +16ms
+[Nest] 27584  - 01/03/2026, 9:36:54 pm     LOG [InstanceLoader] ConfigHostModule dependencies initialized +0ms
+[Nest] 27584  - 01/03/2026, 9:36:54 pm     LOG [InstanceLoader] HttpModule dependencies initialized +0ms
+[Nest] 27584  - 01/03/2026, 9:36:54 pm     LOG [InstanceLoader] ConfigModule dependencies initialized +0ms
+[Nest] 27584  - 01/03/2026, 9:36:54 pm     LOG [InstanceLoader] AppModule dependencies initialized +1ms
+[Nest] 27584  - 01/03/2026, 9:36:54 pm     LOG [RoutesResolver] OrchestratorController {/}: +11ms
+[Nest] 27584  - 01/03/2026, 9:36:54 pm     LOG [RouterExplorer] Mapped {/, POST} route +2ms
+[Nest] 27584  - 01/03/2026, 9:36:54 pm     LOG [NestApplication] Nest application successfully started +2ms
+Orchestrator Agent listening on 3010
+{ userId: 'abc', sessionId: 'abc', message: 'I want a refund' }
+[Nest] 27584  - 01/03/2026, 9:37:07 pm     LOG [OrchestratorService] [abc] User Message: "I want a refund"
+[Nest] 27584  - 01/03/2026, 9:37:07 pm     LOG [OrchestratorService] [abc] Iteration 1: Thinking...
+[Nest] 27584  - 01/03/2026, 9:37:10 pm     LOG [OrchestratorService] [abc] Agent decided to respond directly.
+[Nest] 27584  - 01/03/2026, 9:37:10 pm     LOG [OrchestratorService] [abc] Final Reply: "Could you please provide the Order ID and let me know the reason for the refund request? Additionally, if there are specific items involved, please mention them along with their quantities."
+{ userId: 'abc', sessionId: 'abc', message: 'order is 123' }
+[Nest] 27584  - 01/03/2026, 9:37:43 pm     LOG [OrchestratorService] [abc] User Message: "order is 123"
+[Nest] 27584  - 01/03/2026, 9:37:43 pm     LOG [OrchestratorService] [abc] Iteration 1: Thinking...
+[Nest] 27584  - 01/03/2026, 9:37:45 pm     LOG [OrchestratorService] [abc] Agent decided to respond directly.
+[Nest] 27584  - 01/03/2026, 9:37:45 pm     LOG [OrchestratorService] [abc] Final Reply: "Could you please specify the reason for the refund request and mention any specific items involved along with their quantities?"
+{ userId: 'abc', sessionId: 'abc', message: 'missing 1 burger' }
+[Nest] 27584  - 01/03/2026, 9:38:30 pm     LOG [OrchestratorService] [abc] User Message: "missing 1 burger"
+[Nest] 27584  - 01/03/2026, 9:38:30 pm     LOG [OrchestratorService] [abc] Iteration 1: Thinking...
+[Nest] 27584  - 01/03/2026, 9:38:32 pm     LOG [OrchestratorService] [abc] Calling Tool "Route_To_Refund" with args: {"action":"request_refund","userId":"abc","orderId":"123","issueCategory":"missing_item","description":"missing 1 burger","specificItems":["burger"],"quantity":1}
+Resolution Tool Mock called with: {
+  "action": "request_refund",
+  "action": "request_refund",
+  "userId": "abc",
+  "orderId": "123",
+  "issueCategory": "missing_item",
+  "description": "missing 1 burger",
+  "specificItems": [
+    "burger"
+  ],
+  "quantity": 1
+}
+[Nest] 27584  - 01/03/2026, 9:38:32 pm     LOG [OrchestratorService] [abc] Tool Output: "{"ticketId":"REF-998877","status":"Processing","message":"We have received   "action": "request_refund",
+  "userId": "abc",
+  "orderId": "123",
+  "issueCategory": "missing_item",
+  "description": "missing 1 burger",
+  "specificItems": [
+    "burger"
+  ],
+  "action": "request_refund",
+  "userId": "abc",
+  "orderId": "123",
+  "issueCategory": "missing_item",
+  "description": "missing 1 burger",
+  "specificItems": [
+    "burger"
+  "action": "request_refund",
+  "userId": "abc",
+  "orderId": "123",
+  "issueCategory": "missing_item",
+  "description": "missing 1 burger",
+  "specificItems": [
+    "burger"
+  "orderId": "123",
+  "issueCategory": "missing_item",
+  "description": "missing 1 burger",
+  "issueCategory": "missing_item",
+  "description": "missing 1 burger",
+  "description": "missing 1 burger",
+  "specificItems": [
+    "burger"
+  ],
+  "quantity": 1
+}
+[Nest] 27584  - 01/03/2026, 9:38:32 pm     LOG [OrchestratorService] [abc] Tool Output: "{"ticketId":"REF-998877","status":"Processing","message":"We have received your refund request for missing_item."}"
+[Nest] 27584  - 01/03/2026, 9:38:32 pm     LOG [OrchestratorService] [abc] Iteration 2: Thinking...
+[Nest] 27584  - 01/03/2026, 9:38:34 pm     LOG [OrchestratorService] [abc] Agent decided to respond directly.
+[Nest] 27584  - 01/03/2026, 9:38:34 pm     LOG [OrchestratorService] [abc] Final Reply: "Your refund request for the missing burger has been received and is currently being processed. Your ticket ID is REF-998877. If you have any further questions or need additional assistance, feel free to ask!"

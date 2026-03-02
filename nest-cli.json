@@ -63,6 +63,51 @@
         "tsConfigPath": "apps/payment/tsconfig.app.json"
       }
     },
+    "orchestrator-agent": {
+      "type": "application",
+      "root": "apps/orchestrator-agent",
+      "entryFile": "main",
+      "sourceRoot": "apps/orchestrator-agent/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/orchestrator-agent/tsconfig.app.json"
+      }
+    },
+    "guardian-agent": {
+      "type": "application",
+      "root": "apps/guardian-agent",
+      "entryFile": "main",
+      "sourceRoot": "apps/guardian-agent/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/guardian-agent/tsconfig.app.json"
+      }
+    },
+    "logistic-agent": {
+      "type": "application",
+      "root": "apps/logistic-agent",
+      "entryFile": "main",
+      "sourceRoot": "apps/logistic-agent/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/logistic-agent/tsconfig.app.json"
+      }
+    },
+    "resolution-agent": {
+      "type": "application",
+      "root": "apps/resolution-agent",
+      "entryFile": "main",
+      "sourceRoot": "apps/resolution-agent/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/resolution-agent/tsconfig.app.json"
+      }
+    },
+    "qa-agent": {
+      "type": "application",
+      "root": "apps/qa-agent",
+      "entryFile": "main",
+      "sourceRoot": "apps/qa-agent/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/qa-agent/tsconfig.app.json"
+      }
+    },
     "modules": {
       "type": "library",
       "root": "libs/modules",

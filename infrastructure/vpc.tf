@@ -1,64 +1,61 @@
-# VPC and networking for ECS, RDS, ALB
-resource "aws_vpc" "main" {
-  cidr_block           = "10.0.0.0/16"
-  enable_dns_hostnames = true
-  enable_dns_support   = true
+# Use existing VPC and subnets — do not create or recreate them.
+# Terraform will fail at plan/apply if the VPC or subnets do not exist.
+data "aws_vpc" "main" {
+  id = var.vpc_id
 }
 
-resource "aws_internet_gateway" "main" {
-  vpc_id = aws_vpc.main.id
-}
+# Validate that configured subnets exist and belong to this VPC (fails early if wrong)
+data "aws_subnets" "public" {
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_vpc.main.id]
+  }
+  filter {
+    name   = "subnet-id"
+    values = var.public_subnet_ids
+  }
 
-# Public subnets (ALB, ECS — tasks get public IP and use IGW for ECR/internet; no NAT)
-resource "aws_subnet" "public" {
-  count                   = length(local.azs)
-  vpc_id                  = aws_vpc.main.id
-  cidr_block              = cidrsubnet(aws_vpc.main.cidr_block, 4, count.index)
-  availability_zone       = local.azs[count.index]
-  map_public_ip_on_launch = true
-}
-
-resource "aws_route_table" "public" {
-  vpc_id = aws_vpc.main.id
-  route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.main.id
+  lifecycle {
+    postcondition {
+      condition     = length(self.ids) == length(var.public_subnet_ids)
+      error_message = "Not all public_subnet_ids exist in VPC ${var.vpc_id}. Check that each ID is correct and in this VPC."
+    }
   }
 }
 
-resource "aws_route_table_association" "public" {
-  count          = length(aws_subnet.public)
-  subnet_id      = aws_subnet.public[count.index].id
-  route_table_id = aws_route_table.public.id
+data "aws_subnets" "private" {
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_vpc.main.id]
+  }
+  filter {
+    name   = "subnet-id"
+    values = var.private_subnet_ids
+  }
+
+  lifecycle {
+    postcondition {
+      condition     = length(self.ids) == length(var.private_subnet_ids)
+      error_message = "Not all private_subnet_ids exist in VPC ${var.vpc_id}. Check that each ID is correct and in this VPC."
+    }
+  }
 }
 
-# Private subnets (RDS only; no NAT — RDS does not need internet access)
-resource "aws_subnet" "private" {
-  count             = length(local.azs)
-  vpc_id            = aws_vpc.main.id
-  cidr_block        = cidrsubnet(aws_vpc.main.cidr_block, 4, count.index + 4)
-  availability_zone = local.azs[count.index]
-}
-
-# No default route for private subnets (no NAT). RDS stays private and does not need outbound internet.
-resource "aws_route_table" "private" {
-  vpc_id = aws_vpc.main.id
-}
-
-resource "aws_route_table_association" "private" {
-  count          = length(aws_subnet.private)
-  subnet_id      = aws_subnet.private[count.index].id
-  route_table_id = aws_route_table.private.id
-}
-
-# VPC endpoint for ECR (optional, reduces NAT cost)
+# Security group for VPC endpoints (optional; only created in this Terraform)
 resource "aws_security_group" "vpc_endpoints" {
   name_prefix = "${local.name}-vpc-ep-"
-  vpc_id      = aws_vpc.main.id
+  vpc_id      = data.aws_vpc.main.id
+  description = "VPC endpoint SG for ${local.name}"
   ingress {
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
-    cidr_blocks = [aws_vpc.main.cidr_block]
+    cidr_blocks = [data.aws_vpc.main.cidr_block]
+  }
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
   }
 }
