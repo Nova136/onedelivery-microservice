@@ -28,7 +28,7 @@ async function bootstrap() {
     transport: Transport.TCP,
     options: {
       host: configService.get('ORCHESTRATOR_AGENT_TCP_HOST', '127.0.0.1'),
-      port: configService.get('ORCHESTRATOR_AGENT_TCP_HOST', 3010),
+      port: configService.get('ORCHESTRATOR_AGENT_TCP_PORT', 3010),
     },
   });
   const rabbitUrl = configService.get('RABBITMQ_URL', 'amqp://rabbit:rabbit@localhost:5672');
@@ -46,7 +46,7 @@ async function bootstrap() {
   await app.startAllMicroservices();
   await app.listen(configService.get('ORCHESTRATOR_AGENT_PORT'));
   console.log(
-    `🚀🚀🚀 Orchestrator service running on port ${configService.get('ORCHESTRATOR_AGENT_PORT')},RabbitMQ ${rabbitQueue}}`,
+    `🚀🚀🚀 Orchestrator service running on port ${configService.get('ORCHESTRATOR_AGENT_PORT')}, RabbitMQ ${rabbitQueue}}`,
   );
 }
 bootstrap();
