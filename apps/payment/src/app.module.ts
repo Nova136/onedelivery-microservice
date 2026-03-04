@@ -25,10 +25,11 @@ import { Payment } from './database/entities/payment.entity';
         name: 'AUDIT_SERVICE',
         imports: [ConfigModule],
         useFactory: (config: ConfigService) => ({
-          transport: Transport.TCP,
+          transport: Transport.RMQ,
           options: {
-            host: config.get('AUDIT_TCP_HOST', '127.0.0.1'),
-            port: config.get('AUDIT_TCP_PORT', 3001),
+            urls: config.get('RABBITMQ_URL', 'amqp://rabbit:rabbit@localhost:5672').split(','),
+            queue: config.get('RABBITMQ_AUDIT_QUEUE', 'audit_queue'),
+            queueOptions: { durable: false },
           },
         }),
         inject: [ConfigService],
@@ -37,10 +38,11 @@ import { Payment } from './database/entities/payment.entity';
         name: 'INCIDENT_SERVICE',
         imports: [ConfigModule],
         useFactory: (config: ConfigService) => ({
-          transport: Transport.TCP,
+          transport: Transport.RMQ,
           options: {
-            host: config.get('INCIDENT_TCP_HOST', '127.0.0.1'),
-            port: config.get('INCIDENT_TCP_PORT', 3006),
+            urls: config.get('RABBITMQ_URL', 'amqp://rabbit:rabbit@localhost:5672').split(','),
+            queue: config.get('RABBITMQ_INCIDENT_QUEUE', 'incident_queue'),
+            queueOptions: { durable: false },
           },
         }),
         inject: [ConfigService],

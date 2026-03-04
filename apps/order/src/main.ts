@@ -26,13 +26,6 @@ async function bootstrap() {
   // Serve Swagger at /order/api so Kong (strip_path: false) forwards /order/api correctly
   SwaggerModule.setup('order/api', app, document);
 
-  app.connectMicroservice<MicroserviceOptions>({
-    transport: Transport.TCP,
-    options: {
-      host: configService.get('ORDER_TCP_HOST', '127.0.0.1'),
-      port: configService.get('ORDER_TCP_PORT', 3003),
-    },
-  });
   const rabbitUrl = configService.get('RABBITMQ_URL', 'amqp://rabbit:rabbit@localhost:5672');
   const rabbitQueue = configService.get('RABBITMQ_ORDER_QUEUE', 'order_queue');
   app.connectMicroservice<MicroserviceOptions>({
