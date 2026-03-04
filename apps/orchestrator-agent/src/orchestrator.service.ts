@@ -11,8 +11,11 @@ import {
     BaseMessage,
 } from "@langchain/core/messages";
 import { MemoryService } from "./memory/memory.service";
-import { routeToLogisticsTool } from "./tools/route-to-logistics.tool";
-import { routeToResolutionTool } from "./tools/route-to-resolution.tool";
+import { AgentsClientService } from "./agents/agents-client.service";
+import { createRouteToLogisticsTool } from "./tools/route-to-logistics.tool";
+import { createRouteToResolutionTool } from "./tools/route-to-resolution.tool";
+import { createRouteToQaTool } from "./tools/route-to-qa.tool";
+import { createRouteToGuardianTool } from "./tools/route-to-guardian.tool";
 
 @Injectable()
 export class OrchestratorService {
@@ -20,12 +23,18 @@ export class OrchestratorService {
     private llm: ChatOpenAI;
     private orchestratorWithTools: any;
     private prompt: ChatPromptTemplate;
-    private tools: Record<string, StructuredTool> = {
-        Route_To_Logistics: routeToLogisticsTool,
-        Route_To_Refund: routeToResolutionTool,
-    };
+    private tools: Record<string, StructuredTool>;
 
-    constructor(private memoryService: MemoryService) {
+    constructor(
+        private memoryService: MemoryService,
+        private agentsClient: AgentsClientService,
+    ) {
+        this.tools = {
+            Route_To_Logistics: createRouteToLogisticsTool(this.agentsClient),
+            Route_To_Refund: createRouteToResolutionTool(this.agentsClient),
+            Route_To_QA: createRouteToQaTool(this.agentsClient),
+            Route_To_Guardian: createRouteToGuardianTool(this.agentsClient),
+        } as Record<string, StructuredTool>;
         // 1. Initialize the LLM
         this.llm = new ChatOpenAI({
             modelName: "gpt-4o",
@@ -43,9 +52,12 @@ Your role is to triage customer requests and route them to the appropriate speci
 ### GUIDELINES
 1. **Route_To_Logistics**: Use for "Where is my order?", tracking, cancellations, address changes, or delivery policy.
 2. **Route_To_Refund**: Use for "Missing items", "Wrong order", "Cold food", refund requests, or refund status.
-3. **Gather Information**: If the user's intent implies a tool call but is missing required parameters (like Order ID), DO NOT guess. ASK the user for the missing information first.
-4. **Synthesize tool outputs**: When a tool returns data, summarize it naturally for the user. Never invent order details or policies. Always use the exact data the tool provides.
-5. **Tone**: Be helpful, concise (max 3 sentences), and empathetic if the user is frustrated. Always confirm with the user that their issue is resolved or if they need further assistance.`;
+3. **Route_To_QA**: Use for product questions, FAQs, quality questions, or general feedback about food or service.
+4. **Route_To_Guardian**: Use for safety concerns, account/security issues, escalations, or complaints needing oversight.
+5. **Gather Information**: If the user's intent implies a tool call but is missing required parameters (like Order ID), DO NOT guess. ASK the user for the missing information first.
+6. **Always pass userId and sessionId**: Every tool call MUST include the exact userId and sessionId from the context above so the specialist agent can access the same conversation.
+7. **Synthesize tool outputs**: When a tool returns data, summarize it naturally for the user. Never invent order details or policies. Always use the exact data the tool provides.
+8. **Tone**: Be helpful, concise (max 3 sentences), and empathetic if the user is frustrated. Always confirm with the user that their issue is resolved or if they need further assistance.`;
 
         // 3. Set up the prompt template
         this.prompt = ChatPromptTemplate.fromMessages([
@@ -106,36 +118,36 @@ Your role is to triage customer requests and route them to the appropriate speci
                 break;
             }
 
-            // Execute the tool
-            const toolCall = response.tool_calls[0];
-            const selectedTool = this.tools[toolCall.name];
+            // Add the assistant message with tool_calls first (API requires tool messages to follow this)
+            scratchpad.push(response);
 
-            if (selectedTool) {
-                this.logger.log(
-                    `[${userId}] Calling Tool "${toolCall.name}" with args: ${JSON.stringify(toolCall.args)}`,
-                );
-                const agentReply = await selectedTool.invoke(toolCall.args);
-                this.logger.log(`[${userId}] Tool Output: "${agentReply}"`);
-                const toolMessage = new ToolMessage({
-                    content: String(agentReply),
-                    tool_call_id: toolCall.id,
-                });
+            // Execute each tool call and add a ToolMessage for each (API requires one ToolMessage per tool_call_id)
+            for (const toolCall of response.tool_calls) {
+                const selectedTool = this.tools[toolCall.name];
 
-                // Add the AI's request and the Tool's response to the scratchpad for the next iteration
-                scratchpad.push(response);
-                scratchpad.push(toolMessage);
-            } else {
-                this.logger.warn(
-                    `[${userId}] Agent tried to call unknown tool: ${toolCall.name}`,
-                );
-                // Handle invalid tool name
-                scratchpad.push(response);
-                scratchpad.push(
-                    new ToolMessage({
-                        content: "Error: Tool not found",
-                        tool_call_id: toolCall.id,
-                    }),
-                );
+                if (selectedTool) {
+                    this.logger.log(
+                        `[${userId}] Calling Tool "${toolCall.name}" with args: ${JSON.stringify(toolCall.args)}`,
+                    );
+                    const agentReply = await selectedTool.invoke(toolCall.args);
+                    this.logger.log(`[${userId}] Tool Output: "${agentReply}"`);
+                    scratchpad.push(
+                        new ToolMessage({
+                            content: String(agentReply),
+                            tool_call_id: toolCall.id,
+                        }),
+                    );
+                } else {
+                    this.logger.warn(
+                        `[${userId}] Agent tried to call unknown tool: ${toolCall.name}`,
+                    );
+                    scratchpad.push(
+                        new ToolMessage({
+                            content: "Error: Tool not found",
+                            tool_call_id: toolCall.id,
+                        }),
+                    );
+                }
             }
         }
 

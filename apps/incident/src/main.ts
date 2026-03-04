@@ -25,13 +25,6 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('incident/api', app, document);
 
-  app.connectMicroservice<MicroserviceOptions>({
-    transport: Transport.TCP,
-    options: {
-      host: configService.get('INCIDENT_TCP_HOST', '127.0.0.1'),
-      port: configService.get('INCIDENT_TCP_PORT', 3006),
-    },
-  });
   const rabbitUrl = configService.get('RABBITMQ_URL', 'amqp://rabbit:rabbit@localhost:5672');
   const rabbitQueue = configService.get('RABBITMQ_INCIDENT_QUEUE', 'incident_queue');
   app.connectMicroservice<MicroserviceOptions>({
