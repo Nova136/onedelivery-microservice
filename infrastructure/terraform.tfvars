@@ -1,0 +1,40 @@
+# =============================================================================
+# terraform.tfvars.example — copy to terraform.tfvars and set values.
+# Do not commit terraform.tfvars (add to .gitignore).
+# =============================================================================
+#
+# REQUIRED (no default in variables.tf):
+#   - db_username, db_password  (RDS credentials)
+#   - vpc_id                    (existing VPC ID, e.g. from AWS Console or describe-vpcs)
+#   - public_subnet_ids         (subnet IDs for ECS/ALB in that VPC)
+#   - private_subnet_ids        (subnet IDs for RDS in that VPC)
+#
+# OPTIONAL (have defaults; override here if needed):
+#   - aws_region, environment, aws_account_id
+#   - postgres_* (instance_class, engine_version, allocated_storage, etc.)
+#   - ecs_desired_count, enable_alb, ecs_cpu, ecs_memory_mb
+#   - vpc_cidr (only for reference; Terraform uses existing VPC)
+#   - alb_cidr, fargate_subnet_cidr, endpoints_subnet_cidr, rds_subnet_cidr (reference only)
+# =============================================================================
+
+aws_region   = "ap-southeast-1"
+environment  = "dev"
+db_username  = "postgres"
+db_password  = "64M4YXh08pe7"  # Use a strong password; set in terraform.tfvars
+
+# Optional overrides
+aws_account_id                  = "542829982577"
+postgres_instance_class         = "db.t3.micro"
+postgres_engine_version         = "17.6"
+postgres_allocated_storage      = 20
+postgres_max_allocated_storage  = 20
+postgres_backup_retention_period = 7
+ecs_desired_count               = 0
+enable_alb                      = false
+
+# Existing VPC and subnets (required — replace with your VPC and subnet IDs)
+# e.g. aws ec2 describe-vpcs / describe-subnets --filters "Name=vpc-id,Values=<vpc_id>"
+vpc_id   = "vpc-01f4d46470a373bd0"
+vpc_cidr = "10.0.0.0/16"
+public_subnet_ids  = ["subnet-05e11d0b8594ccdd9", "subnet-02cb0837a91881407", "subnet-0ab9426dc26dab04a"]
+private_subnet_ids = ["subnet-0cb790bb786d37d8f", "subnet-0fe4c38578f00ffd6", "subnet-007c35da441727bce"]
