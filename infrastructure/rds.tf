@@ -1,7 +1,16 @@
 # RDS PostgreSQL Free Tier - single instance (uses existing private subnets)
 resource "aws_db_subnet_group" "postgres" {
-  name       = "${local.name}-postgres"
-  subnet_ids = var.private_subnet_ids
+  name       = "${local.name}-postgres-v2"
+
+  subnet_ids = [
+    aws_subnet.private_a.id,
+    aws_subnet.private_b.id,
+    aws_subnet.private_c.id,
+  ]
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 resource "aws_security_group" "postgres" {

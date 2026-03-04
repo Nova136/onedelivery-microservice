@@ -117,16 +117,6 @@ variable "vpc_id" {
   type        = string
 }
 
-variable "public_subnet_ids" {
-  description = "List of existing public subnet IDs for ECS Fargate and ALB (e.g. [\"subnet-xxx\", \"subnet-yyy\"]). Must be in the VPC specified by vpc_id."
-  type        = list(string)
-}
-
-variable "private_subnet_ids" {
-  description = "List of existing private subnet IDs for RDS (e.g. [\"subnet-aaa\", \"subnet-bbb\"]). Must be in the VPC specified by vpc_id."
-  type        = list(string)
-}
-
 # Optional: CIDR references (not used by Terraform; for documentation / other tooling)
 variable "alb_cidr" {
   description = "Optional CIDR for ALB subnet (not used by Terraform when using existing subnets)"

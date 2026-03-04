@@ -1,43 +1,64 @@
-# Use existing VPC and subnets — do not create or recreate them.
-# Terraform will fail at plan/apply if the VPC or subnets do not exist.
+# Use existing VPC and create dedicated public/private subnets for ECS and RDS.
 data "aws_vpc" "main" {
   id = var.vpc_id
 }
 
-# Validate that configured subnets exist and belong to this VPC (fails early if wrong)
-data "aws_subnets" "public" {
-  filter {
-    name   = "vpc-id"
-    values = [data.aws_vpc.main.id]
-  }
-  filter {
-    name   = "subnet-id"
-    values = var.public_subnet_ids
-  }
-
-  lifecycle {
-    postcondition {
-      condition     = length(self.ids) == length(var.public_subnet_ids)
-      error_message = "Not all public_subnet_ids exist in VPC ${var.vpc_id}. Check that each ID is correct and in this VPC."
-    }
+# Public subnets for ECS/Fargate and ALB (one per AZ)
+resource "aws_subnet" "public_a" {
+  vpc_id                  = data.aws_vpc.main.id
+  cidr_block              = "10.0.0.0/20"
+  availability_zone       = local.azs[0]
+  map_public_ip_on_launch = true
+  tags = {
+    Name = "${local.name}-public-a"
   }
 }
 
-data "aws_subnets" "private" {
-  filter {
-    name   = "vpc-id"
-    values = [data.aws_vpc.main.id]
+resource "aws_subnet" "public_b" {
+  vpc_id                  = data.aws_vpc.main.id
+  cidr_block              = "10.0.16.0/20"
+  availability_zone       = local.azs[1]
+  map_public_ip_on_launch = true
+  tags = {
+    Name = "${local.name}-public-b"
   }
-  filter {
-    name   = "subnet-id"
-    values = var.private_subnet_ids
-  }
+}
 
-  lifecycle {
-    postcondition {
-      condition     = length(self.ids) == length(var.private_subnet_ids)
-      error_message = "Not all private_subnet_ids exist in VPC ${var.vpc_id}. Check that each ID is correct and in this VPC."
-    }
+resource "aws_subnet" "public_c" {
+  vpc_id                  = data.aws_vpc.main.id
+  cidr_block              = "10.0.32.0/20"
+  availability_zone       = local.azs[2]
+  map_public_ip_on_launch = true
+  tags = {
+    Name = "${local.name}-public-c"
+  }
+}
+
+# Private subnets for RDS (no public IPs)
+resource "aws_subnet" "private_a" {
+  vpc_id            = data.aws_vpc.main.id
+  cidr_block        = "10.0.64.0/20"
+  availability_zone = local.azs[0]
+  tags = {
+    Name = "${local.name}-private-a"
+  }
+}
+
+resource "aws_subnet" "private_b" {
+  vpc_id            = data.aws_vpc.main.id
+  cidr_block        = "10.0.80.0/20"
+  availability_zone = local.azs[1]
+  tags = {
+    Name = "${local.name}-private-b"
+  }
+}
+
+resource "aws_subnet" "private_c" {
+  vpc_id            = data.aws_vpc.main.id
+  cidr_block        = "10.0.96.0/20"
+  availability_zone = local.azs[2]
+  tags = {
+    Name = "${local.name}-private-c"
   }
 }
 

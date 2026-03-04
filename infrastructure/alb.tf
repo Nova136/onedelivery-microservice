@@ -32,7 +32,11 @@ resource "aws_lb" "main" {
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb[0].id]
-  subnets            = var.public_subnet_ids
+  subnets = [
+    aws_subnet.public_a.id,
+    aws_subnet.public_b.id,
+    aws_subnet.public_c.id,
+  ]
 }
 
 resource "aws_lb_target_group" "service" {
