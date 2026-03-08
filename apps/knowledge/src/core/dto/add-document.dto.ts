@@ -4,7 +4,7 @@ import { IsString, IsNotEmpty } from "class-validator";
 export class AddDocumentDto {
     @IsString()
     @IsNotEmpty()
-    text: string;
+    content: string;
 
     @IsString()
     @IsNotEmpty()

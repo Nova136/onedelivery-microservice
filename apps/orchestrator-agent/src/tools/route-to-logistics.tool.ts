@@ -4,7 +4,7 @@ import type { AgentsClientService } from "../agents/agents-client.service";
 
 /** Explicit payload type to avoid deep type instantiation with tool() */
 interface LogisticsPayload {
-    action: "track_order" | "check_policy" | "cancel_order";
+    action: "track_order" | "cancel_order";
     userId: string;
     sessionId: string;
     orderId?: string;
@@ -13,10 +13,8 @@ interface LogisticsPayload {
 
 const logisticsSchema = z.object({
     action: z
-        .enum(["track_order", "check_policy", "cancel_order"])
-        .describe(
-            "The specific task the Logistics Agent needs to perform.",
-        ),
+        .enum(["track_order", "cancel_order"])
+        .describe("The specific task the Logistics Agent needs to perform."),
     userId: z
         .string()
         .describe(
@@ -33,15 +31,11 @@ const logisticsSchema = z.object({
         .describe(
             "The order ID. REQUIRED if action is 'track_order' or 'cancel_order'.",
         ),
-    question: z
-        .string()
-        .optional()
-        .describe(
-            "The user's specific question. REQUIRED if action is 'check_policy'.",
-        ),
 });
 
-export function createRouteToLogisticsTool(agentsClient: AgentsClientService): StructuredTool {
+export function createRouteToLogisticsTool(
+    agentsClient: AgentsClientService,
+): StructuredTool {
     return tool(
         async (payload: LogisticsPayload) => {
             try {

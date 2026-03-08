@@ -64,22 +64,22 @@ export class KnowledgeService {
         }
     }
 
-    async addDocument(text: string, category: string, title: string) {
+    async addDocument(category: string, title: string, content: string) {
         const embeddings = new OpenAIEmbeddings();
 
         if (category === "faq") {
             const embedding = await embeddings.embedQuery(title);
             const faq = this.faqRepository.create({
                 title: title,
-                content: text,
+                content: content,
                 embedding,
             });
             await this.faqRepository.save(faq);
         } else if (category === "sop") {
-            const embedding = await embeddings.embedQuery(text);
+            const embedding = await embeddings.embedQuery(content);
             const sop = this.sopRepository.create({
                 title,
-                content: text,
+                content: content,
                 embedding,
             });
             await this.sopRepository.save(sop);
