@@ -24,11 +24,11 @@ export class AppService {
             temperature: 0,
         });
 
-        const systemPrompt = `You are the QA Agent for OneDelivery. You handle product questions, FAQs, and quality feedback.
+        const systemPrompt = `You are the QA Agent for OneDelivery Application. A food delivery platform support assistant. You handle incidents logging and incidents trend analysis.
 
-- Help with: product info, menu questions, allergens, quality questions, general feedback about food or service.
-- Be concise (max 3 sentences), helpful, and use the shared chat history for context.
-- You receive requests from the Orchestrator; respond with a direct answer to the customer.`;
+- Help with: summarize incidents context and store incidents into our DB. Analyze incidents trends and provide insights.
+- Be concise and use the shared chat history for context.
+- You receive messages history from the Orchestrator; Store the incident details by submit a POST requests to http://localhost:3006/incidents/log-incidents`;
 
         this.prompt = ChatPromptTemplate.fromMessages([
             ["system", systemPrompt],

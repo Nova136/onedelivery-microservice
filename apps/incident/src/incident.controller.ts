@@ -1,4 +1,4 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import { Body, Controller, Get, Post } from '@nestjs/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { IncidentService } from './incident.service';
@@ -48,5 +48,12 @@ export class IncidentController {
       timestamp: incident.createdAt.toISOString(),
       message: 'Incident microservice: incident logged',
     };
+  }
+
+  @Get('/incidents')
+  @ApiOperation({ summary: 'Log a new incident via REST' })
+  async getIncidents() {
+    const incident = await this.incidentService.getIncidents();
+    return { incidents: incident };
   }
 }

@@ -14,4 +14,12 @@ export class IncidentService {
     const incident = this.incidentRepo.create({ type, summary, orderId: orderId ?? null });
     return this.incidentRepo.save(incident);
   }
+
+  async getIncidents(page: number = 1, limit: number = 10) {
+    const [incidents, total] = await this.incidentRepo.findAndCount({
+      skip: (page - 1) * limit,
+      take: limit,
+    });
+    return incidents;
+  }
 }
