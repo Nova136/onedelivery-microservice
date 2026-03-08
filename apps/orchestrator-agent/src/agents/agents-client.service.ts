@@ -19,7 +19,8 @@ export interface AgentChatResult {
 @Injectable()
 export class AgentsClientService {
     constructor(
-        @Inject("RESOLUTION_AGENT") private readonly resolutionClient: ClientProxy,
+        @Inject("RESOLUTION_AGENT")
+        private readonly resolutionClient: ClientProxy,
         @Inject("QA_AGENT") private readonly qaClient: ClientProxy,
         @Inject("GUARDIAN_AGENT") private readonly guardianClient: ClientProxy,
         @Inject("LOGISTIC_AGENT") private readonly logisticClient: ClientProxy,
@@ -40,10 +41,7 @@ export class AgentsClientService {
         }
     }
 
-    async send(
-        agent: AgentName,
-        payload: AgentChatPayload,
-    ): Promise<string> {
+    async send(agent: AgentName, payload: AgentChatPayload): Promise<string> {
         const client = this.getClient(agent);
         const result = await firstValueFrom(
             client.send<AgentChatResult>(AGENT_CHAT_PATTERN, payload),
