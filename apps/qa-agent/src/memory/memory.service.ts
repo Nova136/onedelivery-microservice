@@ -82,12 +82,12 @@ export class MemoryService {
   }
 
   async getIdleSessions(hours = 2) {
-    return this.chatMessageRepo
-      .createQueryBuilder("msg")
-      .select("msg.sessionId", "sessionId")
-      .addSelect("MAX(msg.createdAt)", "lastMessage")
-      .where("msg.createdAt < NOW() - INTERVAL :hours HOUR", { hours })
-      .groupBy("msg.sessionId")
-      .getRawMany();
+    // return this.chatMessageRepo
+    //   .createQueryBuilder("msg")
+    //   .select("msg.sessionId", "sessionId")
+    //   .addSelect("MAX(msg.createdAt)", "lastMessage")
+    //   .where("msg.createdAt < NOW() - INTERVAL :hours HOUR", { hours })
+    //   .groupBy("msg.sessionId")
+    //   .getRawMany();
   }
 }
