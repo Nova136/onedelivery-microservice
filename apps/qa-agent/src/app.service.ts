@@ -105,19 +105,19 @@ log_incident tool to record the incident.`;
   async handleReviewIdleChatSessions() {
     this.logger.log("Checking idle chat sessions...");
 
-    const sessions = await this.memoryService.getIdleSessions();
-    // Process each idle chat_message session and check for incidents
-    for (const session of sessions) {
-      try {
-        await this.processChat(
-          session.userId,
-          session.sessionId,
-          "Summarize this conversation and determine if an incident occurred."
-        );
+    // const sessions = await this.memoryService.getIdleSessions();
+    // // Process each idle chat_message session and check for incidents
+    // for (const session of sessions) {
+    //   try {
+    //     await this.processChat(
+    //       session.userId,
+    //       session.sessionId,
+    //       "Summarize this conversation and determine if an incident occurred."
+    //     );
 
-      } catch (err) {
-        this.logger.error(`Failed processing session ${session.sessionId}`, err);
-      }
-    }
+    //   } catch (err) {
+    //     this.logger.error(`Failed processing session ${session.sessionId}`, err);
+    //   }
+    // }
   }
 }

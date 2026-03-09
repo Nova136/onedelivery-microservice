@@ -4,7 +4,10 @@ import {
   Column,
   CreateDateColumn,
   Index,
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
+import { ChatSession } from './chat-session.entity';
 
 export type ChatMessageType = 'human' | 'ai' | 'tool' | 'unknown';
 
@@ -20,6 +23,10 @@ export class ChatMessage {
   @Column({ type: 'varchar', length: 255 })
   sessionId: string;
 
+  @ManyToOne(() => ChatSession, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'sessionId' })
+  session: ChatSession;
+
   @Column({ type: 'varchar', length: 32 })
   type: ChatMessageType;
 
@@ -31,9 +38,6 @@ export class ChatMessage {
 
   @Column({ type: 'int', default: 0 })
   sequence: number;
-
-  @Column({ default: false })
-  reviewed: boolean;
 
   @CreateDateColumn()
   createdAt: Date;

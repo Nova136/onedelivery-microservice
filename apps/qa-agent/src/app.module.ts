@@ -6,6 +6,7 @@ import { AppController } from "./app.controller";
 import { AppService } from "./app.service";
 import { MemoryModule } from "./memory/memory.module";
 import { ChatMessage } from "./database/entities/chat-message.entity";
+import { ChatSession } from "./database/entities/chat-session.entity";
 
 @Module({
     imports: [
@@ -18,7 +19,7 @@ import { ChatMessage } from "./database/entities/chat-message.entity";
                 process.env.DATABASE_URL ??
                 "postgresql://postgres:postgres@localhost:5432/onedelivery",
             schema: "orchestrator",
-            entities: [ChatMessage],
+            entities: [ChatMessage, ChatSession],
             synchronize: process.env.NODE_ENV !== "production",
         }),
         HttpModule,
