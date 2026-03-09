@@ -32,6 +32,9 @@ export class ChatMessage {
   @Column({ type: 'int', default: 0 })
   sequence: number;
 
+  @Column({ default: false })
+  reviewed: boolean;
+
   @CreateDateColumn()
   createdAt: Date;
 }
