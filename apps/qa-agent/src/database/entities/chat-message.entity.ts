@@ -20,12 +20,9 @@ export class ChatMessage {
   @Column({ type: 'varchar', length: 255 })
   userId: string;
 
-  @Column({ type: 'varchar', length: 255 })
-  sessionId: string;
-
   @ManyToOne(() => ChatSession, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'sessionId' })
-  session: ChatSession;
+  sessionId: ChatSession;
 
   @Column({ type: 'varchar', length: 32 })
   type: ChatMessageType;
