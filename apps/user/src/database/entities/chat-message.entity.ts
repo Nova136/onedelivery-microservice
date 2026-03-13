@@ -11,7 +11,7 @@ import { ChatSession } from './chat-session.entity';
 
 export type ChatMessageType = 'human' | 'ai' | 'tool' | 'unknown';
 
-@Entity({ name: 'chat_message', schema: 'orchestrator' })
+@Entity({ name: 'chat_message', schema: 'users' })
 @Index(['userId', 'sessionId'])
 export class ChatMessage {
   @PrimaryGeneratedColumn('uuid')
@@ -39,3 +39,4 @@ export class ChatMessage {
   @CreateDateColumn()
   createdAt: Date;
 }
+

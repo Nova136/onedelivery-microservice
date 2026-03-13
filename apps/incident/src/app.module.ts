@@ -5,9 +5,11 @@ import { IncidentController } from './incident.controller';
 import { IncidentService } from './incident.service';
 import { Incident } from './database/entities/incidents.entity';
 import { HealthModule } from '@libs/modules/health-check/health-check.module';
+import { CommonModule } from '@libs/modules/common/common.module';
 
 @Module({
   imports: [
+    CommonModule,
     ConfigModule.forRoot({
       envFilePath: ['.env'],
     }),
