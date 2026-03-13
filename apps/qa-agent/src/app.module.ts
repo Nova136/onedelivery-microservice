@@ -22,6 +22,7 @@ import { ChatSession } from "./database/entities/chat-session.entity";
             entities: [ChatMessage, ChatSession],
             synchronize: process.env.NODE_ENV !== "production",
         }),
+        TypeOrmModule.forFeature([ChatMessage, ChatSession]),
         HttpModule,
         MemoryModule,
     ],
