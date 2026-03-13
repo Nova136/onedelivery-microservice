@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Logger } from "@nestjs/common";
+import { Controller, Post, Body, Logger, Get } from "@nestjs/common";
 import { MessagePattern, Payload } from "@nestjs/microservices";
 import { ApiTags, ApiOperation, ApiResponse } from "@nestjs/swagger";
 import { AppService } from "./app.service";
@@ -43,5 +43,24 @@ export class AppController {
 
         // Send the final text back to the user
         return { reply: aiResponse };
+    }
+
+    @Get('/analyze-trends')
+    @ApiOperation({ summary: "Analyze incidents trends" })
+    @ApiResponse({ status: 201, description: "The AI agent's response." })
+    async analyzeTrends(@Body() requestData: HandleIncomingMessageDto) {
+        // this.logger.log(
+        //     `Received request for admin ${requestData.userId}, session ${requestData.sessionId}, message: "${requestData.message}"`,
+        // );
+
+        // // Pass the data to our multi-agent orchestrator
+        // const aiResponse = await this.appService.processChat(
+        //     requestData.userId,
+        //     requestData.sessionId,
+        //     requestData.message,
+        // );
+
+        // // Send the final text back to the user
+        // return { reply: aiResponse };
     }
 }
