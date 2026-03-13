@@ -1,7 +1,7 @@
 // src/knowledge/knowledge.controller.ts
 import { Controller, Post, Body, Get, Logger } from "@nestjs/common";
 import { KnowledgeService } from "./knowledge.service";
-import { SearchQueryDto, AddDocumentDto } from "./core/dto";
+import { AddDocumentDto, SearchFaqDto, SearchSopDto } from "./core/dto";
 import { MessagePattern } from "@nestjs/microservices";
 
 @Controller("api/knowledge")
@@ -29,7 +29,7 @@ export class KnowledgeController {
     // ️Endpoint for the Orchestrator's "Search_FAQ" tool
     @MessagePattern("faq")
     @Post("faq")
-    async searchFaq(@Body() body: SearchQueryDto) {
+    async searchFaq(@Body() body: SearchFaqDto) {
         this.logger.log(`Received FAQ search query: "${body.query}"`);
         const result = await this.knowledgeService.searchFAQ(body.query);
         return { reply: result };
@@ -38,10 +38,13 @@ export class KnowledgeController {
     // Endpoint for the Orchestrator's "Search_Internal_SOP" tool
     @MessagePattern("sop")
     @Post("sop")
-    async searchSop(@Body() body: SearchQueryDto) {
-        this.logger.log(`Received SOP search query: "${body.query}"`);
+    async searchSop(@Body() body: SearchSopDto) {
+        this.logger.log(
+            `Received SOP search intent: "${body.intentCode}" from agent "${body.requestingAgent}"`,
+        );
         const result = await this.knowledgeService.searchInternalSOP(
-            body.query,
+            body.intentCode,
+            body.requestingAgent,
         );
         return { reply: result };
     }
@@ -50,13 +53,9 @@ export class KnowledgeController {
     @Post("add")
     async addDocument(@Body() body: AddDocumentDto) {
         this.logger.log(
-            `Received document to add: Category="${body.category}", Title="${body.title}", Content="${body.content}"`,
+            `Received document to add: Title="${body.title}", Content="${body.content}"`,
         );
-        await this.knowledgeService.addDocument(
-            body.category,
-            body.title,
-            body.content,
-        );
+        await this.knowledgeService.addDocument(body.title, body.content);
         return {
             success: true,
             message: `Document '${body.title}' embedded and saved!`,
