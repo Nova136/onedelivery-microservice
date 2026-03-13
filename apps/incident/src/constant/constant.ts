@@ -1,5 +1,4 @@
 export enum IncidentType {
-  GENERAL = 'GENERAL', // user for product questions and FAQs
   LATE_DELIVERY = 'LATE_DELIVERY',
   MISSING_ITEMS = 'MISSING_ITEMS',
   WRONG_ORDER = 'WRONG_ORDER',

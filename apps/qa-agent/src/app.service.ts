@@ -22,7 +22,7 @@ export const logIncidentTool = new DynamicTool({
 Use this tool to log a support incident when a customer problem occurred.
 
 Required fields:
-- type: incident category (DELIVERY, PAYMENT, REFUND, APP_ERROR)
+- type: incident category. MUST be one of: [LATE_DELIVERY, MISSING_ITEMS, WRONG_ORDER, DAMAGED_PACKAGING, PAYMENT_FAILURE, OTHER]
 - summary: short summary of the issue
 - orderId: order ID if applicable
 `,
