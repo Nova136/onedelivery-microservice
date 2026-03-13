@@ -4,7 +4,10 @@ import {
   Column,
   CreateDateColumn,
   Index,
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
+import { ChatSession } from './chat-session.entity';
 
 export type ChatMessageType = 'human' | 'ai' | 'tool' | 'unknown';
 
@@ -17,8 +20,9 @@ export class ChatMessage {
   @Column({ type: 'varchar', length: 255 })
   userId: string;
 
-  @Column({ type: 'varchar', length: 255 })
-  sessionId: string;
+  @ManyToOne(() => ChatSession, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'sessionId' })
+  sessionId: ChatSession;
 
   @Column({ type: 'varchar', length: 32 })
   type: ChatMessageType;
