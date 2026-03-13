@@ -1,5 +1,5 @@
 import { BaseEntity } from "@libs/utils/base.entity";
-import { Column, Entity, PrimaryGeneratedColumn } from "typeorm";
+import { Column, Entity } from "typeorm";
 
 @Entity({ schema: "knowledge", name: "faq" })
 export class Faq extends BaseEntity {

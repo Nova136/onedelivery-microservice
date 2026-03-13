@@ -36,53 +36,76 @@ export class KnowledgeService {
                 .orderBy("faq.embedding <=> :queryEmbedding", "ASC")
                 .getOne();
 
-            return faq ? faq.content : "No relevant FAQ found.";
+            // 1. If the database found absolutely nothing
+            if (!faq) {
+                return "No relevant FAQ found. STRICT RULE: DO NOT guess or make up an answer. Reply EXACTLY with: 'I'm sorry, I don't have the answer to that specific question. Would you like me to connect you with a human agent?'";
+            }
+
+            // 2. If it found something, wrap it in the hallucination-killer prompt
+            return `
+### SEARCH RESULT ###
+${faq.content}
+
+### STRICT RULE ###
+If the user's exact question is not clearly answered by the text above, DO NOT guess or use outside knowledge. Reply EXACTLY with: "I'm sorry, I don't have the answer to that specific question. Would you like me to connect you with a human agent?"
+            `.trim();
         } catch (error) {
             console.error("Error searching FAQ:", error);
-            return "An error occurred while searching for the FAQ.";
+            return "An error occurred while searching for the FAQ. STRICT RULE: Tell the user you are experiencing technical difficulties and ask if they need a human agent.";
         }
     }
 
-    async searchInternalSOP(query: string): Promise<string> {
+    async searchInternalSOP(
+        intentCode: string,
+        requestingAgent: string,
+    ): Promise<string> {
         try {
-            const embeddings = new OpenAIEmbeddings();
-            const queryEmbedding = await embeddings.embedQuery(query);
+            // 1. Lightning-fast exact match (No embeddings needed!)
+            // We also enforce the agentOwner guardrail here so agents don't read each other's rules.
+            const sop = await this.sopRepository.findOne({
+                where: {
+                    intentCode: intentCode,
+                    agentOwner: requestingAgent,
+                },
+            });
 
-            const sop = await this.sopRepository
-                .createQueryBuilder("sop")
-                .select("sop.content")
-                .where("sop.embedding <=> :queryEmbedding < 0.5", {
-                    queryEmbedding: JSON.stringify(queryEmbedding),
-                })
-                .orderBy("sop.embedding <=> :queryEmbedding", "ASC")
-                .getOne();
+            // 2. Safe fallback if the LLM hallucinates a weird intent code
+            if (!sop) {
+                return `Error: No internal rules found for intent '${intentCode}'. Please ask the user to clarify their request.`;
+            }
 
-            return sop ? sop.content : "No relevant SOP found.";
+            // 3. Format the JSON structure into a strict string for the LLM to read
+            const formattedSop = `
+### INTERNAL RULEBOOK: ${sop.title} ###
+
+REQUIRED DATA TO COLLECT FIRST:
+${sop.requiredData.length > 0 ? sop.requiredData.map((item) => `- ${item}`).join("\n") : "None. You may proceed."}
+
+WORKFLOW STEPS (FOLLOW EXACTLY):
+${sop.workflowSteps.join("\n")}
+
+PERMITTED TOOLS:
+${sop.permittedTools.length > 0 ? sop.permittedTools.join(", ") : "None."}
+      `.trim();
+
+            return formattedSop;
         } catch (error) {
-            console.error("Error searching SOP:", error);
-            return "An error occurred while searching for the SOP.";
+            console.error(
+                `Error fetching SOP for intent ${intentCode}:`,
+                error,
+            );
+            return "An internal database error occurred while fetching the workflow rules.";
         }
     }
 
-    async addDocument(category: string, title: string, content: string) {
+    async addDocument(title: string, content: string) {
         const embeddings = new OpenAIEmbeddings();
-
-        if (category === "faq") {
-            const embedding = await embeddings.embedQuery(title);
-            const faq = this.faqRepository.create({
-                title: title,
-                content: content,
-                embedding,
-            });
-            await this.faqRepository.save(faq);
-        } else if (category === "sop") {
-            const embedding = await embeddings.embedQuery(content);
-            const sop = this.sopRepository.create({
-                title,
-                content: content,
-                embedding,
-            });
-            await this.sopRepository.save(sop);
-        }
+        const embedding = await embeddings.embedQuery(title);
+        const faq = this.faqRepository.create({
+            title: title,
+            content: content,
+            embedding,
+        });
+        await this.faqRepository.save(faq);
     }
 }
