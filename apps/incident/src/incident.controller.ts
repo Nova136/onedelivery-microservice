@@ -33,13 +33,15 @@ export class IncidentController {
     return this.logIncident(data);
   }
 
-  @Post('/log-incidents')
+  @MessagePattern({ cmd: 'log-incidents' })
+  // @Post('/log-incidents')
   @ApiOperation({ summary: 'Log a new incident via REST' })
-  async createIncident(@Body() data: LogIncidentDto) {
+  async createIncident(@Payload() data: LogIncidentDto) {
     const incident = await this.incidentService.logIncident(
       data.type,
       data.summary,
       data.orderId,
+      data.userId,
     );
     return {
       incidentId: incident.id,
@@ -51,7 +53,7 @@ export class IncidentController {
   }
 
   @Get('/incidents')
-  @ApiOperation({ summary: 'Log a new incident via REST' })
+  @ApiOperation({ summary: 'Get all incidents via REST' })
   async getIncidents() {
     const incident = await this.incidentService.getIncidents();
     return { incidents: incident };

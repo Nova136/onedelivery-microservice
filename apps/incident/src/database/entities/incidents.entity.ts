@@ -11,6 +11,9 @@ export class Incident {
   @Column({ type: 'uuid', nullable: true })
   orderId: string | null;
 
+  @Column({ type: 'uuid', nullable: true })
+  userId: string | null;
+
   @Column('text')
   summary: string;
 
