@@ -3,15 +3,13 @@ import {
   PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
-  Index,
   UpdateDateColumn,
   OneToMany,
 } from 'typeorm';
 import { ChatMessage } from './chat-message.entity';
-
 export type ChatStatus = 'OPEN' | 'CLOSED';
 
-@Entity({ name: 'chat_session', schema: 'orchestrator' })
+@Entity({ name: 'chat_session', schema: 'users' })
 export class ChatSession {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -31,3 +29,4 @@ export class ChatSession {
   @OneToMany(() => ChatMessage, (message) => message.sessionId)
   messages: ChatMessage[];
 }
+

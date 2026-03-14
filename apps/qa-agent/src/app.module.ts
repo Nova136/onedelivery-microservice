@@ -1,32 +1,36 @@
 import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
-import { TypeOrmModule } from "@nestjs/typeorm";
 import { HttpModule } from "@nestjs/axios";
+import { ClientsModule, Transport } from "@nestjs/microservices";
 import { AppController } from "./app.controller";
 import { AppService } from "./app.service";
 import { MemoryModule } from "./memory/memory.module";
-import { ChatMessage } from "./database/entities/chat-message.entity";
-import { ChatSession } from "./database/entities/chat-session.entity";
+import { CommonModule } from "@libs/modules/common/common.module";
 
 @Module({
-    imports: [
-        ConfigModule.forRoot({
-            isGlobal: true,
+  imports: [
+    CommonModule,
+    ConfigModule.forRoot({
+      isGlobal: true,
+    }),
+    HttpModule,
+    MemoryModule,
+    ClientsModule.registerAsync([
+      {
+        name: "INCIDENT_SERVICE",
+        useFactory: () => ({
+          transport: Transport.RMQ,
+          options: {
+            urls: (process.env.RABBITMQ_URL ??
+              "amqp://rabbit:rabbit@localhost:5672")!.split(","),
+            queue: process.env.RABBITMQ_INCIDENT_QUEUE ?? "incident_queue",
+            queueOptions: { durable: false },
+          },
         }),
-        TypeOrmModule.forRoot({
-            type: "postgres",
-            url:
-                process.env.DATABASE_URL ??
-                "postgresql://postgres:postgres@localhost:5432/onedelivery",
-            schema: "orchestrator",
-            entities: [ChatMessage, ChatSession],
-            synchronize: process.env.NODE_ENV !== "production",
-        }),
-        TypeOrmModule.forFeature([ChatMessage, ChatSession]),
-        HttpModule,
-        MemoryModule,
-    ],
-    controllers: [AppController],
-    providers: [AppService],
+      },
+    ]),
+  ],
+  controllers: [AppController],
+  providers: [AppService],
 })
 export class AppModule {}
