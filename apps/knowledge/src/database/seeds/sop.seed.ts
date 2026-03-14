@@ -14,68 +14,45 @@ export default class SopSeeder implements Seeder {
         }
 
         const sops: Partial<Sop>[] = [
-            // 1. The Resolution SOP (Refunds)
             {
-                intentCode: "MISSING_FOOD",
+                intentCode: "REQUEST_REFUND",
                 agentOwner: "orchestrator",
-                title: "Missing or Incorrect Item Resolution",
-                requiredData: ["orderId", "exactNamesOfMissingItems"],
-                workflowSteps: [
-                    "1. Verify you have the orderId and the specific names of the missing items from the user. Ask clarifying questions if missing.",
-                    "2. Apologize empathetically for the missing food and the poor experience.",
-                    "3. Call the Route_To_Refund tool passing the orderId and missing items.",
-                    "4. Wait for the tool's response. If successful, confirm the refund amount with the user.",
-                    "5. If the tool rejects the refund, politely explain that it requires manual review and ask if they'd like to be transferred to support.",
-                    "6. NEVER mention internal limits or the tool's name.",
+                title: "Missing or Incorrect Item Intake",
+                requiredData: [
+                    "orderId",
+                    "issueCategory (missing_item, quality_issue, wrong_item, late_delivery, other)",
+                    "description",
+                    "items (array of objects with item name and quantity)",
                 ],
-                permittedTools: ["Route_To_Refund"],
+                workflowSteps: [
+                    "1. Ensure you have gathered all the required data from the user. Ask clarifying questions if anything is missing.",
+                    "2. Empathize with the user and apologize for the mistake with their food.",
+                    "3. Execute the Route_To_Resolution tool, passing the gathered data.",
+                    "4. Wait for the tool to return a success or rejection string.",
+                    "5. If successful, confirm the specific refund amount with the user so they know what to expect.",
+                    "6. If rejected, politely explain that the request requires a manual review and ask if they'd like to be transferred to human support.",
+                    "7. NEVER mention internal limits, the Guardian Agent, or the technical name of the tool.",
+                ],
+                permittedTools: ["Route_To_Resolution", "Escalate_To_Human"],
             },
-
-            // 2. The Logistics SOP (Active Cancellations)
             {
-                intentCode: "CANCEL_ORDER",
-                agentOwner: "orchestrator",
-                title: "Cancel Active Order Request",
-                requiredData: ["orderId", "reasonForCancellation"],
+                intentCode: "PROCESS_REFUND_LOGIC",
+                agentOwner: "refund_agent",
+                title: "Refund Calculation and Execution",
+                requiredData: ["orderId", "specificItems", "issueCategory"],
                 workflowSteps: [
-                    "1. Confirm you have the orderId and a brief reason for the cancellation.",
-                    "2. Warn the user that if the restaurant has already started cooking, they might not be eligible for a full refund.",
-                    "3. Call the Route_To_Logistics tool with the action set to 'CANCEL'.",
-                    "4. Relay the exact outcome from the tool to the user (e.g., success, partial refund, or too late to cancel).",
-                    "5. Do not make up delivery rules; only state what the tool returns.",
+                    "1. First, you MUST get the full order details using the Get_Order_Details tool. Ensure that the order has been delivered. The delivered timing must be within the past 2 hours. If it is not delivered or has lapsed for more than 2 hours, reject the refund immediately.",
+                    "2. Calculate the total refund value based on the specific items.",
+                    "3. Check the total value against the $20 auto-approval limit.",
+                    "4. If the refund is > $20, DO NOT execute the refund. Route the payload to the Guardian Agent for fraud/quota approval.",
+                    "5. If the refund is <= $20 (or Guardian approves), execute the payment gateway refund tool.",
+                    "6. Return a simple success/failure string with the final amount back to the Orchestrator.",
                 ],
-                permittedTools: ["Route_To_Logistics"],
-            },
-
-            // 3. The Logistics SOP (Order Tracking)
-            {
-                intentCode: "TRACK_ORDER",
-                agentOwner: "orchestrator",
-                title: "Check Order ETA and Status",
-                requiredData: ["orderId"],
-                workflowSteps: [
-                    "1. Ensure you have the orderId.",
-                    "2. Call the Route_To_Logistics tool with the action set to 'TRACK'.",
-                    "3. Tell the user the current status (e.g., At Restaurant, On the Way) and the estimated time of arrival (ETA).",
-                    "4. If the order is delayed, apologize for the wait and offer a friendly reassurance.",
+                permittedTools: [
+                    "Get_Order_Details",
+                    "executeRefund",
+                    "Route_To_Guardian",
                 ],
-                permittedTools: ["Route_To_Logistics"],
-            },
-
-            // 4. The Guardian SOP (Safety & Escalations)
-            {
-                intentCode: "ESCALATE_SAFETY",
-                agentOwner: "orchestrator",
-                title: "Handle Severe Safety or Abuse Escalations",
-                requiredData: ["orderId", "incidentDescription"],
-                workflowSteps: [
-                    "1. Read the incident description to confirm it involves food poisoning, physical safety, severe allergies, or extreme driver misconduct.",
-                    "2. IMMEDIATELY apologize and validate the user's concern. Treat this with maximum seriousness and empathy.",
-                    "3. DO NOT attempt to issue a refund yourself. DO NOT promise a specific resolution.",
-                    "4. Call the Escalate_To_Human tool, passing the incident details and orderId.",
-                    "5. Inform the user that their safety is our top priority and a specialized support manager will review this and contact them shortly.",
-                ],
-                permittedTools: ["Escalate_To_Human"],
             },
         ];
 

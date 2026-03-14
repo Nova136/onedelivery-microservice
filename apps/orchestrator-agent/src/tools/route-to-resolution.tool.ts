@@ -2,9 +2,14 @@ import { z } from "zod";
 import { tool, StructuredTool } from "@langchain/core/tools";
 import type { AgentsClientService } from "../agents/agents-client.service";
 
+interface ItemDetail {
+    name: string;
+    quantity: number;
+}
+
 /** Explicit payload type to avoid deep type instantiation with tool() */
 interface ResolutionPayload {
-    action: "request_refund" | "check_refund_status";
+    action: "request_refund";
     userId: string;
     sessionId: string;
     orderId?: string;
@@ -15,14 +20,13 @@ interface ResolutionPayload {
         | "late_delivery"
         | "other";
     description?: string;
-    specificItems?: string[];
-    quantity?: number;
+    items?: ItemDetail[];
     question?: string;
 }
 
 const resolutionSchema = z.object({
     action: z
-        .enum(["request_refund", "check_refund_status"])
+        .enum(["request_refund"])
         .describe("The specific task the Resolution Agent needs to perform."),
     userId: z
         .string()
@@ -37,9 +41,7 @@ const resolutionSchema = z.object({
     orderId: z
         .string()
         .optional()
-        .describe(
-            "The order ID. REQUIRED if action is 'request_refund' or 'check_refund_status'.",
-        ),
+        .describe("The order ID. REQUIRED if action is 'request_refund'."),
     issueCategory: z
         .enum([
             "missing_item",
@@ -58,17 +60,18 @@ const resolutionSchema = z.object({
         .describe(
             "The user's description of the issue in their own words. REQUIRED if action is 'request_refund'.",
         ),
-    specificItems: z
-        .array(z.string())
+    items: z
+        .array(
+            z.object({
+                name: z.string().describe("The name of the affected item."),
+                quantity: z
+                    .number()
+                    .describe("The quantity of this specific item affected."),
+            }),
+        )
         .optional()
         .describe(
-            "A list of the specific food items the user is complaining about (e.g., ['fries', 'diet coke']). REQUIRED if action is 'request_refund'.",
-        ),
-    quantity: z
-        .number()
-        .optional()
-        .describe(
-            "The quantity of the specific items affected. REQUIRED if action is 'request_refund'.",
+            "An array of objects, where each object contains the name and quantity of an affected item. REQUIRED if action is 'request_refund'.",
         ),
 });
 
@@ -90,9 +93,9 @@ export function createRouteToResolutionTool(
             }
         },
         {
-            name: "Route_To_Refund",
+            name: "Route_To_Resolution",
             description:
-                "Hand off to the Resolution Agent when the user wants a refund, check refund status, or to check refund policies.",
+                "Hand off to the Resolution Agent when the user wants a refund for an order issue.",
             schema: resolutionSchema as z.ZodType<ResolutionPayload>,
         },
     ) as StructuredTool;
