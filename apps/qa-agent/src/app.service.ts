@@ -1,4 +1,5 @@
-import { Injectable, Logger } from "@nestjs/common";
+import { Inject, Injectable, Logger } from "@nestjs/common";
+import { ClientProxy } from "@nestjs/microservices";
 import { ChatOpenAI } from "@langchain/openai";
 import { Runnable } from "@langchain/core/runnables";
 import {
@@ -7,14 +8,13 @@ import {
 } from "@langchain/core/prompts";
 import { HumanMessage, BaseMessage } from "@langchain/core/messages";
 import { MemoryService } from "./memory/memory.service";
-import { Cron, CronExpression, ScheduleModule } from "@nestjs/schedule";
+import { Cron, CronExpression } from "@nestjs/schedule";
 import { DynamicTool } from "@langchain/core/tools";
-import { Repository, LessThan } from "typeorm";
-
-import axios from "axios";
-import { InjectRepository } from "@nestjs/typeorm";
-import { ChatSession } from "./database/entities/chat-session.entity";
-import { ChatMessage } from "./database/entities/chat-message.entity";
+import { CommonService } from "@libs/modules/common/common.service";
+import {
+  LogIncidentRequest,
+  LogIncidentResponse,
+} from "@libs/utils/rabbitmq-interfaces";
 
 export const logIncidentTool = new DynamicTool({
   name: "log_incident",
@@ -26,15 +26,9 @@ Required fields:
 - summary: short summary of the issue
 - orderId: order ID if applicable
 `,
-  func: async (input: string) => {
-    const data = JSON.parse(input);
-
-    const response = await axios.post(
-      "http://localhost:3006/incidents/log-incidents",
-      data,
-    );
-
-    return JSON.stringify(response.data);
+  // The actual implementation is provided in the AppService constructor
+  func: async () => {
+    throw new Error("logIncidentTool.func not initialized");
   },
 });
 
@@ -51,11 +45,24 @@ export class AppService {
 
   constructor(
     private memoryService: MemoryService,
-    @InjectRepository(ChatSession)
-    private readonly chatSessionRepository: Repository<ChatSession>,
-    @InjectRepository(ChatMessage)
-    private readonly chatMessageRepository: Repository<ChatMessage>,
+    private readonly commonService: CommonService,
+    @Inject("INCIDENT_SERVICE")
+    private readonly incidentClient: ClientProxy,
   ) {
+    // Rebind the tool implementation so we can access injected services
+    (logIncidentTool as any).func = async (input: string) => {
+      const data = JSON.parse(input) as LogIncidentRequest;
+
+      const response =
+        await this.commonService.sendViaRMQ<LogIncidentResponse>(
+          this.incidentClient,
+          { cmd: "incident.log" },
+          data,
+        );
+
+      return JSON.stringify(response);
+    };
+
     this.llm = new ChatOpenAI({
       modelName: "gpt-4o",
       temperature: 0,
@@ -112,71 +119,8 @@ log_incident tool to record the incident.`;
 
   @Cron(CronExpression.EVERY_HOUR)
   async handleReviewIdleChatSessions() {
-    this.logger.log("Checking idle chat sessions...");
-
-    const oneHourAgo = new Date();
-    oneHourAgo.setHours(oneHourAgo.getHours() - 1);
-
-    // 1. Find sessions that are OPEN, not reviewed, and haven't been touched in 1h
-    const idleSessions = await this.chatSessionRepository.find({
-      where: {
-        status: "OPEN",
-        reviewed: false,
-        updatedAt: LessThan(oneHourAgo),
-      },
-    });
-
-    if (idleSessions.length === 0) {
-      this.logger.log("No idle sessions found.");
-      return;
-    }
-
-    for (const session of idleSessions) {
-      try {
-        // 2. Discover the userId from the messages in this session
-        const firstMessage = await this.chatMessageRepository.findOne({
-          where: { sessionId: { id: session.id } },
-          select: ["userId"],
-        });
-
-        if (!firstMessage) {
-          // Empty session - just close it
-          session.status = "CLOSED";
-          session.reviewed = true;
-          await this.chatSessionRepository.save(session);
-          continue;
-        }
-
-        const userId = firstMessage.userId;
-
-        // 3. Use MemoryService to get the formatted LangChain history
-        const history = await this.memoryService.getHistory(userId, session.id);
-
-        // 4. Send the history to the LLM for a final "QA Review"
-        const reviewRequest =
-          "The user has gone quiet. Review this chat: if there's a DELIVERY, PAYMENT, or REFUND issue that wasn't logged yet, use the log_incident tool now. Otherwise, respond 'No action needed'.";
-
-        const formattedMessages = await this.prompt.formatMessages({
-          chat_history: history,
-          input: reviewRequest,
-        });
-
-        // This call will trigger the 'log_incident' tool if the LLM sees a problem
-        const response = await this.llm.invoke(formattedMessages);
-
-        // 5. Update session status
-        session.status = "CLOSED";
-        session.reviewed = true;
-        await this.chatSessionRepository.save(session);
-
-        this.logger.log(
-          `Session ${session.id} (User: ${userId}) reviewed and archived.`,
-        );
-      } catch (error) {
-        this.logger.error(
-          `Failed to review session ${session.id}: ${error.message}`,
-        );
-      }
-    }
+    this.logger.log(
+      "handleReviewIdleChatSessions is currently disabled (chat sessions moved to user service).",
+    );
   }
 }
