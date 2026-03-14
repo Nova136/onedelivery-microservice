@@ -72,6 +72,13 @@ services:
         paths: ["/incident"]
         strip_path: false
 
+  - name: knowledge
+    url: http://host.docker.internal:3007
+    routes:
+      - name: knowledge-route
+        paths: ["/knowledge"]
+        strip_path: false
+
   - name: orchestrator-agent
     url: http://host.docker.internal:3010
     routes:
