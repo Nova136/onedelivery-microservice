@@ -4,12 +4,12 @@ NestJS microservices for the **OneDelivery** platform (Agentic AI for Customer S
 
 ## Microservices
 
-| Service     | Port | Role |
-|------------|------|------|
-| **Order**  | 3001 | Order lifecycle: create, get, list |
+| Service       | Port | Role                                                |
+| ------------- | ---- | --------------------------------------------------- |
+| **Order**     | 3001 | Order lifecycle: create, get, list                  |
 | **Logistics** | 3002 | Delivery tracking, status updates, delay prediction |
-| **Payment** | 3003 | Process payment, refund, get payment |
-| **Audit**  | 3004 | Audit logging, incident logging, query audit trail |
+| **Payment**   | 3003 | Process payment, refund, get payment                |
+| **Audit**     | 3004 | Audit logging, incident logging, query audit trail  |
 
 Each service runs as a **TCP microservice** and exposes **message patterns** (e.g. `order.get`, `logistics.track`, `payment.refund`, `audit.log`) for other apps or an API gateway to call.
 
@@ -27,6 +27,7 @@ npm install
 ## Run
 
 **Run one microservice (dev with watch):**
+
 ```bash
 npm run order:start:dev      # Order @ 127.0.0.1:3001
 npm run logistics:start:dev  # Logistics @ 127.0.0.1:3002
@@ -35,11 +36,13 @@ npm run audit:start:dev      # Audit @ 127.0.0.1:3004
 ```
 
 **Run all four at once:**
+
 ```bash
 npm run start:all
 ```
 
 **Production (no watch):**
+
 ```bash
 npm run order:start
 npm run logistics:start
@@ -84,13 +87,13 @@ Use `ClientProxy` from `@nestjs/microservices` (e.g. with `ClientProxyFactory.cr
 
 Each microservice uses the same Postgres database with **its own schema** and tables:
 
-| Schema     | Tables | Service  |
-|------------|--------|----------|
-| `order`    | `orders`, `order_items` | Order    |
-| `logistics`| `deliveries`, `delivery_tracking` | Logistics |
-| `payment`  | `payments`, `refunds`   | Payment  |
-| `audit`    | `audit_events` | Audit   |
-| `incident` | `incidents`    | Incident |
+| Schema      | Tables                            | Service   |
+| ----------- | --------------------------------- | --------- |
+| `order`     | `orders`, `order_items`           | Order     |
+| `logistics` | `deliveries`, `delivery_tracking` | Logistics |
+| `payment`   | `payments`, `refunds`             | Payment   |
+| `audit`     | `audit_events`                    | Audit     |
+| `incident`  | `incidents`                       | Incident  |
 
 Set `DATABASE_URL` (e.g. in `.env`) so all apps connect to the same DB. TypeORM is configured with `schema` and `synchronize: true` in development so tables are created/updated on startup.
 
@@ -112,24 +115,25 @@ All seeders implement the `Seeder` interface from `typeorm-extension` and insert
 1. **Edit the seeder file** for the service and adjust the array of objects (e.g. add products in `product.seed.ts`, change seed users in `user.seed.ts`, etc.).
 2. **Keep the guard that checks for existing rows** (the `repo.count()` check) so running the seeder twice does not duplicate data. If you want to re-seed from scratch, truncate the table (or drop/recreate the DB) before running again.
 3. **Run the service-specific seed script** from the repo root (Docker compose + `.env` must already be up):
-   - `npm run seed-order`
-   - `npm run seed-logistics`
-   - `npm run seed-payment`
-   - `npm run seed-user`
-   - `npm run seed-incident`
-   - `npm run seed-audit`
+    - `npm run seed-order`
+    - `npm run seed-logistics`
+    - `npm run seed-payment`
+    - `npm run seed-user`
+    - `npm run seed-incident`
+    - `npm run seed-audit`
+    - `npm run seed-knowledge`
 4. To seed **everything at once**, run: `npm run seeding-all-datas`.
 
 ## Local stack (Postgres, RabbitMQ, LocalStack, Kong)
 
 Docker Compose runs **PostgreSQL**, **RabbitMQ** (event bus), **LocalStack** (S3 + SNS), and **Kong** (API gateway) for local development.
 
-| Service    | Port(s)        | Purpose                    |
-|-----------|----------------|----------------------------|
-| **Kong**  | 8000 (proxy), 8001 (admin) | API gateway — **point the frontend to http://localhost:8000** |
-| Postgres  | 5432           | Database                   |
-| RabbitMQ  | 5672 (AMQP), 15672 (Management UI) | Event bus / message broker |
-| LocalStack| 4566           | S3 and SNS (AWS-compatible) |
+| Service    | Port(s)                            | Purpose                                                       |
+| ---------- | ---------------------------------- | ------------------------------------------------------------- |
+| **Kong**   | 8000 (proxy), 8001 (admin)         | API gateway — **point the frontend to http://localhost:8000** |
+| Postgres   | 5432                               | Database                                                      |
+| RabbitMQ   | 5672 (AMQP), 15672 (Management UI) | Event bus / message broker                                    |
+| LocalStack | 4566                               | S3 and SNS (AWS-compatible)                                   |
 
 **Kong routes (path prefix stripped when proxying):** `/order` → order:3001, `/logistics` → logistics:3002, `/payment` → payment:3003, `/audit` → audit:3004, `/user` → user:3005. Run microservices on the host with `npm run start:all`, then the frontend can call e.g. `http://localhost:8000/order/health`, `http://localhost:8000/user/login`, etc.
 
@@ -188,13 +192,13 @@ docker build -f apps/audit/Dockerfile -t audit:latest .
 ### Required setup
 
 1. **AWS**
-   - Create an **ECS cluster** and four **ECS services** (order, logistics, payment, audit), each using a task definition that points to the corresponding ECR image (e.g. via Terraform in `infrastructure/`).
-   - Create **ECR repositories** (e.g. `onedelivery-order`, `onedelivery-logistics`, `onedelivery-payment`, `onedelivery-audit`).
-   - Create a **GitHub OIDC IAM role** that GitHub Actions can assume (ECR push + ECS update-service).
+    - Create an **ECS cluster** and four **ECS services** (order, logistics, payment, audit), each using a task definition that points to the corresponding ECR image (e.g. via Terraform in `infrastructure/`).
+    - Create **ECR repositories** (e.g. `onedelivery-order`, `onedelivery-logistics`, `onedelivery-payment`, `onedelivery-audit`).
+    - Create a **GitHub OIDC IAM role** that GitHub Actions can assume (ECR push + ECS update-service).
 
 2. **GitHub**
-   - **Secret:** `AWS_ROLE_ARN` = ARN of that IAM role (e.g. `arn:aws:iam::542829982577:role/github-actions-ecs`).
-   - **Variables (optional):** `AWS_REGION`, `ECS_CLUSTER`, ECR repo names, ECS service names. Defaults are in the workflow.
+    - **Secret:** `AWS_ROLE_ARN` = ARN of that IAM role (e.g. `arn:aws:iam::542829982577:role/github-actions-ecs`).
+    - **Variables (optional):** `AWS_REGION`, `ECS_CLUSTER`, ECR repo names, ECS service names. Defaults are in the workflow.
 
 After this, pushing to `main` (or running the workflow manually) will build the four images, push them to ECR, and redeploy the four ECS services.
 
@@ -204,7 +208,8 @@ After this, pushing to `main` (or running the workflow manually) will build the 
 - Add persistence (DB) and shared DTOs per service.
 - Wire in **Order & Logistics** and **Resolution & Refund** agents from the practice module.
 
-## Updating ECS Variable 
+## Updating ECS Variable
+
 Update new variable on ./infrastructure/ecs.tf
 Then execute the update
 export AWS_PROFILE=onedelivery

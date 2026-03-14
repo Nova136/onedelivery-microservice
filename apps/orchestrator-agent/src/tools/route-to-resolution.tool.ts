@@ -4,11 +4,16 @@ import type { AgentsClientService } from "../agents/agents-client.service";
 
 /** Explicit payload type to avoid deep type instantiation with tool() */
 interface ResolutionPayload {
-    action: "request_refund" | "check_refund_status" | "check_policy";
+    action: "request_refund" | "check_refund_status";
     userId: string;
     sessionId: string;
     orderId?: string;
-    issueCategory?: "missing_item" | "quality_issue" | "wrong_item" | "late_delivery" | "other";
+    issueCategory?:
+        | "missing_item"
+        | "quality_issue"
+        | "wrong_item"
+        | "late_delivery"
+        | "other";
     description?: string;
     specificItems?: string[];
     quantity?: number;
@@ -17,10 +22,8 @@ interface ResolutionPayload {
 
 const resolutionSchema = z.object({
     action: z
-        .enum(["request_refund", "check_refund_status", "check_policy"])
-        .describe(
-            "The specific task the Resolution Agent needs to perform.",
-        ),
+        .enum(["request_refund", "check_refund_status"])
+        .describe("The specific task the Resolution Agent needs to perform."),
     userId: z
         .string()
         .describe(
@@ -67,15 +70,11 @@ const resolutionSchema = z.object({
         .describe(
             "The quantity of the specific items affected. REQUIRED if action is 'request_refund'.",
         ),
-    question: z
-        .string()
-        .optional()
-        .describe(
-            "The user's specific question. REQUIRED if action is 'check_policy'.",
-        ),
 });
 
-export function createRouteToResolutionTool(agentsClient: AgentsClientService): StructuredTool {
+export function createRouteToResolutionTool(
+    agentsClient: AgentsClientService,
+): StructuredTool {
     return tool(
         async (payload: ResolutionPayload) => {
             try {
