@@ -4,8 +4,13 @@ import { firstValueFrom } from "rxjs";
 
 export type AgentName = "knowledge";
 
-export interface KnowledgePayload {
+export interface SearchFaqPayload {
     query: string;
+}
+
+export interface SearchInternalSopPayload {
+    intentCode: string;
+    requestingAgent: string;
 }
 
 export interface QueryResult {
@@ -19,14 +24,16 @@ export class KnowledgeClientService {
         private readonly knowledgeClient: ClientProxy,
     ) {}
 
-    async searchFaq(payload: KnowledgePayload): Promise<string> {
+    async searchFaq(payload: SearchFaqPayload): Promise<string> {
         const result = await firstValueFrom(
             this.knowledgeClient.send<QueryResult>("faq", payload),
         );
         return result?.reply ?? "No response from agent.";
     }
 
-    async searchInternalSop(payload: KnowledgePayload): Promise<string> {
+    async searchInternalSop(
+        payload: SearchInternalSopPayload,
+    ): Promise<string> {
         const result = await firstValueFrom(
             this.knowledgeClient.send<QueryResult>("sop", payload),
         );
