@@ -11,6 +11,7 @@ import { Faq } from "./database/entities/faq.entity";
 import { Sop } from "./database/entities/sop.entity";
 import { KnowledgeController } from "./knowledge.controller";
 import { KnowledgeService } from "./knowledge.service";
+import { SnakeNamingStrategy } from "typeorm-naming-strategies";
 
 @Module({
     imports: [
@@ -28,6 +29,7 @@ import { KnowledgeService } from "./knowledge.service";
             schema: "logistics",
             entities: [Faq, Sop],
             synchronize: process.env.NODE_ENV !== "production",
+            namingStrategy: new SnakeNamingStrategy(),
         }),
         TypeOrmModule.forFeature([Faq, Sop]),
     ],

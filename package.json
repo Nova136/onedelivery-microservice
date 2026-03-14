@@ -28,7 +28,6 @@
         "run-resolution-agent": "nest start resolution-agent --watch --debug 0.0.0.0:3012",
         "run-guardian-agent": "nest start guardian-agent --watch --debug 0.0.0.0:3013",
         "run-qa-agent": "nest start qa-agent --watch --debug 0.0.0.0:3014",
-        "run-all-agents": "concurrently \"npm:run-orchestrator-agent\" \"npm:run-logistic-agent\" \"npm:run-resolution-agent\" \"npm:run-guardian-agent\" \"npm:run-qa-agent\"",
         "seeding-all-datas": "concurrently \"npm:seed-*\"",
         "seed-audit": "cd apps/audit && npm run seed:run",
         "seed-logistics": "cd apps/logistics && npm run seed:run",
