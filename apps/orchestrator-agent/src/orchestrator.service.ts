@@ -72,17 +72,25 @@ export class OrchestratorService {
         userId: string,
         sessionId: string,
         message: string,
+        activeOrderId: string = "None",
+        knownIssue: string = "None",
     ): Promise<string> {
         this.logger.log(`[${userId}] User Message: "${message}"`);
 
-        // 1. Fetch the past conversation from the database
+        // Fetch the past conversation from the database
         const chatHistory = await this.memoryService.getHistory(
             userId,
             sessionId,
         );
 
-        // 2. Add the user's brand new message to the history
+        // Add the user's brand new message to the history
         const newHumanMessage = new HumanMessage(message);
+        await this.memoryService.saveHistory(
+            userId,
+            sessionId,
+            chatHistory.length + 1,
+            newHumanMessage,
+        );
         chatHistory.push(newHumanMessage);
 
         // Token-saving: only use a window of the most recent messages for the prompt
@@ -91,7 +99,7 @@ export class OrchestratorService {
         let finalAiMessage: BaseMessage | undefined;
         const scratchpad: BaseMessage[] = [];
 
-        // 3. Loop for multi-step processing (Agent Loop)
+        // Loop for multi-step processing (Agent Loop)
         // We limit to 5 iterations to prevent infinite loops
         for (let i = 0; i < 5; i++) {
             this.logger.log(`[${userId}] Iteration ${i + 1}: Thinking...`);
@@ -102,6 +110,8 @@ export class OrchestratorService {
                 agent_scratchpad: scratchpad,
                 userId: userId,
                 sessionId: sessionId,
+                activeOrderId: activeOrderId,
+                knownIssue: knownIssue,
             });
 
             const response =
@@ -154,21 +164,32 @@ export class OrchestratorService {
             }
         }
 
-        // 7. Append the AI's final reply to our history array
+        let finalResponseString = finalAiMessage?.content
+            ? String(finalAiMessage.content)
+            : "I'm sorry, I encountered an error and couldn't complete the request.";
+
+        // Strip out the hidden reasoning tags!
+        finalResponseString = finalResponseString
+            .replace(/<thinking>[\s\S]*?<\/thinking>/g, "")
+            .trim();
+
+        // Save the CLEAN conversation back to the database safely!
         if (finalAiMessage) {
+            // Overwrite the content with the cleaned string so the DB doesn't store the <thinking> tags
+            finalAiMessage.content = finalResponseString;
             chatHistory.push(finalAiMessage);
+            await this.memoryService.saveHistory(
+                userId,
+                sessionId,
+                chatHistory.length + 1,
+                finalAiMessage,
+            );
         }
 
-        // 8. Save the fully updated conversation back to the database!
-        await this.memoryService.saveHistory(userId, sessionId, chatHistory);
-
         this.logger.log(
-            `[${userId}] Final Reply: "${finalAiMessage?.content}"`,
+            `[${userId}] Final Clean Reply to Frontend: "${finalResponseString}"`,
         );
 
-        return (
-            (finalAiMessage?.content as string) ||
-            "I'm sorry, I encountered an error."
-        );
+        return finalResponseString;
     }
 }
