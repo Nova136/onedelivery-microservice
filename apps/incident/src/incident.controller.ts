@@ -41,6 +41,7 @@ export class IncidentController {
       data.type,
       data.summary,
       data.orderId,
+      data.userId,
     );
     return {
       incidentId: incident.id,
@@ -52,7 +53,7 @@ export class IncidentController {
   }
 
   @Get('/incidents')
-  @ApiOperation({ summary: 'Log a new incident via REST' })
+  @ApiOperation({ summary: 'Get all incidents via REST' })
   async getIncidents() {
     const incident = await this.incidentService.getIncidents();
     return { incidents: incident };
