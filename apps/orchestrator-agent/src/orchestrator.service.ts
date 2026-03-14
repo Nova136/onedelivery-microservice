@@ -85,13 +85,13 @@ export class OrchestratorService {
 
         // Add the user's brand new message to the history
         const newHumanMessage = new HumanMessage(message);
+        chatHistory.push(newHumanMessage);
         await this.memoryService.saveHistory(
             userId,
             sessionId,
-            chatHistory.length + 1,
+            chatHistory.length,
             newHumanMessage,
         );
-        chatHistory.push(newHumanMessage);
 
         // Token-saving: only use a window of the most recent messages for the prompt
         const historyWindow = chatHistory.slice(-this.CHAT_HISTORY_WINDOW_SIZE);
@@ -181,7 +181,7 @@ export class OrchestratorService {
             await this.memoryService.saveHistory(
                 userId,
                 sessionId,
-                chatHistory.length + 1,
+                chatHistory.length,
                 finalAiMessage,
             );
         }
