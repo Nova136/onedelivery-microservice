@@ -41,7 +41,7 @@ export default class SopSeeder implements Seeder {
                 title: "Refund Calculation and Execution",
                 requiredData: ["orderId", "specificItems", "issueCategory"],
                 workflowSteps: [
-                    "1. First, you MUST get the full order details using the Get_Order_Details tool. Check the delivery completion time to ensure the order delivery has not lapsed for more than 1 hour. If it has, reject the refund immediately.",
+                    "1. First, you MUST get the full order details using the Get_Order_Details tool. Ensure that the order has been delivered. The delivered timing must be within the past 2 hours. If it is not delivered or has lapsed for more than 2 hours, reject the refund immediately.",
                     "2. Calculate the total refund value based on the specific items.",
                     "3. Check the total value against the $20 auto-approval limit.",
                     "4. If the refund is > $20, DO NOT execute the refund. Route the payload to the Guardian Agent for fraud/quota approval.",
