@@ -10,8 +10,13 @@ export class IncidentService {
     private readonly incidentRepo: Repository<Incident>,
   ) {}
 
-  async logIncident(type: string, summary: string, orderId?: string) {
-    const incident = this.incidentRepo.create({ type, summary, orderId: orderId ?? null });
+  async logIncident(type: string, summary: string, orderId?: string, userId?: string) {
+    const incident = this.incidentRepo.create({
+      type,
+      summary,
+      orderId: orderId ?? null,
+      userId: userId ?? null,
+    });
     return this.incidentRepo.save(incident);
   }
 

@@ -28,4 +28,14 @@ export class LogIncidentDto {
   @IsOptional()
   @IsUUID('4') // Validates that the input is a valid UUID (v4)
   orderId?: string;
+
+  @ApiProperty({
+    example: '550e8400-e29b-41d4-a716-446655440000',
+    required: false,
+    format: 'uuid',
+    description: 'The unique identifier of the user who reported the incident',
+  })
+  @IsOptional()
+  @IsUUID('4')
+  userId?: string;
 }
