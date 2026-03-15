@@ -200,4 +200,88 @@ log_incident tool to record the incident.`;
       this.logger.log(`Marked session ${session.id} as reviewed.`);
     }
   }
+
+  async processChatMessageBySessionId(
+    userId: string,
+    sessionId: string
+  ): Promise<string> {
+    this.logger.log(`Processing session ${sessionId} for user ${userId} to check for incidents.`);
+
+    // Fetch the session with messages using getHistory
+    const session = await this.commonService.sendViaRMQ<any>(
+      this.userClient,
+      { cmd: "user.chat.getHistory" },
+      { sessionId },
+    );
+
+    if (!session) {
+      this.logger.warn(`Session ${sessionId} not found.`);
+      return "Session not found.";
+    }
+
+    if (session.reviewed) {
+      this.logger.log(`Session ${sessionId} already reviewed.`);
+      return "Session already reviewed.";
+    }
+
+    // Verify userId matches
+    if (session.userId !== userId) {
+      this.logger.warn(`Session ${sessionId} does not belong to user ${userId}.`);
+      return "Session does not belong to user.";
+    }
+
+    if (session.messages.length === 0) {
+      this.logger.log(`Session ${sessionId} has no messages.`);
+      return "No messages in session.";
+    }
+
+    // Convert messages to BaseMessage[]
+    const chatHistory: BaseMessage[] = session.messages.map((msg: any) => {
+      if (msg.type === 'human') return new HumanMessage(msg.content);
+      if (msg.type === 'ai') return new AIMessage(msg.content);
+      if (msg.type === 'tool')
+        return new ToolMessage({
+          content: msg.content,
+          tool_call_id: msg.toolCallId ?? '',
+        });
+      return new HumanMessage(msg.content);
+    });
+
+    // Format prompt for review
+    const formatted = await this.prompt.formatMessages({
+      chat_history: chatHistory,
+      input: `Please review this chat session and log any incidents if necessary. Summarize the issue and use the log_incident tool if applicable. Context: The user ID for this session is ${userId}. Extract the order ID from the conversation if mentioned.`,
+    });
+
+    // Invoke LLM
+    const response = (await this.llm.invoke(formatted)) as AIMessage;
+
+    let incidentLogged = false;
+
+    // Handle tool calls
+    if (response.tool_calls && response.tool_calls.length > 0) {
+      for (const toolCall of response.tool_calls) {
+        if (toolCall.name === 'log_incident') {
+          try {
+            const result = await logIncidentTool.func(JSON.stringify(toolCall.args));
+            this.logger.log(`Logged incident for session ${sessionId}: ${result}`);
+            incidentLogged = true;
+          } catch (error) {
+            this.logger.error(`Failed to log incident for session ${sessionId}: ${error.message}`);
+          }
+        }
+      }
+    }
+
+    // Mark as reviewed
+    await this.commonService.sendViaRMQ<void>(
+      this.userClient,
+      { cmd: "user.chat.updateSession" },
+      { id: session.id, reviewed: true },
+    );
+
+    this.logger.log(`Marked session ${sessionId} as reviewed.`);
+
+    return incidentLogged ? "Incident logged for the session." : "No incident detected.";
+  }
 }
