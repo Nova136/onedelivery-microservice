@@ -1,6 +1,12 @@
 audit
+guardian-agent
+incident
+knowledge
 logistics
+logistics-agent
+orchestrator-agent
 order
 payment
+qa-agent
+resolution-agent
 user
-knowledge

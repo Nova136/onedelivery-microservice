@@ -46,7 +46,7 @@
         "tsConfigPath": "apps/knowledge/tsconfig.app.json"
       }
     },
-    "logistic-agent": {
+    "logistics-agent": {
       "type": "application",
       "root": "apps/logistics-agent",
       "entryFile": "main",
