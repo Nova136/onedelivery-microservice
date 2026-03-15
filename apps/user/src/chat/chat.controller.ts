@@ -10,8 +10,8 @@ import {
     UpdateChatSessionPayload,
 } from "./chat.dto";
 import { ChatSession } from "../database/entities/chat-session.entity";
-import { ApiOperation } from "@nestjs/swagger";
 
+// TODO: Add authentication and ensure users can only access their own chat sessions and messages.
 @Controller()
 export class ChatController {
     constructor(private readonly chatService: ChatService) {}
@@ -28,15 +28,17 @@ export class ChatController {
         await this.chatService.saveHistory(payload);
     }
 
-    @MessagePattern({ cmd: 'user.chat.getSessionsByFilter' })
+    @MessagePattern({ cmd: "user.chat.getSessionsByFilter" })
     async getSessions(
-      @Payload() payload: GetChatSessionsPayload,
+        @Payload() payload: GetChatSessionsPayload,
     ): Promise<ChatSession[]> {
-      return this.chatService.getSessions(payload);
+        return this.chatService.getSessions(payload);
     }
 
-    @MessagePattern({ cmd: 'user.chat.updateSession' })
-    async updateSession(@Payload() payload: UpdateChatSessionPayload): Promise<void> {
-      await this.chatService.updateSession(payload);
+    @MessagePattern({ cmd: "user.chat.updateSession" })
+    async updateSession(
+        @Payload() payload: UpdateChatSessionPayload,
+    ): Promise<void> {
+        await this.chatService.updateSession(payload);
     }
 }
