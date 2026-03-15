@@ -1,8 +1,20 @@
 // src/knowledge/knowledge.controller.ts
-import { Controller, Post, Body, Get, Logger } from "@nestjs/common";
+import {
+    Controller,
+    Post,
+    Body,
+    Get,
+    Logger,
+    NotFoundException,
+} from "@nestjs/common";
 import { KnowledgeService } from "./knowledge.service";
-import { AddDocumentDto, SearchFaqDto, SearchSopDto } from "./core/dto";
+import {
+    AddDocumentPayload,
+    SearchFaqPayload,
+    SearchSopPayload,
+} from "./core/dto";
 import { MessagePattern } from "@nestjs/microservices";
+import { SearchFaqResponse, SearchSopResponse } from "./core/interface";
 
 @Controller("api/knowledge")
 export class KnowledgeController {
@@ -29,16 +41,20 @@ export class KnowledgeController {
     // ️Endpoint for the Orchestrator's "Search_FAQ" tool
     @MessagePattern("faq")
     @Post("faq")
-    async searchFaq(@Body() body: SearchFaqDto) {
+    async searchFaq(
+        @Body() body: SearchFaqPayload,
+    ): Promise<SearchFaqResponse[]> {
         this.logger.log(`Received FAQ search query: "${body.query}"`);
         const result = await this.knowledgeService.searchFAQ(body.query);
-        return { reply: result };
+        return result;
     }
 
     // Endpoint for the Orchestrator's "Search_Internal_SOP" tool
     @MessagePattern("sop")
     @Post("sop")
-    async searchSop(@Body() body: SearchSopDto) {
+    async searchSop(
+        @Body() body: SearchSopPayload,
+    ): Promise<SearchSopResponse> {
         this.logger.log(
             `Received SOP search intent: "${body.intentCode}" from agent "${body.requestingAgent}"`,
         );
@@ -46,12 +62,26 @@ export class KnowledgeController {
             body.intentCode,
             body.requestingAgent,
         );
-        return { reply: result };
+
+        if (!result) {
+            throw new NotFoundException(
+                `SOP for intent ${body.intentCode} not found.`,
+            );
+        }
+
+        return {
+            intentCode: result.intentCode,
+            agentOwner: result.agentOwner,
+            title: result.title,
+            requiredData: result.requiredData,
+            workflowSteps: result.workflowSteps,
+            permittedTools: result.permittedTools,
+        };
     }
 
     // Admin endpoint to add new SOPs to the Postgres Database
     @Post("add")
-    async addDocument(@Body() body: AddDocumentDto) {
+    async addDocument(@Body() body: AddDocumentPayload) {
         this.logger.log(
             `Received document to add: Title="${body.title}", Content="${body.content}"`,
         );

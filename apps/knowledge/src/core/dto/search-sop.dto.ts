@@ -1,7 +1,7 @@
 import { IsString, IsNotEmpty } from "class-validator";
 import { ApiProperty } from "@nestjs/swagger";
 
-export class SearchSopDto {
+export class SearchSopPayload {
     @ApiProperty({
         description:
             "The unique intent code identifying the SOP (e.g., 'CANCEL_ORDER')",

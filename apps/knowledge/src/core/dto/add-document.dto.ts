@@ -2,7 +2,7 @@
 import { IsString, IsNotEmpty } from "class-validator";
 import { ApiProperty } from "@nestjs/swagger";
 
-export class AddDocumentDto {
+export class AddDocumentPayload {
     @ApiProperty({
         description: "The title of the FAQ document",
         example: "Refund Policy",
