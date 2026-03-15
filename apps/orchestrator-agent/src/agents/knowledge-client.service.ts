@@ -1,22 +1,12 @@
 import { Injectable, Inject } from "@nestjs/common";
 import { ClientProxy } from "@nestjs/microservices";
 import { firstValueFrom } from "rxjs";
-
-export type AgentName = "knowledge";
-
-export interface SearchFaqPayload {
-    query: string;
-}
-
-export interface SearchInternalSopPayload {
-    intentCode: string;
-    requestingAgent: string;
-}
-
-export interface QueryResult {
-    reply: string;
-}
-
+import {
+    SearchFaqPayload,
+    SearchSopPayload,
+    SearchFaqResponse,
+    SearchSopResponse,
+} from "../core/interface";
 @Injectable()
 export class KnowledgeClientService {
     constructor(
@@ -24,19 +14,19 @@ export class KnowledgeClientService {
         private readonly knowledgeClient: ClientProxy,
     ) {}
 
-    async searchFaq(payload: SearchFaqPayload): Promise<string> {
+    async searchFaq(payload: SearchFaqPayload): Promise<SearchFaqResponse[]> {
         const result = await firstValueFrom(
-            this.knowledgeClient.send<QueryResult>("faq", payload),
+            this.knowledgeClient.send<SearchFaqResponse[]>("faq", payload),
         );
-        return result?.reply ?? "No response from agent.";
+        return result;
     }
 
     async searchInternalSop(
-        payload: SearchInternalSopPayload,
-    ): Promise<string> {
+        payload: SearchSopPayload,
+    ): Promise<SearchSopResponse> {
         const result = await firstValueFrom(
-            this.knowledgeClient.send<QueryResult>("sop", payload),
+            this.knowledgeClient.send<SearchSopResponse>("sop", payload),
         );
-        return result?.reply ?? "No response from agent.";
+        return result;
     }
 }

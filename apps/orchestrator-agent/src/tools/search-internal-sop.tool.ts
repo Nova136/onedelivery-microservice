@@ -20,15 +20,36 @@ export function createSearchInternalSopTool(
     return tool(
         async ({ intentCode }: { intentCode: string }) => {
             try {
-                // The 'orchestrator' is hardcoded as it's the only agent using this tool
-                const reply = await knowledgeClient.searchInternalSop({
+                // 1. Fetch the raw JSON object from the pure API
+                const sop = await knowledgeClient.searchInternalSop({
                     intentCode,
                     requestingAgent: "orchestrator",
                 });
-                return reply;
+
+                // 2. Safe fallback if the LLM hallucinates a weird intent code
+                if (!sop) {
+                    return `Error: No internal rules found for intent '${intentCode}'. Please ask the user to clarify their request. DO NOT invent rules.`;
+                }
+
+                // 3. Format the JSON structure into a strict string for the LLM to read
+                const formattedSop = `
+### INTERNAL RULEBOOK: ${sop.title} ###
+
+REQUIRED DATA TO COLLECT FIRST:
+${sop.requiredData && sop.requiredData.length > 0 ? sop.requiredData.map((item: string) => `- ${item}`).join("\n") : "None. You may proceed."}
+
+WORKFLOW STEPS (FOLLOW EXACTLY):
+${sop.workflowSteps ? sop.workflowSteps.join("\n") : "None."}
+
+PERMITTED TOOLS:
+${sop.permittedTools && sop.permittedTools.length > 0 ? sop.permittedTools.join(", ") : "None."}
+                `.trim();
+
+                return formattedSop;
             } catch (err) {
                 const msg = err instanceof Error ? err.message : String(err);
-                return `System Error: Knowledge Microservice unreachable. ${msg}`;
+                // 4. Give the LLM instructions on how to handle the crash gracefully
+                return `System Error: Knowledge Microservice unreachable. ${msg}. STRICT RULE: Tell the user you are experiencing technical difficulties and ask if they need a human agent.`;
             }
         },
         {
