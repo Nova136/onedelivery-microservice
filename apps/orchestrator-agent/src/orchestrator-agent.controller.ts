@@ -1,14 +1,16 @@
 import { Controller, Post, Body, Logger } from "@nestjs/common";
 import { ApiTags, ApiOperation, ApiResponse } from "@nestjs/swagger";
-import { OrchestratorService } from "./orchestrator.service";
+import { OrchestratorAgentService } from "./orchestrator-agent.service";
 import { HandleIncomingMessageDto } from "./core/dto/handle-incoming-message.dto";
 
 @ApiTags("Orchestrator")
 @Controller()
-export class OrchestratorController {
-    private readonly logger = new Logger(OrchestratorController.name);
+export class OrchestratorAgentController {
+    private readonly logger = new Logger(OrchestratorAgentController.name);
 
-    constructor(private readonly orchestratorService: OrchestratorService) {}
+    constructor(
+        private readonly orchestratorService: OrchestratorAgentService,
+    ) {}
 
     @Post()
     @ApiOperation({ summary: "Process a user chat message" })
