@@ -6,7 +6,7 @@ import {
   ChatPromptTemplate,
   MessagesPlaceholder,
 } from "@langchain/core/prompts";
-import { HumanMessage, BaseMessage } from "@langchain/core/messages";
+import { HumanMessage, BaseMessage, AIMessage, ToolMessage } from "@langchain/core/messages";
 import { MemoryService } from "./memory/memory.service";
 import { Cron, CronExpression } from "@nestjs/schedule";
 import { DynamicTool } from "@langchain/core/tools";
@@ -25,6 +25,7 @@ Required fields:
 - type: incident category. MUST be one of: [LATE_DELIVERY, MISSING_ITEMS, WRONG_ORDER, DAMAGED_PACKAGING, PAYMENT_FAILURE, OTHER]
 - summary: short summary of the issue
 - orderId: order ID if applicable
+- userId: user ID if applicable
 `,
   // The actual implementation is provided in the AppService constructor
   func: async () => {
@@ -48,17 +49,18 @@ export class AppService {
     private readonly commonService: CommonService,
     @Inject("INCIDENT_SERVICE")
     private readonly incidentClient: ClientProxy,
+    @Inject("USER_SERVICE")
+    private readonly userClient: ClientProxy,
   ) {
     // Rebind the tool implementation so we can access injected services
     (logIncidentTool as any).func = async (input: string) => {
       const data = JSON.parse(input) as LogIncidentRequest;
 
-      const response =
-        await this.commonService.sendViaRMQ<LogIncidentResponse>(
-          this.incidentClient,
-          { cmd: "incident.log" },
-          data,
-        );
+      const response = await this.commonService.sendViaRMQ<LogIncidentResponse>(
+        this.incidentClient,
+        { cmd: "log-incidents" },
+        data,
+      );
 
       return JSON.stringify(response);
     };
@@ -119,8 +121,79 @@ log_incident tool to record the incident.`;
 
   @Cron(CronExpression.EVERY_HOUR)
   async handleReviewIdleChatSessions() {
-    this.logger.log(
-      "handleReviewIdleChatSessions is currently disabled (chat sessions moved to user service).",
+    this.logger.log("Reviewing idle chat sessions...");
+
+    const request = {
+      status: "OPEN",
+      hoursAgo: 2,
+      reviewed: false,
+      userId: null,
+    };
+
+    const sessions = await this.commonService.sendViaRMQ<any[]>(
+      this.userClient,
+      { cmd: "user.chat.getSessionsByFilter" },
+      request,
     );
+
+    this.logger.log(`Found ${sessions.length} idle sessions to review.`);
+    this.logger.log(`sessions :: `, sessions);
+
+    for (const session of sessions) {
+      if (session.reviewed) {
+        this.logger.log(`Session ${session.id} already reviewed, skipping.`);
+        continue;
+      }
+
+      this.logger.log(`Processing session ${session.id}...`);
+
+      // Convert messages to BaseMessage[]
+      const chatHistory: BaseMessage[] = session.messages.map((msg: any) => {
+        if (msg.type === 'human') return new HumanMessage(msg.content);
+        if (msg.type === 'ai') return new AIMessage(msg.content);
+        if (msg.type === 'tool')
+          return new ToolMessage({
+            content: msg.content,
+            tool_call_id: msg.toolCallId ?? '',
+          });
+        return new HumanMessage(msg.content);
+      });
+
+      this.logger.log(`chatHistory :: `, chatHistory);
+
+      // Format prompt for review
+      const formatted = await this.prompt.formatMessages({
+        chat_history: chatHistory,
+        input: "Please review this chat session and log any incidents if necessary. Summarize the issue and use the log_incident tool if applicable.",
+      });
+
+      // Invoke LLM
+      const response = (await this.llm.invoke(formatted)) as AIMessage;
+
+      // Handle tool calls
+      if (response.tool_calls && response.tool_calls.length > 0) {
+        for (const toolCall of response.tool_calls) {
+          if (toolCall.name === 'log_incident') {
+            try {
+              const result = await logIncidentTool.func(JSON.stringify(toolCall.args));
+              this.logger.log(`Logged incident for session ${session.id}: ${result}`);
+            } catch (error) {
+              this.logger.error(`Failed to log incident for session ${session.id}: ${error.message}`);
+            }
+          }
+        }
+      } else {
+        this.logger.log(`No incident logged for session ${session.id}.`);
+      }
+
+      // Mark as reviewed
+      await this.commonService.sendViaRMQ<void>(
+        this.userClient,
+        { cmd: "user.chat.updateSession" },
+        { id: session.id, reviewed: true },
+      );
+
+      this.logger.log(`Marked session ${session.id} as reviewed.`);
+    }
   }
 }
