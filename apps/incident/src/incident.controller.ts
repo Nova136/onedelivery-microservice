@@ -17,6 +17,7 @@ export class IncidentController {
       data.type,
       data.summary,
       data.orderId,
+      data.userId,
     );
     return {
       incidentId: incident.id,
