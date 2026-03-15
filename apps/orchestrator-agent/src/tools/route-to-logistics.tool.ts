@@ -4,11 +4,11 @@ import type { AgentsClientService } from "../agents/agents-client.service";
 
 /** Explicit payload type to avoid deep type instantiation with tool() */
 interface LogisticsPayload {
-    action: "track_order" | "cancel_order";
+    action: "cancel_order";
     userId: string;
     sessionId: string;
     orderId?: string;
-    question?: string;
+    description?: string;
 }
 
 const logisticsSchema = z.object({
