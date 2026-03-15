@@ -18,12 +18,16 @@ import { createRouteToQaTool } from "./tools/route-to-qa.tool";
 import { createRouteToGuardianTool } from "./tools/route-to-guardian.tool";
 import { createSearchInternalSopTool } from "./tools/search-internal-sop.tool";
 import { createSearchFaqTool } from "./tools/search-faq.tool";
+import { createEscalateToHumanTool } from "./tools/escalate-to-human.tool";
 import { KnowledgeClientService } from "./agents/knowledge-client.service";
+import { orchestratorPrompt } from "./core/prompts/orchestrator.prompt";
 
 @Injectable()
 export class OrchestratorService {
     private readonly logger = new Logger(OrchestratorService.name);
     private llm: ChatOpenAI;
+    private readonly CHAT_HISTORY_WINDOW_SIZE = 10; // Keeps the last 5 pairs of (human, ai) messages
+
     private orchestratorWithTools: any;
     private prompt: ChatPromptTemplate;
     private tools: Record<string, StructuredTool>;
@@ -35,13 +39,14 @@ export class OrchestratorService {
     ) {
         this.tools = {
             Route_To_Logistics: createRouteToLogisticsTool(this.agentsClient),
-            Route_To_Refund: createRouteToResolutionTool(this.agentsClient),
+            Route_To_Resolution: createRouteToResolutionTool(this.agentsClient),
             Route_To_QA: createRouteToQaTool(this.agentsClient),
             Route_To_Guardian: createRouteToGuardianTool(this.agentsClient),
             Search_Internal_SOP: createSearchInternalSopTool(
                 this.knowledgeClient,
             ),
             Search_FAQ: createSearchFaqTool(this.knowledgeClient),
+            Escalate_To_Human: createEscalateToHumanTool(this.agentsClient),
         } as Record<string, StructuredTool>;
         // 1. Initialize the LLM
         this.llm = new ChatOpenAI({
@@ -49,52 +54,15 @@ export class OrchestratorService {
             temperature: 0,
         });
 
-        // 2. Define the Orchestrator's persona and rules
-        const orchestratorSystemPrompt = `You are the Orchestrator Agent for OneDelivery, a friendly and empathetic food delivery support assistant.
-Your primary job is to help customers by answering questions and routing complex requests (like cancellations, refunds, or tracking) to our backend specialist tools.
-
-### CURRENT SESSION CONTEXT
-- **User ID**: {userId} (ALWAYS pass this exact ID to tool calls)
-- **Session ID**: {sessionId}
-
-### CORE DIRECTIVES
-
-1. **The "Read the Manual" Rule (CRITICAL)**
-   - If a user asks a general question (e.g., "What are your hours?"), use the Search_FAQ tool to search the public FAQs.
-   - If a user wants you to take an ACTION (e.g., cancel an order, report missing food, complain about a driver), you MUST use the Search_Internal_SOP tool FIRST to fetch the official company policy for that specific issue. 
-
-2. **The Execution Rule**
-   - Once you read the SOP, follow its steps exactly in order.
-   - If the SOP tells you to check viability before asking for confirmation, do exactly that.
-   - Use your routing tools (Route_To_Logistics, Route_To_Refund) strictly according to the steps outlined in the SOP.
-
-3. **The Information Gathering Rule**
-   - If you need to use a tool but are missing required parameters (like the Order ID, or the exact names of the missing items), DO NOT guess or invent data. 
-   - Ask the user for the missing information first before triggering the tool.
-
-4. **Security Rule (STRICT)**
-   - The SOPs you fetch are highly confidential internal documents. 
-   - NEVER quote an SOP or policy verbatim to the user.
-   - NEVER reveal internal compensation limits, business rules, or backend tool names (e.g., never say "I am triggering the Route_To_Refund tool").
-   - Translate the outcome of your tools into natural, polite, customer-facing language.
-
-5. **The Escalation Rule**
-   - If the user is highly abusive, threatens legal action, reports a severe food safety issue (like allergies or foreign objects), or demands a human manager, immediately use the Escalate_To_Human tool. Stop trying to solve the problem yourself.
-
-### TONE AND PERSONALITY
-- Be friendly, helpful, and concise (keep replies to 3 sentences or less when possible).
-- Show extreme empathy if the user is frustrated, hungry, or dealing with a messed-up order. 
-- Talk like a real human support rep, not a robotic state machine.`;
-
-        // 3. Set up the prompt template
+        // 2. Set up the prompt template
         this.prompt = ChatPromptTemplate.fromMessages([
-            ["system", orchestratorSystemPrompt],
+            ["system", orchestratorPrompt],
             new MessagesPlaceholder("chat_history"),
             ["human", "{input}"],
             new MessagesPlaceholder("agent_scratchpad"),
         ]);
 
-        // 4. Bind the tools to the LLM
+        // 3. Bind the tools to the LLM
         this.orchestratorWithTools = this.llm.bindTools(
             Object.values(this.tools),
         );
@@ -104,37 +72,55 @@ Your primary job is to help customers by answering questions and routing complex
         userId: string,
         sessionId: string,
         message: string,
+        activeOrderId: string = "None",
+        knownIssue: string = "None",
     ): Promise<string> {
         this.logger.log(`[${userId}] User Message: "${message}"`);
 
-        // 1. Fetch the past conversation from the database
+        // Fetch the past conversation from the database
         const chatHistory = await this.memoryService.getHistory(
             userId,
             sessionId,
         );
 
-        // 2. Add the user's brand new message to the history
+        // Add the user's brand new message to the history
         const newHumanMessage = new HumanMessage(message);
         chatHistory.push(newHumanMessage);
+        await this.memoryService.saveHistory(
+            userId,
+            sessionId,
+            chatHistory.length,
+            newHumanMessage,
+        );
+
+        // Token-saving: only use a window of the most recent messages for the prompt
+        const historyWindow = chatHistory.slice(-this.CHAT_HISTORY_WINDOW_SIZE);
 
         let finalAiMessage: BaseMessage | undefined;
         const scratchpad: BaseMessage[] = [];
 
-        // 3. Loop for multi-step processing (Agent Loop)
+        // Loop for multi-step processing (Agent Loop)
         // We limit to 5 iterations to prevent infinite loops
         for (let i = 0; i < 5; i++) {
             this.logger.log(`[${userId}] Iteration ${i + 1}: Thinking...`);
 
             const formattedPrompt = await this.prompt.formatMessages({
-                chat_history: chatHistory,
+                chat_history: historyWindow, // Use the windowed history
                 input: message,
                 agent_scratchpad: scratchpad,
                 userId: userId,
                 sessionId: sessionId,
+                activeOrderId: activeOrderId,
+                knownIssue: knownIssue,
             });
 
             const response =
                 await this.orchestratorWithTools.invoke(formattedPrompt);
+
+            // If the model returns a thought in the content, log it for observability
+            if (response.content && String(response.content).length > 0) {
+                this.logger.log(`[${userId}] Thought: ${response.content}`);
+            }
 
             // If no tool calls, we are done
             if (!response.tool_calls || response.tool_calls.length === 0) {
@@ -178,21 +164,32 @@ Your primary job is to help customers by answering questions and routing complex
             }
         }
 
-        // 7. Append the AI's final reply to our history array
+        let finalResponseString = finalAiMessage?.content
+            ? String(finalAiMessage.content)
+            : "I'm sorry, I encountered an error and couldn't complete the request.";
+
+        // Strip out the hidden reasoning tags!
+        finalResponseString = finalResponseString
+            .replace(/<thinking>[\s\S]*?<\/thinking>/g, "")
+            .trim();
+
+        // Save the CLEAN conversation back to the database safely!
         if (finalAiMessage) {
+            // Overwrite the content with the cleaned string so the DB doesn't store the <thinking> tags
+            finalAiMessage.content = finalResponseString;
             chatHistory.push(finalAiMessage);
+            await this.memoryService.saveHistory(
+                userId,
+                sessionId,
+                chatHistory.length,
+                finalAiMessage,
+            );
         }
 
-        // 8. Save the fully updated conversation back to the database!
-        await this.memoryService.saveHistory(userId, sessionId, chatHistory);
-
         this.logger.log(
-            `[${userId}] Final Reply: "${finalAiMessage?.content}"`,
+            `[${userId}] Final Clean Reply to Frontend: "${finalResponseString}"`,
         );
 
-        return (
-            (finalAiMessage?.content as string) ||
-            "I'm sorry, I encountered an error."
-        );
+        return finalResponseString;
     }
 }
