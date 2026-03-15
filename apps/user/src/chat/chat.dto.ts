@@ -1,17 +1,31 @@
-export interface ChatHistoryPayload {
-    userId: string;
-    sessionId: string;
+import { ApiProperty } from "@nestjs/swagger";
+
+export class ChatHistoryPayload {
+  sessionId: string;
+}
+
+export interface ChatSessionDTO {
+  id: string;
+  userId: string;
+  status: string;
+  reviewed: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+  messages: ChatMessageDTO[];
 }
 
 export interface ChatMessageDTO {
-    sequence: number;
-    type: "human" | "ai" | "tool" | "unknown";
-    content: string;
-    toolCallId?: string;
+  id?: string;
+  type: "human" | "ai" | "tool" | "unknown";
+  content: string;
+  toolCallId?: string;
+  sequence: number;
+  createdAt: Date;
 }
 
-export interface ChatSavePayload extends ChatHistoryPayload {
-    message: ChatMessageDTO;
+export class ChatSavePayload extends ChatHistoryPayload {
+  userId: string;
+  message: ChatMessageDTO;
 }
 
 export class GetChatSessionsPayload {

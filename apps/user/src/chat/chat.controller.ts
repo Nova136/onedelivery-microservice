@@ -1,14 +1,16 @@
-import { Controller } from "@nestjs/common";
+import { Controller, Post } from "@nestjs/common";
 import { MessagePattern, Payload } from "@nestjs/microservices";
 import { ChatService } from "./chat.service";
 import {
     ChatHistoryPayload,
     ChatMessageDTO,
     ChatSavePayload,
+    ChatSessionDTO,
     GetChatSessionsPayload,
     UpdateChatSessionPayload,
 } from "./chat.dto";
 import { ChatSession } from "../database/entities/chat-session.entity";
+import { ApiOperation } from "@nestjs/swagger";
 
 @Controller()
 export class ChatController {
@@ -17,7 +19,7 @@ export class ChatController {
     @MessagePattern({ cmd: "user.chat.getHistory" })
     async getHistory(
         @Payload() payload: ChatHistoryPayload,
-    ): Promise<ChatMessageDTO[]> {
+    ): Promise<ChatSessionDTO> {
         return this.chatService.getHistory(payload);
     }
 
