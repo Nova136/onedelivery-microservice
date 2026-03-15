@@ -13,7 +13,7 @@ interface LogisticsPayload {
 
 const logisticsSchema = z.object({
     action: z
-        .enum(["track_order", "cancel_order"])
+        .enum(["cancel_order"])
         .describe("The specific task the Logistics Agent needs to perform."),
     userId: z
         .string()
@@ -28,8 +28,12 @@ const logisticsSchema = z.object({
     orderId: z
         .string()
         .optional()
+        .describe("The order ID. REQUIRED if action is 'cancel_order'."),
+    description: z
+        .string()
+        .optional()
         .describe(
-            "The order ID. REQUIRED if action is 'track_order' or 'cancel_order'.",
+            "The user's description of the issue in their own words. REQUIRED if action is 'cancel_order'.",
         ),
 });
 
