@@ -1,16 +1,11 @@
 import { Injectable, Logger } from "@nestjs/common";
-import {
-  AIMessage,
-  BaseMessage,
-  HumanMessage,
-  ToolMessage,
-} from "@langchain/core/messages";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { ChatMessage } from "../database/entities/chat-message.entity";
 import { ChatSession } from "../database/entities/chat-session.entity";
 import {
   ChatHistoryPayload,
+  ChatMessageDTO,
   ChatSavePayload,
   GetChatSessionsPayload,
   UpdateChatSessionPayload,
@@ -35,7 +30,7 @@ export class ChatService {
     return session;
   }
 
-  async getHistory(payload: ChatHistoryPayload): Promise<BaseMessage[]> {
+  async getHistory(payload: ChatHistoryPayload): Promise<ChatMessageDTO[]> {
     const { userId, sessionId } = payload;
     const rows = await this.chatMessageRepo.find({
       where: {
@@ -46,65 +41,28 @@ export class ChatService {
     });
 
     return rows.map((row) => {
-      if (row.type === "human") return new HumanMessage(row.content);
-      if (row.type === "ai") return new AIMessage(row.content);
-      if (row.type === "tool")
-        return new ToolMessage({
-          content: row.content,
-          tool_call_id: row.toolCallId ?? "",
-        });
-      return new HumanMessage(row.content);
+      return {
+        sequence: row.sequence,
+        type: row.type,
+        content: row.content,
+        toolCallId: row.toolCallId,
+      };
     });
   }
 
   async saveHistory(payload: ChatSavePayload): Promise<void> {
-    const { userId, sessionId, messages } = payload;
+    const { userId, sessionId, message } = payload;
+    console.log(payload);
     const session = await this.ensureSession(sessionId);
+    const entity = new ChatMessage();
+    entity.userId = userId;
+    entity.sessionId = session;
+    entity.sequence = message.sequence;
+    entity.type = message.type;
+    entity.content = message.content;
+    entity.toolCallId = message.toolCallId ?? null;
 
-    await this.chatMessageRepo.delete({
-      userId,
-      sessionId: { id: sessionId },
-    });
-
-    const entities: ChatMessage[] = messages.map((msg, index) => {
-      const e = new ChatMessage();
-      e.userId = userId;
-      e.sessionId = session;
-      e.sequence = index;
-      e.toolCallId = null;
-
-      if (msg instanceof HumanMessage) {
-        e.type = "human";
-        e.content =
-          typeof msg.content === "string"
-            ? msg.content
-            : JSON.stringify(msg.content);
-      } else if (msg instanceof AIMessage) {
-        e.type = "ai";
-        e.content =
-          typeof msg.content === "string"
-            ? msg.content
-            : JSON.stringify(msg.content);
-      } else if (msg instanceof ToolMessage) {
-        e.type = "tool";
-        e.content =
-          typeof msg.content === "string"
-            ? msg.content
-            : JSON.stringify(msg.content);
-        e.toolCallId = msg.tool_call_id ?? null;
-      } else {
-        e.type = "unknown";
-        e.content =
-          typeof (msg as any).content === "string"
-            ? (msg as any).content
-            : JSON.stringify((msg as any).content);
-      }
-      return e;
-    });
-
-    if (entities.length > 0) {
-      await this.chatMessageRepo.save(entities);
-    }
+    await this.chatMessageRepo.save(entity);
   }
 
   async getSessions(payload: GetChatSessionsPayload): Promise<ChatSession[]> {
