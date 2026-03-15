@@ -7,7 +7,7 @@ import {
     ToolMessage,
 } from "@langchain/core/messages";
 import { CommonService } from "@libs/modules/common/common.service";
-import { ChatMessageDTO } from "../core/dto/chat-message.dto";
+import { ChatMessageDTO, ChatSessionDTO } from "../core/dto/chat-message.dto";
 
 @Injectable()
 export class MemoryService {
@@ -21,13 +21,13 @@ export class MemoryService {
         userId: string,
         sessionId: string,
     ): Promise<BaseMessage[]> {
-        const reply = await this.commonService.sendViaRMQ<ChatMessageDTO[]>(
+        const session = await this.commonService.sendViaRMQ<ChatSessionDTO>(
             this.userClient,
             { cmd: "user.chat.getHistory" },
             { userId, sessionId },
         );
 
-        return reply.map((row) => {
+        return session.messages.map((row) => {
             if (row.type === "human") return new HumanMessage(row.content);
             if (row.type === "ai") return new AIMessage(row.content);
             if (row.type === "tool")
