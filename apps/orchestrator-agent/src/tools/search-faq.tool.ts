@@ -15,13 +15,35 @@ export function createSearchFaqTool(
     return tool(
         async (query: string) => {
             try {
-                const reply = await knowledgeClient.searchFaq({
+                // 1. Fetch the raw data from your pure API
+                const rawFaqContent = await knowledgeClient.searchFaq({
                     query: query,
                 });
-                return reply;
+
+                // 2. Handle the empty state inside the tool
+                if (!rawFaqContent || rawFaqContent.length === 0) {
+                    return "No relevant FAQ found. STRICT RULE: DO NOT guess or make up an answer. Reply EXACTLY with: 'I'm sorry, I don't have the answer to that specific question.'";
+                }
+
+                const formattedFaqs = rawFaqContent
+                    .map(
+                        (faq, index) =>
+                            `[FAQ ${index + 1}]\nQuestion: ${faq.title}\nAnswer: ${faq.content}`,
+                    )
+                    .join("\n\n");
+
+                // 4. Wrap the formatted data with your strict LLM instructions
+                return `
+### SEARCH RESULTS ###
+${formattedFaqs}
+
+### STRICT RULE ###
+If the user's exact question is not clearly answered by the text above, DO NOT guess or use outside knowledge. Reply EXACTLY with: "I'm sorry, I don't have the answer to that specific question."
+                `.trim();
             } catch (err) {
                 const msg = err instanceof Error ? err.message : String(err);
-                return `System Error: Knowledge Microservice unreachable. ${msg}`;
+                // 4. Give the LLM instructions on how to handle the crash gracefully
+                return `System Error: Knowledge Microservice unreachable. ${msg}. STRICT RULE: Tell the user you are experiencing technical difficulties and ask if them to visit the FAQ page.`;
             }
         },
         {
