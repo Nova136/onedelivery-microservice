@@ -147,6 +147,10 @@ log_incident tool to record the incident.`;
 
       this.logger.log(`Processing session ${session.id}...`);
 
+      // Extract userId from messages (assuming all messages in session have same userId)
+      const userId = session.messages[0]?.userId;
+      this.logger.log(`Extracted userId: ${userId}`);
+
       // Convert messages to BaseMessage[]
       const chatHistory: BaseMessage[] = session.messages.map((msg: any) => {
         if (msg.type === 'human') return new HumanMessage(msg.content);
@@ -161,10 +165,10 @@ log_incident tool to record the incident.`;
 
       this.logger.log(`chatHistory :: `, chatHistory);
 
-      // Format prompt for review
+      // Format prompt for review, including userId context
       const formatted = await this.prompt.formatMessages({
         chat_history: chatHistory,
-        input: "Please review this chat session and log any incidents if necessary. Summarize the issue and use the log_incident tool if applicable.",
+        input: `Please review this chat session and log any incidents if necessary. Summarize the issue and use the log_incident tool if applicable. Context: The user ID for this session is ${userId}. Extract the order ID from the conversation if mentioned.`,
       });
 
       // Invoke LLM
