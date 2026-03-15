@@ -9,5 +9,8 @@
     "test:e2e": "jest --testMatch \"**/+(*.)+(e2e-spec).+(ts)\"",
     "test:e2e:coverage": "jest --coverage",
     "seed:run": "ts-node -r tsconfig-paths/register seed"
+  },
+  "dependencies": {
+    "typeorm-naming-strategies": "^4.1.0"
   }
 }
