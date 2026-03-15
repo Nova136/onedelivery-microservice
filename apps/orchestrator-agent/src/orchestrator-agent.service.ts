@@ -23,8 +23,8 @@ import { KnowledgeClientService } from "./agents/knowledge-client.service";
 import { orchestratorPrompt } from "./core/prompts/orchestrator.prompt";
 
 @Injectable()
-export class OrchestratorService {
-    private readonly logger = new Logger(OrchestratorService.name);
+export class OrchestratorAgentService {
+    private readonly logger = new Logger(OrchestratorAgentService.name);
     private llm: ChatOpenAI;
     private readonly CHAT_HISTORY_WINDOW_SIZE = 10; // Keeps the last 5 pairs of (human, ai) messages
 
