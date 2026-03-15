@@ -26,6 +26,18 @@ export class AppController {
         return { reply };
     }
 
+    @MessagePattern({ cmd: "agent.reviewSession" })
+    async handleReviewSession(@Payload() payload: { userId: string; sessionId: string }) {
+        this.logger.log(
+            `[TCP] Reviewing session ${payload.sessionId} for user ${payload.userId}`,
+        );
+        const result = await this.appService.processChatMessageBySessionId(
+            payload.userId,
+            payload.sessionId,
+        );
+        return { result };
+    }
+
     @Post()
     @ApiOperation({ summary: "Process a user chat message" })
     @ApiResponse({ status: 201, description: "The AI agent's response." })
