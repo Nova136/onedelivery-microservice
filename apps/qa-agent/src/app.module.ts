@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
 import { HttpModule } from "@nestjs/axios";
 import { ClientsModule, Transport } from "@nestjs/microservices";
+import { ScheduleModule } from "@nestjs/schedule";
 import { AppController } from "./app.controller";
 import { AppService } from "./app.service";
 import { MemoryModule } from "./memory/memory.module";
@@ -15,6 +16,7 @@ import { CommonModule } from "@libs/modules/common/common.module";
     }),
     HttpModule,
     MemoryModule,
+    ScheduleModule.forRoot(),
     ClientsModule.registerAsync([
       {
         name: "INCIDENT_SERVICE",
@@ -24,6 +26,18 @@ import { CommonModule } from "@libs/modules/common/common.module";
             urls: (process.env.RABBITMQ_URL ??
               "amqp://rabbit:rabbit@localhost:5672")!.split(","),
             queue: process.env.RABBITMQ_INCIDENT_QUEUE ?? "incident_queue",
+            queueOptions: { durable: false },
+          },
+        }),
+      },
+      {
+        name: "USER_SERVICE",
+        useFactory: () => ({
+          transport: Transport.RMQ,
+          options: {
+            urls: (process.env.RABBITMQ_URL ??
+              "amqp://rabbit:rabbit@localhost:5672")!.split(","),
+            queue: process.env.RABBITMQ_USER_QUEUE ?? "user_queue",
             queueOptions: { durable: false },
           },
         }),
