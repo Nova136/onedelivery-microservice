@@ -9,6 +9,7 @@ export const config = {
     migrations: [__dirname + "/src/database/migrations/*{.ts,.js}"],
     migrationsTableName: "users.migrations",
     namingStrategy: new SnakeNamingStrategy(),
+    synchronize: true,
 };
 
 export const configDS = new DataSource(config);

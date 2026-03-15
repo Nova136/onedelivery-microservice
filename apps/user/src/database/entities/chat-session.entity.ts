@@ -14,6 +14,9 @@ export class ChatSession {
     @PrimaryGeneratedColumn("uuid")
     id: string;
 
+    @Column({ type: "varchar", length: 255 })
+    userId: string;
+
     @Column({ type: "varchar", length: 50 })
     status: string;
 
