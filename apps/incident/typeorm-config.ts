@@ -7,7 +7,7 @@ export const config = {
     // Therefor we will get all entities inside this particular service
     entities: [__dirname + "/**/*.entity{.ts,.js}"],
     migrations: [__dirname + "/src/database/migrations/*{.ts,.js}"],
-    migrationsTableName: "logistics.migrations",
+    migrationsTableName: "incident.migrations",
     namingStrategy: new SnakeNamingStrategy(),
 };
 
