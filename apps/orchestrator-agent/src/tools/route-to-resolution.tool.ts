@@ -15,10 +15,9 @@ interface ResolutionPayload {
     orderId?: string;
     issueCategory?:
         | "missing_item"
-        | "quality_issue"
         | "wrong_item"
-        | "late_delivery"
-        | "other";
+        | "quality_issue"
+        | "late_delivery";
     description?: string;
     items?: ItemDetail[];
     question?: string;
@@ -43,13 +42,7 @@ const resolutionSchema = z.object({
         .optional()
         .describe("The order ID. REQUIRED if action is 'request_refund'."),
     issueCategory: z
-        .enum([
-            "missing_item",
-            "quality_issue",
-            "wrong_item",
-            "late_delivery",
-            "other",
-        ])
+        .enum(["missing_item", "wrong_item", "quality_issue", "late_delivery"])
         .optional()
         .describe(
             "Categorize the problem. REQUIRED if action is 'request_refund'.",
