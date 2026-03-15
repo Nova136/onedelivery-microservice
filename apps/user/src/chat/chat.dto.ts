@@ -13,3 +13,15 @@ export interface ChatMessageDTO {
 export interface ChatSavePayload extends ChatHistoryPayload {
     message: ChatMessageDTO;
 }
+
+export class GetChatSessionsPayload {
+  status?: string;
+  reviewed?: boolean;
+  hoursAgo?: number;
+  userId?: string;
+}
+
+export interface UpdateChatSessionPayload {
+  id: string;
+  reviewed: boolean;
+}

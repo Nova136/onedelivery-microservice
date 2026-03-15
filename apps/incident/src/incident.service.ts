@@ -1,16 +1,25 @@
-import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { Incident } from './database/entities/incidents.entity';
+import { Injectable, Logger } from "@nestjs/common";
+import { InjectRepository } from "@nestjs/typeorm";
+import { Repository } from "typeorm";
+import { Incident } from "./database/entities/incidents.entity";
 
 @Injectable()
 export class IncidentService {
+  private readonly logger = new Logger(IncidentService.name);
+
   constructor(
     @InjectRepository(Incident)
     private readonly incidentRepo: Repository<Incident>,
   ) {}
 
-  async logIncident(type: string, summary: string, orderId?: string, userId?: string) {
+  async logIncident(
+    type: string,
+    summary: string,
+    orderId?: string,
+    userId?: string,
+  ) {
+    this.logger.log(`logIncident received: "${type}, ${summary}, ${orderId}, ${userId}"`);
+
     const incident = this.incidentRepo.create({
       type,
       summary,

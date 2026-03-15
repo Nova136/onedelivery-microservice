@@ -5,7 +5,10 @@ import {
     ChatHistoryPayload,
     ChatMessageDTO,
     ChatSavePayload,
+    GetChatSessionsPayload,
+    UpdateChatSessionPayload,
 } from "./chat.dto";
+import { ChatSession } from "../database/entities/chat-session.entity";
 
 @Controller()
 export class ChatController {
@@ -21,5 +24,17 @@ export class ChatController {
     @MessagePattern({ cmd: "user.chat.saveHistory" })
     async saveHistory(@Payload() payload: ChatSavePayload): Promise<void> {
         await this.chatService.saveHistory(payload);
+    }
+
+    @MessagePattern({ cmd: 'user.chat.getSessionsByFilter' })
+    async getSessions(
+      @Payload() payload: GetChatSessionsPayload,
+    ): Promise<ChatSession[]> {
+      return this.chatService.getSessions(payload);
+    }
+
+    @MessagePattern({ cmd: 'user.chat.updateSession' })
+    async updateSession(@Payload() payload: UpdateChatSessionPayload): Promise<void> {
+      await this.chatService.updateSession(payload);
     }
 }
