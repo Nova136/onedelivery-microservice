@@ -6,6 +6,7 @@ import { OrchestratorAgentService } from "./orchestrator-agent.service";
 import { MemoryModule } from "./memory/memory.module";
 import { AgentsModule } from "./agents/agents.module";
 import { CommonModule } from "@libs/modules/common/common.module";
+import { KnowledgeModule } from "./agents/knowledge.module";
 
 @Module({
     imports: [
@@ -16,6 +17,7 @@ import { CommonModule } from "@libs/modules/common/common.module";
         HttpModule,
         MemoryModule,
         AgentsModule,
+        KnowledgeModule,
     ],
     controllers: [OrchestratorAgentController],
     providers: [OrchestratorAgentService],
