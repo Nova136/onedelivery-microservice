@@ -7,7 +7,11 @@ import {
     ToolMessage,
 } from "@langchain/core/messages";
 import { CommonService } from "@libs/modules/common/common.service";
-import { ChatMessageDTO, ChatSessionDTO } from "../core/dto/chat-message.dto";
+import {
+    GetChatHistoryPayload,
+    GetChatHistoryResponse,
+    SaveChatHistoryPayload,
+} from "../core/interface";
 
 @Injectable()
 export class MemoryService {
@@ -21,11 +25,17 @@ export class MemoryService {
         userId: string,
         sessionId: string,
     ): Promise<BaseMessage[]> {
-        const session = await this.commonService.sendViaRMQ<ChatSessionDTO>(
-            this.userClient,
-            { cmd: "user.chat.getHistory" },
-            { userId, sessionId },
-        );
+        const payload: GetChatHistoryPayload = {
+            userId,
+            sessionId,
+        };
+
+        const session =
+            await this.commonService.sendViaRMQ<GetChatHistoryResponse>(
+                this.userClient,
+                { cmd: "user.chat.getHistory" },
+                payload,
+            );
 
         return session.messages.map((row) => {
             if (row.type === "human") return new HumanMessage(row.content);
@@ -64,17 +74,21 @@ export class MemoryService {
         }
 
         // 3. Create the object literal using the interface
-        const message: ChatMessageDTO = {
-            sequence,
-            toolCallId,
-            type,
-            content,
+        const payload: SaveChatHistoryPayload = {
+            userId,
+            sessionId,
+            message: {
+                sequence,
+                type,
+                content,
+                toolCallId,
+            },
         };
 
         await this.commonService.sendViaRMQ<void>(
             this.userClient,
             { cmd: "user.chat.saveHistory" },
-            { userId, sessionId, message },
+            payload,
         );
     }
 }
