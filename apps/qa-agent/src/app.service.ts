@@ -147,8 +147,8 @@ log_incident tool to record the incident.`;
 
       this.logger.log(`Processing session ${session.id}...`);
 
-      // Extract userId from messages (assuming all messages in session have same userId)
-      const userId = session.messages[0]?.userId;
+      // Extract userId from session
+      const userId = session.userId;
       this.logger.log(`Extracted userId: ${userId}`);
 
       // Convert messages to BaseMessage[]

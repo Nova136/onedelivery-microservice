@@ -7,6 +7,7 @@ import {
   ChatHistoryPayload,
   ChatMessageDTO,
   ChatSavePayload,
+  ChatSessionDTO,
   GetChatSessionsPayload,
   UpdateChatSessionPayload,
 } from "./chat.dto";
@@ -21,41 +22,56 @@ export class ChatService {
     private readonly chatSessionRepo: Repository<ChatSession>,
   ) {}
 
-  private async ensureSession(id: string): Promise<ChatSession> {
+  private async ensureSession(id: string, userId: string): Promise<ChatSession> {
     let session = await this.chatSessionRepo.findOne({ where: { id } });
     if (!session) {
-      session = this.chatSessionRepo.create({ id, status: "OPEN" });
+      session = this.chatSessionRepo.create({ id, status: "OPEN", userId });
+      await this.chatSessionRepo.save(session);
+    } else if (!session.userId) {
+      session.userId = userId;
       await this.chatSessionRepo.save(session);
     }
     return session;
   }
 
-  async getHistory(payload: ChatHistoryPayload): Promise<ChatMessageDTO[]> {
-    const { userId, sessionId } = payload;
-    const rows = await this.chatMessageRepo.find({
-      where: {
-        userId,
-        sessionId: { id: sessionId },
-      },
-      order: { sequence: "ASC" },
-    });
+  async getHistory(payload: ChatHistoryPayload): Promise<ChatSessionDTO> {
+    const { sessionId } = payload;
+    const session = await this.chatSessionRepo
+      .createQueryBuilder('session')
+      .leftJoinAndSelect('session.messages', 'message')
+      .where('session.id = :sessionId', { sessionId })
+      .orderBy('message.sequence', 'ASC')
+      .getOne();
 
-    return rows.map((row) => {
-      return {
-        sequence: row.sequence,
-        type: row.type,
-        content: row.content,
-        toolCallId: row.toolCallId,
-      };
-    });
+    if (!session) {
+      throw new Error('Session not found');
+    }
+
+    const userId = session.userId;
+
+    return {
+      id: session.id,
+      userId,
+      status: session.status,
+      reviewed: session.reviewed,
+      createdAt: session.createdAt,
+      updatedAt: session.updatedAt,
+      messages: session.messages.map((msg) => ({
+        id: msg.id,
+        type: msg.type,
+        content: msg.content,
+        toolCallId: msg.toolCallId,
+        sequence: msg.sequence,
+        createdAt: msg.createdAt,
+      })),
+    };
   }
 
   async saveHistory(payload: ChatSavePayload): Promise<void> {
     const { userId, sessionId, message } = payload;
     console.log(payload);
-    const session = await this.ensureSession(sessionId);
+    const session = await this.ensureSession(sessionId, userId);
     const entity = new ChatMessage();
-    entity.userId = userId;
     entity.sessionId = session;
     entity.sequence = message.sequence;
     entity.type = message.type;
@@ -91,16 +107,9 @@ export class ChatService {
       query.andWhere("session.createdAt < :date", { date });
     }
 
-    // If filtering by userId, only filter which sessions are returned, but still load all
-    // messages for those sessions.
+    // If filtering by userId, filter sessions directly
     if (payload.userId) {
-      const subQuery = this.chatMessageRepo
-        .createQueryBuilder("m")
-        .select("m.sessionId")
-        .where("m.userId = :userId", { userId: payload.userId });
-
-      query.andWhere(`session.id IN (${subQuery.getQuery()})`);
-      query.setParameters(subQuery.getParameters());
+      query.andWhere('session.userId = :userId', { userId: payload.userId });
     }
 
     query

@@ -12,13 +12,9 @@ import { ChatSession } from "./chat-session.entity";
 export type ChatMessageType = "human" | "ai" | "tool" | "unknown";
 
 @Entity({ name: "chat_message", schema: "users" })
-@Index(["userId", "sessionId"])
 export class ChatMessage {
     @PrimaryGeneratedColumn("uuid")
     id: string;
-
-    @Column({ type: "varchar", length: 255 })
-    userId: string;
 
     @ManyToOne(() => ChatSession, { onDelete: "CASCADE" })
     @JoinColumn({ name: "sessionId" })
