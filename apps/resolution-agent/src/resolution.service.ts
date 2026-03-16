@@ -8,7 +8,7 @@ import { StructuredTool } from "@langchain/core/tools";
 import { ToolMessage, BaseMessage } from "@langchain/core/messages";
 import { AgentsClientService } from "./agents/agents-client.service";
 import { KnowledgeClientService } from "./agents/knowledge-client.service";
-import { AgentChatPayload } from "./core/dto/agent-chat.dto";
+import { AgentChatPayload } from "@libs/modules/generic/interface/agent-chat-payload.interface";
 import { createGetOrderDetailsTool } from "./tools/get-order-details.tool";
 import { createExecuteRefundTool } from "./tools/execute-refund.tool";
 import { createRouteToGuardianTool } from "./tools/route-to-guardian.tool";

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { tool, StructuredTool } from "@langchain/core/tools";
 import { AgentsClientService } from "../agents/agents-client.service";
-import { AGENT_CHAT_PATTERN } from "../core/dto/agent-chat.dto";
+import { AGENT_CHAT_PATTERN } from "@libs/modules/generic/enum/agent-chat.pattern";
 
 const guardianSchema = z.object({
     userId: z.string().describe("The user's unique identifier."),

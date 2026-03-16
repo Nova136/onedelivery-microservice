@@ -1,16 +1,10 @@
 import { Injectable, Inject } from "@nestjs/common";
 import { ClientProxy } from "@nestjs/microservices";
 import { firstValueFrom } from "rxjs";
-
-export const AGENT_CHAT_PATTERN = { cmd: "agent.chat" as const };
+import { AGENT_CHAT_PATTERN } from "@libs/modules/generic/enum/agent-chat.pattern";
+import { AgentChatPayload } from "@libs/modules/generic/interface/agent-chat-payload.interface";
 
 export type AgentName = "resolution" | "qa" | "guardian" | "logistic";
-
-export interface AgentChatPayload {
-    userId: string;
-    sessionId: string;
-    message: string;
-}
 
 export interface AgentChatResult {
     reply: string;
