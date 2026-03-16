@@ -1,7 +1,7 @@
 import { Controller, Post, Body, Logger } from "@nestjs/common";
 import { ApiTags, ApiOperation, ApiResponse } from "@nestjs/swagger";
 import { OrchestratorAgentService } from "./orchestrator-agent.service";
-import { HandleIncomingMessageDto } from "./core/dto/handle-incoming-message.dto";
+import { HandleIncomingMessageDto } from "@libs/modules/generic/dto/handle-incoming-message.dto";
 
 @ApiTags("Orchestrator")
 @Controller()

@@ -3,7 +3,7 @@ version: '3'
 # Debug stack: microservices + agents using Postgres (and RabbitMQ) from docker-compose.yml.
 # Start the main stack first: docker compose up -d
 # Then: docker compose -f docker-compose.debug.yml up --build
-# Ports: 3001 audit, 3002 logistics, 3003 order, 3004 payment, 3005 user, 3006 incident; 3010 orchestrator-agent, 3011 logistic-agent, 3012 resolution-agent, 3013 guardian-agent, 3014 qa-agent.
+# Ports: 3001 audit, 3002 logistics, 3003 order, 3004 payment, 3005 user, 3006 incident; 3010 orchestrator-agent, 3011 logistics-agent, 3012 resolution-agent, 3013 guardian-agent, 3014 qa-agent.
 services:
   # Host:container = 300x:900x so Kong (host.docker.internal:300x) matches.
   order:
@@ -193,11 +193,11 @@ services:
     networks:
       - backend
 
-  logistic-agent:
+  logistics-agent:
     build:
-      dockerfile: .docker/Dockerfile.logistic-agent
+      dockerfile: .docker/Dockerfile.logistics-agent
     restart: unless-stopped
-    hostname: logistic-agent
+    hostname: logistics-agent
     ports:
       - '3011:9011'
     env_file:

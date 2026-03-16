@@ -1,10 +1,8 @@
 import { Controller, Logger } from "@nestjs/common";
 import { MessagePattern, Payload } from "@nestjs/microservices";
 import { ResolutionService } from "./resolution.service";
-import {
-    AgentChatPayload,
-    AGENT_CHAT_PATTERN,
-} from "./core/dto/agent-chat.dto";
+import { AGENT_CHAT_PATTERN } from "@libs/modules/generic/enum/agent-chat.pattern";
+import { AgentChatPayload } from "@libs/modules/generic/interface/agent-chat-payload.interface";
 
 @Controller()
 export class ResolutionController {
