@@ -17,14 +17,18 @@ function mapItem(item: {
     id: string;
     orderId: string;
     productId: string;
-    quantity: number;
+    productName: string;
+    quantityOrdered: number;
+    quantityRefunded: number;
     price: number;
 }) {
     return {
         id: item.id,
         orderId: item.orderId,
         productId: item.productId,
-        quantity: item.quantity,
+        productName: item.productName,
+        quantityOrdered: item.quantityOrdered,
+        quantityRefunded: item.quantityRefunded,
         price: Number(item.price),
     };
 }
@@ -50,16 +54,19 @@ export class OrderController {
                 customerId,
                 items: body.items,
                 deliveryAddress: body.deliveryAddress,
+                priorityOption: body.priorityOption,
             });
         const response: ICreateOrderResponse = {
             orderId: order.id,
             status: order.status,
             customerId: order.customerId,
             deliveryAddress: order.deliveryAddress,
+            priorityOption: order.priorityOption,
             createdAt: order.createdAt.toISOString(),
             items: order.items.map(mapItem),
             paymentSuccess,
             transactionId,
+            message: paymentSuccess ? "Order created" : "Order created but payment failed",
         };
         return response;
     }
@@ -80,9 +87,13 @@ export class OrderController {
                 status: o.status,
                 customerId: o.customerId,
                 deliveryAddress: o.deliveryAddress,
+                priorityOption: o.priorityOption,
                 transactionId: o.transactionId ?? null,
                 createdAt: o.createdAt.toISOString(),
                 items: o.items.map(mapItem),
+                totalOrderValue: Number(o.totalOrderValue),
+                totalRefundValue: Number(o.totalRefundValue),
+                refundStatus: o.refundStatus,
             })),
         };
         return response;

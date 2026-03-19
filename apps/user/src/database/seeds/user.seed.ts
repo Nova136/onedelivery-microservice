@@ -21,7 +21,7 @@ export default class UserSeeder implements Seeder {
         email: 'admin@onedelivery.demo',
         role: Role.Admin,
         plainPassword: 'Admin123!',
-        passwordHash: await bcrypt.hash('User123!', SALT_ROUNDS),
+        passwordHash: await bcrypt.hash('Admin123!', SALT_ROUNDS),
 
       },
       {

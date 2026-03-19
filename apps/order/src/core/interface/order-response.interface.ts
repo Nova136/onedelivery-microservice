@@ -6,6 +6,7 @@ export interface IOrderResponse {
     status: string;
     customerId: string;
     deliveryAddress: string;
+    priorityOption: string;
     transactionId: string | null;
     createdAt: string;
     items: IOrderItemResponse[];

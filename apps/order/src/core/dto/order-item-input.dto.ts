@@ -4,6 +4,8 @@ import { ApiProperty } from '@nestjs/swagger';
 export class OrderItemInputDto {
   @ApiProperty({ format: 'uuid', description: 'Product ID' })
   productId!: string;
+  @ApiProperty({ example: 'Hainanese Chicken Rice', description: 'Product name' })
+  productName!: string;
   @ApiProperty({ example: 1, minimum: 1 })
   quantity!: number;
   @ApiProperty({ example: 9.99 })
