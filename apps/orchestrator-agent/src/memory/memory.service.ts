@@ -11,6 +11,8 @@ import {
     GetChatHistoryPayload,
     GetChatHistoryResponse,
     SaveChatHistoryPayload,
+    GetChatHistoryListingPayload,
+    GetChatHistoryListingResponse
 } from "../core/interface";
 
 @Injectable()
@@ -88,6 +90,34 @@ export class MemoryService {
         await this.commonService.sendViaRMQ<void>(
             this.userClient,
             { cmd: "user.chat.saveHistory" },
+            payload,
+        );
+    }
+
+    async getHistoryListing(
+        userId: string
+    ): Promise<GetChatHistoryListingResponse[]> {
+        const payload: GetChatHistoryListingPayload = {
+            userId
+        };
+
+       return await this.commonService.sendViaRMQ<GetChatHistoryListingResponse[]>( this.userClient,
+        { cmd: "user.chat.getChatHistoryListing" },
+        payload,
+       );
+       
+    }
+    async getChatHistory(
+        userId: string,
+        sessionId: string
+    ): Promise<GetChatHistoryResponse> {
+        const payload: GetChatHistoryPayload = {
+            userId,
+            sessionId,
+        };
+
+        return await this.commonService.sendViaRMQ<GetChatHistoryResponse>( this.userClient,
+            { cmd: "user.chat.getHistory" },
             payload,
         );
     }

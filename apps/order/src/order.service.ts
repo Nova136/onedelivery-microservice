@@ -38,23 +38,31 @@ export class OrderService {
     }
 
     async create(dto: CreateOrderDto) {
+        const totalOrderValue = dto.items.reduce(
+            (sum, it) => sum + it.price * it.quantity,
+            0,
+        );
+        const order = this.orderRepo.create({
+            customerId: dto.customerId,
+            deliveryAddress: dto.deliveryAddress,
+            priorityOption: dto.priorityOption ? dto.priorityOption :"PRIO-STD",
+            status: "CREATED",
+            totalOrderValue,
+        });
+        const saved = await this.orderRepo.save(order);
+
         const items = dto.items.map((it) =>
             this.orderItemRepo.create({
                 orderId: saved.id,
                 productId: it.productId,
+                productName: it.productName,
                 quantityOrdered: it.quantity,
                 price: it.price,
                 itemValue: it.price * it.quantity,
             }),
         );
-        const order = this.orderRepo.create({
-            customerId: dto.customerId,
-            deliveryAddress: dto.deliveryAddress,
-            status: "CREATED",
-            totalOrderValue: items.reduce((sum, it) => sum + it.itemValue, 0),
-        });
-        const saved = await this.orderRepo.save(order);
         await this.orderItemRepo.save(items);
+
         return this.orderRepo.findOne({
             where: { id: saved.id },
             relations: ["items"],

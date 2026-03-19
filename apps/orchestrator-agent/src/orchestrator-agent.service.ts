@@ -21,6 +21,7 @@ import { createSearchFaqTool } from "./tools/search-faq.tool";
 import { createEscalateToHumanTool } from "./tools/escalate-to-human.tool";
 import { KnowledgeClientService } from "./agents/knowledge-client.service";
 import { orchestratorPrompt } from "./core/prompts/orchestrator.prompt";
+import { GetChatHistoryListingResponse } from "./core/interface";
 
 @Injectable()
 export class OrchestratorAgentService {
@@ -192,4 +193,18 @@ export class OrchestratorAgentService {
 
         return finalResponseString;
     }
+    
+    async getHistoryListing(
+        userId: string
+    ){
+        return await this.memoryService.getHistoryListing(userId);
+    }
+
+    async getChatHistory(
+        userId: string,
+        sessionId: string
+    ){
+        return await this.memoryService.getChatHistory(userId, sessionId);
+    }
+    
 }
