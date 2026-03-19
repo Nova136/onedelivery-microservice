@@ -3,6 +3,7 @@ import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { ProductsService } from './products.service';
 import { ListProductsRequestDto, ListProductsResponseDto } from '../core/dto';
 import { IListProductsResponse } from '../core/interface';
+import { PRIORITY_OPTIONS, PriorityOption } from '../core/enums/priority-option';
 
 @ApiTags('Products')
 @Controller('logistics')
@@ -37,5 +38,12 @@ export class ProductsController {
       },
     };
     return response;
+  }
+
+  @Get('priority-options')
+  @ApiOperation({ summary: 'List available delivery priority options' })
+  @ApiResponse({ status: 200, description: 'List of delivery priority options' })
+  getPriorityOptions(): PriorityOption[] {
+    return [...PRIORITY_OPTIONS];
   }
 }

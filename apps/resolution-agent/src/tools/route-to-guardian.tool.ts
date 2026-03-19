@@ -23,17 +23,27 @@ export function createRouteToGuardianTool(
             message: string;
         }) => {
             try {
-                // TODO: Implement actual communication with Guardian Agent. For now, we return a placeholder response.
-                // const reply = await agentsClient.send(
-                //     "guardian",
-                //     AGENT_CHAT_PATTERN,
-                //     payload,
-                // );
-                // return reply;
-                return "Approved";
+                const result = await agentsClient.send(
+                    "guardian",
+                    AGENT_CHAT_PATTERN,
+                    payload,
+                );
+
+                const reply =
+                    typeof result === "object" && result?.reply
+                        ? result.reply
+                        : String(result ?? "No response from Guardian Agent.");
+
+                return JSON.stringify({
+                    summary: `Guardian Agent response for session ${payload.sessionId}: ${reply}`,
+                    data: result,
+                });
             } catch (err) {
                 const msg = err instanceof Error ? err.message : String(err);
-                return `Error: Guardian Agent unreachable. ${msg}`;
+                return JSON.stringify({
+                    summary: `Error: Guardian Agent unreachable. ${msg}`,
+                    data: null,
+                });
             }
         },
         {

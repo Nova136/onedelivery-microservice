@@ -62,6 +62,21 @@ export class PaymentController {
     };
   }
 
+  @MessagePattern({ cmd: 'payment.getByOrder' })
+  async getPaymentByOrder(@Payload() data: { orderId: string }) {
+    const payment = await this.paymentService.getByOrderId(data.orderId);
+    if (!payment) return { orderId: data.orderId, found: false };
+    return {
+      found: true,
+      paymentId: payment.id,
+      orderId: payment.orderId,
+      status: payment.status,
+      amount: Number(payment.amount),
+      refunds: payment.refunds?.map((r) => ({ id: r.id, amount: Number(r.amount) })),
+      message: 'Payment microservice: payment retrieved by orderId',
+    };
+  }
+
   @MessagePattern({ cmd: 'payment.get' })
   async getPayment(@Payload() data: { paymentId: string }) {
     const payment = await this.paymentService.getById(data.paymentId);

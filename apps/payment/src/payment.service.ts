@@ -66,6 +66,14 @@ export class PaymentService {
     });
   }
 
+  async getByOrderId(orderId: string) {
+    return this.paymentRepo.findOne({
+      where: { orderId },
+      order: { createdAt: 'DESC' },
+      relations: ['refunds'],
+    });
+  }
+
   async refund(paymentId: string, amount: number, reason?: string) {
     const refund = this.refundRepo.create({
       paymentId,

@@ -16,11 +16,14 @@ export class OrderItem {
     orderId: string;
 
     @ManyToOne(() => Order, (order) => order.items, { onDelete: "CASCADE" })
-    @JoinColumn({ name: "orderId" })
+    @JoinColumn({ name: "order_id" })
     order: Order;
 
     @Column({ type: "uuid" })
     productId: string;
+
+    @Column({ type: "varchar", length: 255 })
+    productName: string;
 
     @Column("decimal", { precision: 10, scale: 2 })
     price: number;

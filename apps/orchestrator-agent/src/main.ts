@@ -20,6 +20,7 @@ async function bootstrap() {
         .setTitle("OneDelivery Orchestrator")
         .setDescription("API documentation for the AI Orchestrator Agent")
         .setVersion("1.0")
+        .addBearerAuth()
         .build();
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('orchestrator-agent/api', app, document);
