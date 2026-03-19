@@ -140,6 +140,23 @@ export class ChatService {
         return query.getMany();
     }
 
+    async getChatHistoryListing(userId: string): Promise<ChatSessionDTO[]> {
+        const sessions = await this.chatSessionRepo.find({
+            where: { userId },
+            order: { createdAt: "DESC" },
+        });
+
+        return sessions.map((s) => ({
+            id: s.id,
+            userId: s.userId,
+            status: s.status,
+            reviewed: s.reviewed,
+            createdAt: s.createdAt,
+            updatedAt: s.updatedAt,
+            messages: [],
+        }));
+    }
+
     async updateSession(payload: UpdateChatSessionPayload): Promise<void> {
         await this.chatSessionRepo.update(payload.id, {
             reviewed: payload.reviewed,

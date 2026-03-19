@@ -35,6 +35,13 @@ export class ChatController {
         return this.chatService.getSessions(payload);
     }
 
+    @MessagePattern({ cmd: "user.chat.getChatHistoryListing" })
+    async getChatHistoryListing(
+        @Payload() payload: { userId: string },
+    ): Promise<ChatSessionDTO[]> {
+        return this.chatService.getChatHistoryListing(payload.userId);
+    }
+
     @MessagePattern({ cmd: "user.chat.updateSession" })
     async updateSession(
         @Payload() payload: UpdateChatSessionPayload,
