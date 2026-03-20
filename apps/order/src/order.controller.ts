@@ -124,6 +124,40 @@ export class OrderController {
         };
     }
 
+    @MessagePattern({ cmd: "order.updateRefund" })
+    async updateRefund(
+        @Payload()
+        data: {
+            orderId: string;
+            items: { orderItemId: string; quantity: number }[];
+        },
+    ) {
+        try {
+            const order = await this.orderService.updateItemRefunds(
+                data.orderId,
+                data.items,
+            );
+            if (!order) return { orderId: data.orderId, success: false };
+            return {
+                success: true,
+                orderId: order.id,
+                refundStatus: order.refundStatus,
+                totalRefundValue: Number(order.totalRefundValue),
+                items: order.items.map(mapItem),
+                message: "Order microservice: refund quantities updated",
+            };
+        } catch (err) {
+            return {
+                success: false,
+                orderId: data.orderId,
+                message:
+                    err instanceof Error
+                        ? err.message
+                        : "Failed to update refund quantities",
+            };
+        }
+    }
+
     @MessagePattern({ cmd: "order.list" })
     async listOrders(@Payload() data: { customerId?: string }) {
         const orders = await this.orderService.listByCustomer(

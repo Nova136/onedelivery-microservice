@@ -182,6 +182,71 @@ export class OrderService {
         };
     }
 
+    async updateItemRefunds(
+        orderId: string,
+        items: { orderItemId: string; quantity: number }[],
+    ) {
+        const order = await this.orderRepo.findOne({
+            where: { id: orderId },
+            relations: ["items"],
+        });
+        if (!order) throw new Error(`Order ${orderId} not found`);
+
+        for (const ri of items) {
+            const item = order.items.find((oi) => oi.id === ri.orderItemId);
+            if (!item) {
+                throw new Error(
+                    `Order item ${ri.orderItemId} not found in order ${orderId}`,
+                );
+            }
+
+            const newRefunded = item.quantityRefunded + ri.quantity;
+            if (newRefunded > item.quantityOrdered) {
+                throw new Error(
+                    `Refund quantity ${ri.quantity} would exceed ordered quantity ` +
+                        `(${item.quantityRefunded} + ${ri.quantity} > ${item.quantityOrdered}) ` +
+                        `for item ${ri.orderItemId}`,
+                );
+            }
+
+            await this.orderItemRepo.update(ri.orderItemId, {
+                quantityRefunded: newRefunded,
+            });
+        }
+
+        const refreshed = await this.orderRepo.findOne({
+            where: { id: orderId },
+            relations: ["items"],
+        });
+
+        const totalRefundValue = refreshed!.items.reduce(
+            (sum, it) =>
+                sum + it.quantityRefunded * Number(it.price),
+            0,
+        );
+
+        const fullyRefunded = refreshed!.items.every(
+            (it) => it.quantityRefunded >= it.quantityOrdered,
+        );
+        const partiallyRefunded = refreshed!.items.some(
+            (it) => it.quantityRefunded > 0,
+        );
+
+        let refundStatus = "NONE";
+        if (fullyRefunded) refundStatus = "FULL";
+        else if (partiallyRefunded) refundStatus = "PARTIAL";
+
+        await this.orderRepo.update(orderId, {
+            totalRefundValue,
+            refundStatus,
+        });
+
+        return this.orderRepo.findOne({
+            where: { id: orderId },
+            relations: ["items"],
+        });
+    }
+
     async listByCustomer(customerId: string) {
         return this.orderRepo.find({
             where: { customerId },

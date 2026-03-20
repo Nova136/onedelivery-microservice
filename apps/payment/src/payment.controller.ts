@@ -48,6 +48,7 @@ export class PaymentController {
 
   @MessagePattern({ cmd: 'payment.refund' })
   async refund(@Payload() data: RefundDto) {
+    console.log('Refund data', data);
     const refund = await this.paymentService.refund(
       data.paymentId,
       data.amount,
