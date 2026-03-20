@@ -87,7 +87,7 @@ export default class SopSeeder implements Seeder {
                 requiredData: ["orderId"],
                 workflowSteps: [
                     "1. Execute Get_Order_Details to fetch the current state of the order.",
-                    "2. Check the 'status' field. If the status is 'CREATED' or 'PREPARATION', the order is eligible for standard cancellation. Proceed to step 4.",
+                    "2. Check the 'status' field. If the status is 'CREATED', the order is eligible for standard cancellation. Proceed to step 5.",
                     "3. If the status is 'PREPARATION' or 'IN_DELIVERY', the order cannot normally be cancelled. Check the 'updatedAt' timestamp against the current time. If the delivery is MORE than 3 hours late, it is eligible for late-cancellation, proceed to step 4. Otherwise, return a rejection string stating the food is being prepared or out for delivery.",
                     "4. If the status is 'DELIVERED' or 'CANCELLED', the order is not eligible for cancellation. Return a rejection string stating the food has already been delivered/cancelled.",
                     "5. If eligible for cancellation, execute the Route_To_Guardian tool to check the user's cancellation quota and fraud risk.",
