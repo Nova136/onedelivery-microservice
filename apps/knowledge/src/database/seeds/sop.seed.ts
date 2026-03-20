@@ -84,17 +84,20 @@ export default class SopSeeder implements Seeder {
                 intentCode: "PROCESS_CANCELLATION_LOGIC",
                 agentOwner: "logistics_agent",
                 title: "Order Cancellation Validation and Execution",
-                requiredData: ["orderId"],
+                requiredData: ["orderId", "customerId"],
                 workflowSteps: [
                     "1. Execute Get_Order_Details to fetch the current state of the order.",
-                    "2. Check the 'status' field. If the status is 'CREATED', the order is eligible for standard cancellation. Proceed to step 5.",
-                    "3. If the status is 'PREPARATION' or 'IN_DELIVERY', the order cannot normally be cancelled. Check the 'updatedAt' timestamp against the current time. If the delivery is MORE than 3 hours late, it is eligible for late-cancellation, proceed to step 4. Otherwise, return a rejection string stating the food is being prepared or out for delivery.",
-                    "4. If the status is 'DELIVERED' or 'CANCELLED', the order is not eligible for cancellation. Return a rejection string stating the food has already been delivered/cancelled.",
-                    "5. If eligible for cancellation, execute the Route_To_Guardian tool to check the user's cancellation quota and fraud risk.",
-                    "6. Wait for the Guardian Agent's response.",
-                    "7. If rejected by Guardian, return a rejection string to the Orchestrator stating: 'Rejected by Guardian, requires manual review'.",
-                    "8. If approved by Guardian, execute the Execute_Cancellation_And_Refund tool.",
-                    "9. Return a simple success/failure status with the reason to the Orchestrator.",
+                    "2. If the orderId cannot be found through Get_Order_Details, return a rejection string with the reason order is not found."
+                    "3. If order is found, check if the customerId of the order matches with the customerId from Get_Order_Details. If it matches, proceed to step 5."
+                    "4. If customerId do not match, return a rejection string with the reason order is not found."
+                    "5. check the 'status' field. If the status is 'CREATED', the order is eligible for standard cancellation. Proceed to step 8.",
+                    "6. If the status is 'PREPARATION' or 'IN_DELIVERY', the order cannot normally be cancelled. Check the 'updatedAt' timestamp against the current time. If the delivery is MORE than 3 hours late, it is eligible for late-cancellation, proceed to step 8. Otherwise, return a rejection string stating the food is being prepared or out for delivery.",
+                    "7. If the status is 'DELIVERED' or 'CANCELLED', the order is not eligible for cancellation. Return a rejection string stating the food has already been delivered/cancelled.",
+                    "8. If eligible for cancellation, execute the Route_To_Guardian tool to check the user's cancellation quota and fraud risk.",
+                    "9. Wait for the Guardian Agent's response.",
+                    "10. If rejected by Guardian, return a rejection string to the Orchestrator stating: 'Rejected by Guardian, requires manual review'.",
+                    "11. If approved by Guardian, execute the Execute_Cancellation_And_Refund tool.",
+                    "12. Return a simple success/failure status with the reason to the Orchestrator.",
                 ],
                 permittedTools: [
                     "Get_Order_Details",
