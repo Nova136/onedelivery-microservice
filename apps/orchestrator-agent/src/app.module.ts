@@ -4,9 +4,10 @@ import { HttpModule } from "@nestjs/axios";
 import { OrchestratorAgentController } from "./orchestrator-agent.controller";
 import { OrchestratorAgentService } from "./orchestrator-agent.service";
 import { MemoryModule } from "./memory/memory.module";
-import { AgentsModule } from "./agents/agents.module";
+import { AgentsClientModule } from "./modules/agents-client/agents-client.module";
 import { CommonModule } from "@libs/modules/common/common.module";
-import { KnowledgeModule } from "./agents/knowledge.module";
+import { KnowledgeClientModule } from "./modules/knowledge-client/knowledge-client.module";
+import { ModerationModule } from "./modules/moderation/moderation.module";
 
 @Module({
     imports: [
@@ -16,8 +17,9 @@ import { KnowledgeModule } from "./agents/knowledge.module";
         }),
         HttpModule,
         MemoryModule,
-        AgentsModule,
-        KnowledgeModule,
+        AgentsClientModule,
+        KnowledgeClientModule,
+        ModerationModule,
     ],
     controllers: [OrchestratorAgentController],
     providers: [OrchestratorAgentService],

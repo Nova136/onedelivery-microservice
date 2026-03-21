@@ -96,4 +96,4 @@ import { AgentsClientService } from "./agents-client.service";
     providers: [AgentsClientService],
     exports: [AgentsClientService],
 })
-export class AgentsModule {}
+export class AgentsClientModule {}
