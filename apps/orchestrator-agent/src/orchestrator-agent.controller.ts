@@ -1,12 +1,22 @@
-import { Controller, Post, Body, Logger,UseGuards } from "@nestjs/common";
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiBody } from "@nestjs/swagger";
+import { Controller, Post, Body, Logger, UseGuards } from "@nestjs/common";
+import {
+    ApiTags,
+    ApiOperation,
+    ApiResponse,
+    ApiBearerAuth,
+    ApiBody,
+} from "@nestjs/swagger";
 import { OrchestratorAgentService } from "./orchestrator-agent.service";
 import { HandleIncomingMessageDto } from "@libs/modules/generic/dto/handle-incoming-message.dto";
 import { ClientAuthGuard } from "@libs/utils/guards/auth.guard";
 import { CurrentUser } from "@libs/utils/decorators/user.decorator";
 import { HandleGetChatHistoryDto } from "@libs/modules/generic/dto/handle-get-chat-history.dto";
-import { GetChatHistoryListingResponse, GetChatHistoryResponse } from "./core/interface";
 import { HandleUserInputMessageDto } from "@libs/modules/generic/dto/handle-user-input-message";
+import { MemoryService } from "./modules/memory/memory.service";
+import {
+    GetChatHistoryListingResponse,
+    GetChatHistoryResponse,
+} from "./modules/memory/interface";
 
 @ApiTags("Orchestrator")
 @Controller("orchestrator-agent")
@@ -15,6 +25,7 @@ export class OrchestratorAgentController {
 
     constructor(
         private readonly orchestratorService: OrchestratorAgentService,
+        private readonly memoryService: MemoryService,
     ) {}
 
     @Post()
@@ -69,13 +80,11 @@ export class OrchestratorAgentController {
     @ApiResponse({ status: 401, description: "Unauthorized" })
     @UseGuards(ClientAuthGuard)
     async getUserChatSession(
-        @CurrentUser() customerId: string
+        @CurrentUser() customerId: string,
     ): Promise<GetChatHistoryListingResponse[]> {
-
         // Pass the data to our multi-agent orchestrator
-        const historyListing = await this.orchestratorService.getHistoryListing(
-            customerId
-        );
+        const historyListing =
+            await this.memoryService.getHistoryListing(customerId);
 
         // Send the final text back to the user
         return historyListing;
@@ -92,15 +101,13 @@ export class OrchestratorAgentController {
         @CurrentUser() customerId: string,
         @Body() body: HandleGetChatHistoryDto,
     ): Promise<GetChatHistoryResponse> {
-
         // Pass the data to our multi-agent orchestrator
-        const chatHistory = await this.orchestratorService.getChatHistory(
+        const chatHistory = await this.memoryService.getChatHistory(
             customerId,
-            body.sessionId
+            body.sessionId,
         );
 
         // Send the final text back to the user
         return chatHistory;
     }
-    
 }
