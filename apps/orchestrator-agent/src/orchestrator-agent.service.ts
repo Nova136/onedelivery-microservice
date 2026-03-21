@@ -152,7 +152,7 @@ export class OrchestratorAgentService {
                     const agentReply = await selectedTool.invoke(toolCall.args);
                     const replyString = String(agentReply);
                     this.logger.log(
-                        `[${state.userId}] Tool Output: "${replyString}"`,
+                        `[${state.userId}] Tool Output: "${replyString.length > 200 ? replyString.substring(0, 200) + "... (truncated)" : replyString}"`,
                     );
 
                     for (const availableTool of this.mcpToolRegistry.getAvailableToolNames()) {
@@ -257,10 +257,6 @@ export class OrchestratorAgentService {
                 .filter(Boolean)
                 .join("\n");
 
-            this.logger.log(
-                `[${state.userId}] Evaluator Context: \n${evaluationContext}`,
-            );
-
             const outputEvaluationResult =
                 await this.moderationService.evaluateOutput(
                     evaluationContext,
@@ -268,9 +264,6 @@ export class OrchestratorAgentService {
                 );
 
             if (outputEvaluationResult.approved) {
-                this.logger.log(
-                    `[${state.userId}] Output Evaluator approved response.`,
-                );
                 return { finalAiMessage: lastMessage };
             } else if (state.iterations >= this.MAX_ITERATIONS) {
                 this.logger.error(
@@ -322,11 +315,8 @@ export class OrchestratorAgentService {
         message: string,
         activeOrderId: string = "None",
     ): Promise<string> {
-        this.logger.log(`[${userId}] User Message: "${message}"`);
-
         // 1. PII Redaction
         const scrubbedMessage = this.privacyService.redactPii(message);
-        this.logger.log(`[${userId}] Scrubbed Message: "${scrubbedMessage}"`);
 
         // 2. Validate Input (Guardrails)
         const isSafe = await this.validateInput(userId, scrubbedMessage);
@@ -404,7 +394,6 @@ export class OrchestratorAgentService {
         userId: string,
         message: string,
     ): Promise<boolean> {
-        this.logger.log(`[${userId}] Running Input Validation...`);
         const inputValidationResult =
             await this.moderationService.validateInput(message);
 
