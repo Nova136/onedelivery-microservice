@@ -46,7 +46,7 @@ variable "ecr_repository_names" {
     incident          = "onedelivery-incident"
     orchestrator-agent = "onedelivery-orchestrator-agent"
     guardian-agent     = "onedelivery-guardian-agent"
-    logistic-agent     = "onedelivery-logistic-agent"
+    logistics-agent     = "onedelivery-logistics-agent"
     resolution-agent   = "onedelivery-resolution-agent"
     qa-agent          = "onedelivery-qa-agent"
   }

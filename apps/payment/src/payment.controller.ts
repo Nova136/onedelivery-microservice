@@ -48,6 +48,7 @@ export class PaymentController {
 
   @MessagePattern({ cmd: 'payment.refund' })
   async refund(@Payload() data: RefundDto) {
+    console.log('Refund data', data);
     const refund = await this.paymentService.refund(
       data.paymentId,
       data.amount,
@@ -59,6 +60,21 @@ export class PaymentController {
       status: refund.status,
       amount: Number(refund.amount),
       message: 'Payment microservice: refund processed',
+    };
+  }
+
+  @MessagePattern({ cmd: 'payment.getByOrder' })
+  async getPaymentByOrder(@Payload() data: { orderId: string }) {
+    const payment = await this.paymentService.getByOrderId(data.orderId);
+    if (!payment) return { orderId: data.orderId, found: false };
+    return {
+      found: true,
+      paymentId: payment.id,
+      orderId: payment.orderId,
+      status: payment.status,
+      amount: Number(payment.amount),
+      refunds: payment.refunds?.map((r) => ({ id: r.id, amount: Number(r.amount) })),
+      message: 'Payment microservice: payment retrieved by orderId',
     };
   }
 

@@ -20,6 +20,7 @@ async function bootstrap() {
     .setTitle('Logistics API')
     .setDescription('Logistics microservice – products catalog and delivery tracking')
     .setVersion('1.0')
+    .addBearerAuth()
     .addTag('logistics')
     .addTag('products')
     .build();

@@ -1,7 +1,7 @@
 # Kong DB-less declarative config. Gateway for local dev.
 # Frontend and clients call http://localhost:8000/<service>/... ; Kong strips the prefix and proxies to the microservice.
 # Debug Docker stack maps 3001:9001 (audit), 3002:9002 (logistics), 3003:9003 (order), 3004:9004 (payment), 3005:9005 (user), 3006:9006 (incident).
-# Agents: 3010 orchestrator-agent, 3011 logistic-agent, 3012 resolution-agent, 3013 guardian-agent, 3014 qa-agent.
+# Agents: 3010 orchestrator-agent, 3011 logistics-agent, 3012 resolution-agent, 3013 guardian-agent, 3014 qa-agent.
 # Kong uses host.docker.internal:300x to reach the service on the host.
 
 _format_version: "3.0"
@@ -93,11 +93,11 @@ services:
         paths: ["/guardian-agent"]
         strip_path: false
 
-  - name: logistic-agent
+  - name: logistics-agent
     url: http://host.docker.internal:3011
     routes:
-      - name: logistic-agent-route
-        paths: ["/logistic-agent"]
+      - name: logistics-agent-route
+        paths: ["/logistics-agent"]
         strip_path: false
 
   - name: resolution-agent

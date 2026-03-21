@@ -4,10 +4,8 @@ import { MessagePattern, Payload } from "@nestjs/microservices";
 import { ApiTags, ApiOperation, ApiResponse } from "@nestjs/swagger";
 import { LogisticsAgentService } from "./logistics-agent.service";
 import { ExecuteLogisticsTaskDto } from "./core/dto/execute-logistics-task.dto";
-import { AgentChatPayload } from "./core/interface";
-
-// Update the pattern to reflect a backend task rather than a chat
-export const AGENT_CHAT_PATTERN = { cmd: "agent.chat" as const };
+import { AgentChatPayload } from "@libs/modules/generic/interface/agent-chat-payload.interface";
+import { AGENT_CHAT_PATTERN } from "@libs/modules/generic/enum/agent-chat.pattern";
 
 @ApiTags("Logistics Agent (Backend)")
 @Controller("logistics") // Adding a route prefix is good practice for REST fallback

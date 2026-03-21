@@ -186,10 +186,10 @@ resource "aws_lb_listener_rule" "logistic_agent" {
   priority     = 180
   action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.service["logistic-agent"].arn
+    target_group_arn = aws_lb_target_group.service["logistics-agent"].arn
   }
   condition {
-    path_pattern { values = ["/logistic-agent", "/logistic-agent/*"] }
+    path_pattern { values = ["/logistics-agent", "/logistics-agent/*"] }
   }
 }
 

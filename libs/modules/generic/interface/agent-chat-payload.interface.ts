@@ -1,5 +1,4 @@
-export const AGENT_CHAT_PATTERN = { cmd: "agent.chat" as const };
-
+/** Payload for agent.chat TCP message used by all agents and the orchestrator. */
 export interface AgentChatPayload {
     userId: string;
     sessionId: string;

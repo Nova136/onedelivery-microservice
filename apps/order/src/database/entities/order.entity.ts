@@ -42,4 +42,7 @@ export class Order {
 
     @Column({ type: "varchar", length: 32, default: "NONE" })
     refundStatus: string;
+
+    @Column({ type: "varchar", length: 32, default: "PRIO-STD" })
+    priorityOption: string;
 }

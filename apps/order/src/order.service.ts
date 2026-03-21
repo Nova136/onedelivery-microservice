@@ -38,23 +38,31 @@ export class OrderService {
     }
 
     async create(dto: CreateOrderDto) {
+        const totalOrderValue = dto.items.reduce(
+            (sum, it) => sum + it.price * it.quantity,
+            0,
+        );
+        const order = this.orderRepo.create({
+            customerId: dto.customerId,
+            deliveryAddress: dto.deliveryAddress,
+            priorityOption: dto.priorityOption ? dto.priorityOption :"PRIO-STD",
+            status: "CREATED",
+            totalOrderValue,
+        });
+        const saved = await this.orderRepo.save(order);
+
         const items = dto.items.map((it) =>
             this.orderItemRepo.create({
                 orderId: saved.id,
                 productId: it.productId,
+                productName: it.productName,
                 quantityOrdered: it.quantity,
                 price: it.price,
                 itemValue: it.price * it.quantity,
             }),
         );
-        const order = this.orderRepo.create({
-            customerId: dto.customerId,
-            deliveryAddress: dto.deliveryAddress,
-            status: "CREATED",
-            totalOrderValue: items.reduce((sum, it) => sum + it.itemValue, 0),
-        });
-        const saved = await this.orderRepo.save(order);
         await this.orderItemRepo.save(items);
+
         return this.orderRepo.findOne({
             where: { id: saved.id },
             relations: ["items"],
@@ -172,6 +180,71 @@ export class OrderService {
             paymentSuccess,
             transactionId,
         };
+    }
+
+    async updateItemRefunds(
+        orderId: string,
+        items: { orderItemId: string; quantity: number }[],
+    ) {
+        const order = await this.orderRepo.findOne({
+            where: { id: orderId },
+            relations: ["items"],
+        });
+        if (!order) throw new Error(`Order ${orderId} not found`);
+
+        for (const ri of items) {
+            const item = order.items.find((oi) => oi.id === ri.orderItemId);
+            if (!item) {
+                throw new Error(
+                    `Order item ${ri.orderItemId} not found in order ${orderId}`,
+                );
+            }
+
+            const newRefunded = item.quantityRefunded + ri.quantity;
+            if (newRefunded > item.quantityOrdered) {
+                throw new Error(
+                    `Refund quantity ${ri.quantity} would exceed ordered quantity ` +
+                        `(${item.quantityRefunded} + ${ri.quantity} > ${item.quantityOrdered}) ` +
+                        `for item ${ri.orderItemId}`,
+                );
+            }
+
+            await this.orderItemRepo.update(ri.orderItemId, {
+                quantityRefunded: newRefunded,
+            });
+        }
+
+        const refreshed = await this.orderRepo.findOne({
+            where: { id: orderId },
+            relations: ["items"],
+        });
+
+        const totalRefundValue = refreshed!.items.reduce(
+            (sum, it) =>
+                sum + it.quantityRefunded * Number(it.price),
+            0,
+        );
+
+        const fullyRefunded = refreshed!.items.every(
+            (it) => it.quantityRefunded >= it.quantityOrdered,
+        );
+        const partiallyRefunded = refreshed!.items.some(
+            (it) => it.quantityRefunded > 0,
+        );
+
+        let refundStatus = "NONE";
+        if (fullyRefunded) refundStatus = "FULL";
+        else if (partiallyRefunded) refundStatus = "PARTIAL";
+
+        await this.orderRepo.update(orderId, {
+            totalRefundValue,
+            refundStatus,
+        });
+
+        return this.orderRepo.findOne({
+            where: { id: orderId },
+            relations: ["items"],
+        });
     }
 
     async listByCustomer(customerId: string) {

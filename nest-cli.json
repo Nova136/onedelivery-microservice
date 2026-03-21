@@ -46,13 +46,13 @@
         "tsConfigPath": "apps/knowledge/tsconfig.app.json"
       }
     },
-    "logistic-agent": {
+    "logistics-agent": {
       "type": "application",
-      "root": "apps/logistic-agent",
+      "root": "apps/logistics-agent",
       "entryFile": "main",
-      "sourceRoot": "apps/logistic-agent/src",
+      "sourceRoot": "apps/logistics-agent/src",
       "compilerOptions": {
-        "tsConfigPath": "apps/logistic-agent/tsconfig.app.json"
+        "tsConfigPath": "apps/logistics-agent/tsconfig.app.json"
       }
     },
     "logistics": {

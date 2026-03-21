@@ -61,5 +61,5 @@ output "api_gateway_id" {
 
 output "routing_note" {
   description = "How traffic is routed (when enable_alb = true)"
-  value       = var.enable_alb ? "API Gateway -> ALB:80 -> path-based to ECS (/order, /logistics, /payment, /audit, /user, /incident, /orchestrator-agent, /guardian-agent, /logistic-agent, /resolution-agent, /qa-agent). Set DATABASE_URL and ensure apps expose HTTP on port 80 and GET /health for ALB." : "ALB and API Gateway disabled (enable_alb = false). No external HTTP entry to ECS."
+  value       = var.enable_alb ? "API Gateway -> ALB:80 -> path-based to ECS (/order, /logistics, /payment, /audit, /user, /incident, /orchestrator-agent, /guardian-agent, /logistics-agent, /resolution-agent, /qa-agent). Set DATABASE_URL and ensure apps expose HTTP on port 80 and GET /health for ALB." : "ALB and API Gateway disabled (enable_alb = false). No external HTTP entry to ECS."
 }
