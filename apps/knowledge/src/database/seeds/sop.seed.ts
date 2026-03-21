@@ -102,6 +102,22 @@ export default class SopSeeder implements Seeder {
                     "Execute_Cancellation_And_Refund",
                 ],
             },
+            {
+                intentCode: "VERIFICATION",
+                agentOwner: "guardian_agent",
+                title: "Response Verification Before Customer Delivery",
+                requiredData: [],
+                workflowSteps: [
+                    "1. Read the proposed response carefully.",
+                    "2. Check that no refund amount exceeds $20 (auto-approval limit).",
+                    "3. Check that no order cancellation is approved if status is DELIVERED or CANCELLED.",
+                    "4. Check that the response does not reveal internal tool names, SOP details, or system limits.",
+                    "5. Check that the response does not contain hallucinated data (made-up amounts, order IDs, or item names).",
+                    "6. If all checks pass, return the proposed response exactly as-is.",
+                    "7. If any check fails, return a corrected version prefixed with 'CORRECTED: ' and append the reason in brackets at the end.",
+                ],
+                permittedTools: [],
+            },
         ];
 
         await repo.insert(sops);
