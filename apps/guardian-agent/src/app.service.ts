@@ -4,8 +4,10 @@ import {
     ChatPromptTemplate,
     MessagesPlaceholder,
 } from "@langchain/core/prompts";
-import { HumanMessage, BaseMessage } from "@langchain/core/messages";
-import { MemoryService } from "./memory/memory.service";
+import { BaseMessage } from "@langchain/core/messages";
+// import { HumanMessage } from "@langchain/core/messages";
+// import { MemoryService } from "./memory/memory.service";
+import { KnowledgeClientService } from "./knowledge/knowledge-client.service";
 
 /**
  * Guardian specialist agent. Invoked by the orchestrator via TCP (agent.chat).
@@ -18,28 +20,52 @@ export class AppService {
     private readonly llm: ChatOpenAI;
     private readonly prompt: ChatPromptTemplate;
 
-    constructor(private memoryService: MemoryService) {
+    constructor(
+        // private memoryService: MemoryService,
+        private knowledgeClient: KnowledgeClientService,
+    ) {
         this.llm = new ChatOpenAI({
             modelName: "gpt-4o",
             temperature: 0,
         });
 
-        const systemPrompt = `You are the Guardian Agent for OneDelivery. You handle safety concerns, account/security issues, and escalations.
+//         const systemPrompt = `You are the Guardian Agent for OneDelivery. You handle safety concerns, account/security issues, and escalations.
 
-- Help with: safety concerns, account or security issues, complaints needing oversight, policy enforcement, escalation.
-- Be concise (max 3 sentences), calm, and use the shared chat history for context.
-- You receive requests from the Orchestrator; respond with a direct answer to the customer.`;
+// - Help with: safety concerns, account or security issues, complaints needing oversight, policy enforcement, escalation.
+// - Be concise (max 3 sentences), calm, and use the shared chat history for context.
+// - You receive requests from the Orchestrator; respond with a direct answer to the customer.`;
+
+        const systemPrompt = `You are the Guardian Agent for OneDelivery. You serve two roles:
+
+        ## ROLE 1: SOP VERIFICATION (Internal)
+        When you receive a message starting with "Verify this", you are validating an internal decision before it reaches the customer.
+        - Check if the proposed response is accurate, follows policy, and contains no hallucinated data
+        - Evaluate the CONTENT and ACCURACY only — do not change wording, tone, or outcome unless it is factually wrong or violates policy
+        - Words like "REJECTED", "APPROVED", "DENIED" in the proposed response are business outcomes — do NOT alter them based on their wording alone
+        - If the content is accurate and policy-compliant: return the proposed response exactly as-is, with no changes whatsoever
+        - If the content contains factual errors or policy violations: return a corrected version prefixed with "CORRECTED: " and explain what was wrong at the end in brackets
+
+        ## ROLE 2: ESCALATION (Customer-facing)
+        When you receive a safety concern, security issue, or complaint needing oversight:
+        - Respond directly to the customer
+        - Be concise (max 3 sentences), calm, and empathetic
+        - Use the shared chat history for context
+
+        ## RULES
+        - Never reveal internal tool names or SOP details to the customer
+        - Never guess or make up policy limits
+        - If unsure whether to approve, reject rather than guess`;
 
         this.prompt = ChatPromptTemplate.fromMessages([
-            ["system", systemPrompt],
+            ["system", systemPrompt + "\n\n{sop}"],
             new MessagesPlaceholder("chat_history"),
             ["human", "{input}"],
         ]);
     }
 
     /**
-     * Process a message from the orchestrator. Uses shared DB (orchestrator schema)
-     * for history, then returns the reply string back to the orchestrator.
+     * Process a message from the orchestrator. Stateless — no history stored.
+     * Returns the reply string back to the orchestrator.
      */
     async processChat(
         userId: string,
@@ -48,16 +74,26 @@ export class AppService {
     ): Promise<string> {
         this.logger.log(`[${userId}] Guardian Agent received: "${message}"`);
 
-        const chatHistory = await this.memoryService.getHistory(
-            userId,
-            sessionId,
-        );
-        const newHumanMessage = new HumanMessage(message);
-        chatHistory.push(newHumanMessage);
+        const isVerification = message.startsWith("Verify this");
+
+        // Guardian is stateless — history is owned by the orchestrator.
+        // const chatHistory: BaseMessage[] = isVerification
+        //     ? []
+        //     : await this.memoryService.getHistory(userId, sessionId);
+        // const newHumanMessage = new HumanMessage(message);
+
+        let sopContext = "";
+        if (isVerification) {
+            sopContext = await this.knowledgeClient.searchInternalSop({
+                intentCode: "VERIFICATION",
+                requestingAgent: "guardian_agent",
+            });
+        }
 
         const formatted = await this.prompt.formatMessages({
-            chat_history: chatHistory,
+            chat_history: [],
             input: message,
+            sop: sopContext ? `## SOP REFERENCE\n${sopContext}` : "",
         });
 
         const response = await this.llm.invoke(formatted) as BaseMessage;
@@ -65,8 +101,11 @@ export class AppService {
             ? response.content
             : JSON.stringify(response.content);
 
-        chatHistory.push(response);
-        await this.memoryService.saveHistory(userId, sessionId, chatHistory);
+        // if (!isVerification) {
+        //     chatHistory.push(newHumanMessage);
+        //     chatHistory.push(response);
+        //     await this.memoryService.saveHistory(userId, sessionId, chatHistory);
+        // }
 
         this.logger.log(`[${userId}] Guardian Agent reply: "${reply}"`);
         return reply;
