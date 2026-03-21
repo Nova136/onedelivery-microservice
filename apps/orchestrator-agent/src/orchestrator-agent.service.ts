@@ -266,6 +266,19 @@ export class OrchestratorAgentService {
             .replace(/<thinking>[\s\S]*?<\/thinking>/g, "")
             .trim();
 
+        // Before replying to human, guardian verifies the response against SOP
+        const verificationMessage = `Verify this response before it is sent to the customer. Customer's message: "${message}". Proposed response: "${finalResponseString}". Ensure it is accurate, follows SOP, and is appropriate to send.`;
+        const guardianVerified = await this.agentsClient.send("guardian", {
+            userId,
+            sessionId: `${sessionId}-verify`,
+            message: verificationMessage,
+        });
+        const guardianReply = guardianVerified || finalResponseString;
+        finalResponseString = guardianReply.startsWith("CORRECTED: ")
+            ? guardianReply.replace("CORRECTED: ", "").replace(/\[.*?\]$/, "").trim()
+            : guardianReply;
+        this.logger.log(`[${userId}] Guardian Verified Reply: "${finalResponseString}"`);
+
         // Save the CLEAN conversation back to the database safely!
         if (finalAiMessage) {
             // Overwrite the content with the cleaned string so the DB doesn't store the <thinking> tags

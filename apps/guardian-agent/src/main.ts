@@ -39,7 +39,7 @@ async function bootstrap() {
   await app.startAllMicroservices();
   await app.listen(configService.get('GUARDIAN_AGENT_PORT'));
   console.log(
-    `🚀🚀🚀 Guardian service running on port ${configService.get('GUARDIAN_AGENT_PORT')},RabbitMQ ${rabbitQueue}}`,
+    `🚀🚀🚀 Guardian service running on port ${configService.get('GUARDIAN_AGENT_PORT')},RabbitMQ ${rabbitQueue}`,
   );
 }
 bootstrap();
