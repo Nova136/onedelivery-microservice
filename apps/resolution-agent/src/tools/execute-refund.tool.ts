@@ -51,6 +51,21 @@ export function createExecuteRefundTool(
                     });
                 }
 
+                const refundStatus =
+                    (orderLookup as { refundStatus?: string }).refundStatus ??
+                    "NONE";
+                if (refundStatus !== "NONE") {
+                    return JSON.stringify({
+                        summary:
+                            `REJECTED: Refunds can only be processed when order refundStatus is NONE. ` +
+                            `Current refundStatus: ${refundStatus}.`,
+                        data: {
+                            rejected: true,
+                            code: "REFUND_STATUS_NOT_NONE",
+                        },
+                    });
+                }
+
                 const orderItems: Array<{
                     id: string;
                     quantityOrdered: number;
@@ -109,6 +124,20 @@ export function createExecuteRefundTool(
                             `Refund validation failed for order ${orderId}: ` +
                             validationErrors.join(" | "),
                         data: { validationErrors },
+                    });
+                }
+
+                const totalCents = Math.round(totalRefundAmount * 100);
+                const autoApprovalLimitCents = 20 * 100;
+                if (totalCents > autoApprovalLimitCents) {
+                    return JSON.stringify({
+                        summary:
+                            `REJECTED: Refund amount exceeds the $20 auto-approval limit; this request requires manual review. ` +
+                            `(Calculated $${totalRefundAmount.toFixed(2)}.)`,
+                        data: {
+                            rejected: true,
+                            code: "OVER_AUTO_APPROVAL_LIMIT",
+                        },
                     });
                 }
 
@@ -174,6 +203,7 @@ export function createExecuteRefundTool(
             name: "Execute_Refund",
             description:
                 "Processes an item-level refund against the payment service for a given order. " +
+                "Refunds are only allowed when the order's refundStatus is NONE. " +
                 "Validates that each item has not been fully refunded and that the requested quantity " +
                 "does not exceed remaining eligible units. Automatically computes the refund amount " +
                 "from item prices and updates order item refund quantities after success. " +
