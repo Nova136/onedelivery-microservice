@@ -25,6 +25,7 @@
       "@libs/*": [
         "libs/*"
       ]
-    }
+    },
+    "esModuleInterop": true,
   }
 }

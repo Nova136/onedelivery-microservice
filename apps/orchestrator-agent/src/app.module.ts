@@ -9,6 +9,7 @@ import { CommonModule } from "@libs/modules/common/common.module";
 import { KnowledgeClientModule } from "./modules/knowledge-client/knowledge-client.module";
 import { ModerationModule } from "./modules/moderation/moderation.module";
 import { PrivacyModule } from "./modules/privacy/privacy.module";
+import { McpModule } from "./modules/mcp/mcp.module";
 
 @Module({
     imports: [
@@ -22,6 +23,7 @@ import { PrivacyModule } from "./modules/privacy/privacy.module";
         KnowledgeClientModule,
         ModerationModule,
         PrivacyModule,
+        McpModule,
     ],
     controllers: [OrchestratorAgentController],
     providers: [OrchestratorAgentService],

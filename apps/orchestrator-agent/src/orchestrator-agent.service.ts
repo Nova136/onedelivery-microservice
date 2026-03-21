@@ -13,18 +13,10 @@ import {
     SystemMessage,
 } from "@langchain/core/messages";
 import { MemoryService } from "./modules/memory/memory.service";
-import { AgentsClientService } from "./modules/agents-client/agents-client.service";
-import { createRouteToLogisticsTool } from "./tools/route-to-logistics.tool";
-import { createRouteToResolutionTool } from "./tools/route-to-resolution.tool";
-import { createRouteToQaTool } from "./tools/route-to-qa.tool";
-import { createSearchInternalSopTool } from "./tools/search-internal-sop.tool";
-import { createSearchFaqTool } from "./tools/search-faq.tool";
-import { createEscalateToHumanTool } from "./tools/escalate-to-human.tool";
-import { createGetUserRecentOrdersTool } from "./tools/get-user-recent-orders.tool";
-import { KnowledgeClientService } from "./modules/knowledge-client/knowledge-client.service";
 import { orchestratorPrompt } from "./prompts/orchestrator.prompt";
 import { ModerationService } from "./modules/moderation/moderation.service";
 import { PrivacyService } from "./modules/privacy/privacy.service";
+import { McpToolRegistryService } from "./modules/mcp/mcp-tool-registry.service";
 
 @Injectable()
 export class OrchestratorAgentService {
@@ -34,36 +26,14 @@ export class OrchestratorAgentService {
     private readonly SUMMARIZE_BATCH_SIZE = 4;
     private readonly MAX_ITERATIONS = 5;
 
-    private orchestratorWithTools: any;
     private prompt: ChatPromptTemplate;
-    private tools: Record<string, StructuredTool>;
 
     constructor(
         private memoryService: MemoryService,
-        private agentsClientService: AgentsClientService,
-        private knowledgeClientService: KnowledgeClientService,
         private moderationService: ModerationService,
         private privacyService: PrivacyService,
+        private mcpToolRegistry: McpToolRegistryService,
     ) {
-        this.tools = {
-            Route_To_Logistics: createRouteToLogisticsTool(
-                this.agentsClientService,
-            ),
-            Route_To_Resolution: createRouteToResolutionTool(
-                this.agentsClientService,
-            ),
-            Route_To_QA: createRouteToQaTool(this.agentsClientService),
-            Search_Internal_SOP: createSearchInternalSopTool(
-                this.knowledgeClientService,
-            ),
-            Search_FAQ: createSearchFaqTool(this.knowledgeClientService),
-            Escalate_To_Human: createEscalateToHumanTool(
-                this.agentsClientService,
-            ),
-            Get_User_Recent_Orders: createGetUserRecentOrdersTool(
-                this.agentsClientService,
-            ),
-        } as Record<string, StructuredTool>;
         // 1. Initialize the LLM
         this.llm = new ChatOpenAI({
             modelName: "gpt-4o-mini",
@@ -77,11 +47,6 @@ export class OrchestratorAgentService {
             ["human", "{input}"],
             new MessagesPlaceholder("agent_scratchpad"),
         ]);
-
-        // 3. Bind the tools to the LLM
-        this.orchestratorWithTools = this.llm.bindTools(
-            Object.values(this.tools),
-        );
     }
 
     async processChat(
@@ -217,8 +182,23 @@ export class OrchestratorAgentService {
         const scratchpad: BaseMessage[] = [];
         let circuitBreakerTriggered = false;
 
+        // 1. Initialize Default Safe Tools
+        // We start with read-only/informational tools. Action tools are unlocked dynamically by the SOP.
+        const activeToolNames = new Set<string>([
+            "Search_Internal_SOP",
+            "Search_FAQ",
+            "Get_User_Recent_Orders",
+            "Escalate_To_Human",
+        ]);
+
         for (let i = 0; i < this.MAX_ITERATIONS; i++) {
             this.logger.log(`[${userId}] Iteration ${i + 1}: Thinking...`);
+
+            // 2. Bind only the currently active tools discovered so far
+            const currentTools = Array.from(activeToolNames)
+                .map((name) => this.mcpToolRegistry.getTool(name))
+                .filter(Boolean) as StructuredTool[];
+            const orchestratorWithTools = this.llm.bindTools(currentTools);
 
             const formattedPrompt = await this.prompt.formatMessages({
                 chat_history: contextWindow,
@@ -231,7 +211,7 @@ export class OrchestratorAgentService {
             });
 
             const response =
-                await this.orchestratorWithTools.invoke(formattedPrompt);
+                await orchestratorWithTools.invoke(formattedPrompt);
 
             // Log LLM's internal thoughts for observability
             if (response.content && String(response.content).length > 0) {
@@ -301,7 +281,9 @@ export class OrchestratorAgentService {
 
             // Execute requested tools
             for (const toolCall of response.tool_calls) {
-                const selectedTool = this.tools[toolCall.name];
+                const selectedTool = this.mcpToolRegistry.getTool(
+                    toolCall.name,
+                );
 
                 if (selectedTool) {
                     this.logger.log(
@@ -312,6 +294,19 @@ export class OrchestratorAgentService {
                     this.logger.log(
                         `[${userId}] Tool Output: "${replyString}"`,
                     );
+
+                    // Dynamic Tool Discovery: Unlock tools mentioned in the SOP or tool output
+                    for (const availableTool of this.mcpToolRegistry.getAvailableToolNames()) {
+                        if (
+                            replyString.includes(availableTool) &&
+                            !activeToolNames.has(availableTool)
+                        ) {
+                            this.logger.log(
+                                `[${userId}] Dynamic Tool Binding: SOP unlocked restricted tool -> "${availableTool}"`,
+                            );
+                            activeToolNames.add(availableTool);
+                        }
+                    }
 
                     // Circuit Breaker: Stop hallucination spirals if a critical backend system fails
                     if (replyString.startsWith("System Error:")) {
