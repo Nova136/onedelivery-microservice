@@ -268,7 +268,7 @@ export class OrchestratorAgentService {
 
         // Before replying to human, guardian verifies the response against SOP
         const verificationMessage = `Verify this response before it is sent to the customer. Customer's message: "${message}". Proposed response: "${finalResponseString}". Ensure it is accurate, follows SOP, and is appropriate to send.`;
-        const guardianVerified = await this.agentsClient.send("guardian", {
+        const guardianVerified = await this.agentsClientService.send("guardian", {
             userId,
             sessionId: `${sessionId}-verify`,
             message: verificationMessage,
