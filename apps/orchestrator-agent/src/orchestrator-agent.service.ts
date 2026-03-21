@@ -213,9 +213,14 @@ export class OrchestratorAgentService {
             const lastMessage = state.scratchpad[
                 state.scratchpad.length - 1
             ] as AIMessage;
-            const draftContent = lastMessage.content
+            let draftContent = lastMessage.content
                 ? String(lastMessage.content)
                 : "";
+
+            // Strip out thinking tags so the evaluator doesn't falsely flag internal reasoning
+            draftContent = draftContent
+                .replace(/<thinking>[\s\S]*?<\/thinking>/g, "")
+                .trim();
 
             const recentContext = state.contextWindow
                 .map(
@@ -378,8 +383,7 @@ export class OrchestratorAgentService {
         }
 
         // 5. Extract and Sanitize Final Response
-        const finalResponseString =
-            await this.extractFinalResponse(finalAiMessage);
+        const finalResponseString = this.extractFinalResponse(finalAiMessage);
 
         // 6. Save Final AI Message to Database
         await this.saveFinalResponse(
@@ -448,7 +452,6 @@ export class OrchestratorAgentService {
         // Add current user message to the context window
         const userMessage = new HumanMessage(message);
         const humanMessageSequence = chatHistory.messages.length + 1;
-        contextWindow.push(userMessage);
 
         // Save the user message to the DB asynchronously
         await this.memoryService.saveHistory(
@@ -482,6 +485,7 @@ export class OrchestratorAgentService {
                 "Search_Internal_SOP",
                 "Search_FAQ",
                 "Escalate_To_Human",
+                "End_Chat_Session",
             ],
             circuitBreakerTriggered: false,
             iterations: 0,
@@ -524,14 +528,14 @@ export class OrchestratorAgentService {
     private async saveFinalResponse(
         userId: string,
         sessionId: string,
-        humanMessageSequence: number,
+        currentSequence: number,
         finalAiMessage: BaseMessage | undefined,
         finalResponseString: string,
     ): Promise<void> {
         if (finalAiMessage) {
             // Overwrite content with the cleaned string so the DB doesn't store the raw <thinking> tags
             finalAiMessage.content = finalResponseString;
-            const aiMessageSequence = humanMessageSequence + 1;
+            const aiMessageSequence = currentSequence + 1;
 
             await this.memoryService.saveHistory(
                 userId,
