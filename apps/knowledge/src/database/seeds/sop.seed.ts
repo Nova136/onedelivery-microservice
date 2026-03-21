@@ -76,7 +76,7 @@ export default class SopSeeder implements Seeder {
                     "3. Execute the Route_To_Logistics tool, passing the gathered data.",
                     "4. Wait for the Route_To_Logistics tool to return a success or rejection string.",
                     "5. If successful, confirm to the user that the order has been cancelled and their refund is processing.",
-                    "6. If rejected, politely explain why (based on the Logistics return string) and ask if they'd like to be transferred to human support.",
+                    "6. If rejected, politely explain why and ask if they'd like to be transferred to human support.",
                     "7. If the user agrees to be transferred, execute the Escalate_To_Human tool.",
                 ],
                 permittedTools: ["Route_To_Logistics", "Escalate_To_Human"],

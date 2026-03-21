@@ -13,7 +13,7 @@ import {
     SystemMessage,
 } from "@langchain/core/messages";
 import { MemoryService } from "./modules/memory/memory.service";
-import { orchestratorPrompt } from "./prompts/orchestrator.prompt";
+import { ORCHESTRATOR_PROMPT } from "./prompts/orchestrator.prompt";
 import { ModerationService } from "./modules/moderation/moderation.service";
 import { PrivacyService } from "./modules/privacy/privacy.service";
 import { McpToolRegistryService } from "./modules/mcp/mcp-tool-registry.service";
@@ -24,7 +24,7 @@ export class OrchestratorAgentService {
     private llm: ChatOpenAI;
     private readonly CHAT_HISTORY_WINDOW_SIZE = 6;
     private readonly SUMMARIZE_BATCH_SIZE = 4;
-    private readonly MAX_ITERATIONS = 5;
+    private readonly MAX_ITERATIONS = 10;
 
     private prompt: ChatPromptTemplate;
 
@@ -42,7 +42,7 @@ export class OrchestratorAgentService {
 
         // 2. Set up the prompt template
         this.prompt = ChatPromptTemplate.fromMessages([
-            ["system", orchestratorPrompt],
+            ["system", ORCHESTRATOR_PROMPT],
             new MessagesPlaceholder("chat_history"),
             ["human", "{input}"],
             new MessagesPlaceholder("agent_scratchpad"),
@@ -54,7 +54,6 @@ export class OrchestratorAgentService {
         sessionId: string,
         message: string,
         activeOrderId: string = "None",
-        knownIssue: string = "None",
     ): Promise<string> {
         this.logger.log(`[${userId}] User Message: "${message}"`);
 
@@ -78,7 +77,6 @@ export class OrchestratorAgentService {
             sessionId,
             scrubbedMessage,
             activeOrderId,
-            knownIssue,
             contextWindow,
         );
 
@@ -175,7 +173,6 @@ export class OrchestratorAgentService {
         sessionId: string,
         message: string,
         activeOrderId: string,
-        knownIssue: string,
         contextWindow: BaseMessage[],
     ): Promise<BaseMessage | undefined> {
         let finalAiMessage: BaseMessage | undefined;
@@ -207,7 +204,6 @@ export class OrchestratorAgentService {
                 userId: userId,
                 sessionId: sessionId,
                 activeOrderId: activeOrderId,
-                knownIssue: knownIssue,
             });
 
             const response =
@@ -228,17 +224,51 @@ export class OrchestratorAgentService {
                     ? String(response.content)
                     : "";
 
-                // Build recent context for output evaluation to prevent context collapse
+                // 1. Get the historical conversation
                 const recentContext = contextWindow
                     .map(
                         (msg) =>
                             `${msg instanceof HumanMessage ? "User" : "AI"}: ${msg.content}`,
                     )
                     .join("\n");
-                const evaluationContext = recentContext
-                    ? `${recentContext}\nUser: ${message}`
-                    : `User: ${message}`;
 
+                // 2. NEW: Extract the tool results from the current loop's scratchpad!
+                const scratchpadContext = scratchpad
+                    .map((msg) => {
+                        if (
+                            msg instanceof AIMessage &&
+                            msg.tool_calls &&
+                            msg.tool_calls.length > 0
+                        ) {
+                            // Show the evaluator what tool was called
+                            const tools = msg.tool_calls
+                                .map((t) => t.name)
+                                .join(", ");
+                            return `[AI Action]: Called Tool -> ${tools}`;
+                        } else if (msg instanceof ToolMessage) {
+                            // Show the evaluator the exact string the backend returned!
+                            return `[Backend Response]: ${msg.content}`;
+                        }
+                        return "";
+                    })
+                    .filter((str) => str.length > 0) // Remove empty strings
+                    .join("\n");
+
+                // 3. Stitch it all together for the Evaluator
+                const evaluationContext = [
+                    recentContext,
+                    scratchpadContext
+                        ? `\n--- CURRENT BACKEND ACTIONS ---\n${scratchpadContext}`
+                        : "",
+                ]
+                    .filter(Boolean)
+                    .join("\n");
+
+                this.logger.log(
+                    `[${userId}] Evaluator Context: \n${evaluationContext}`,
+                );
+
+                // Now the Evaluator will see the Logistics agent's approval!
                 const outputEvaluationResult =
                     await this.moderationService.evaluateOutput(
                         evaluationContext,

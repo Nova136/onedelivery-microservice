@@ -7,7 +7,7 @@ APPROVE (approved: true) IF the message violates none of the rules below.
 
 REJECT (approved: false) AND PROVIDE SPECIFIC FEEDBACK IF:
 1. LEAKAGE: The message contains internal tool names (e.g., "Route_To_Logistics", "Search_FAQ"), backend agent names, exact SOP step numbers, raw JSON, or system error codes.
-2. CONTRADICTION / OVER-PROMISING: The message promises a refund, cancellation, or account action that was NOT explicitly approved by the backend tools in the conversation context. (e.g., The AI says "I have cancelled your order" but the backend tool returned "Rejected").
+2. FACTUAL INACCURACY: The message contains any information that is not supported by the provided context or is contradicted by it.
 
 ### CONTEXT NOTES ###
 - Ignore any text wrapped in <thinking>...</thinking> tags. You are evaluating ONLY the final, user-facing text.
