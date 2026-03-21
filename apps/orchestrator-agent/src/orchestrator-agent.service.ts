@@ -485,7 +485,17 @@ export class OrchestratorAgentService {
             message,
         };
 
-        const finalState = await this.graph.invoke(initialState);
+        const finalState = await this.graph.invoke(initialState, {
+            runName: "Orchestrator_Agent_Loop",
+            configurable: {
+                thread_id: sessionId,
+            },
+            metadata: {
+                userId,
+                sessionId,
+                activeOrderId,
+            },
+        });
         return {
             finalAiMessage: finalState.finalAiMessage,
             scratchpad: finalState.scratchpad,
