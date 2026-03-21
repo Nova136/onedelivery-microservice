@@ -5,6 +5,7 @@ import {
     HumanMessage,
     AIMessage,
     ToolMessage,
+    SystemMessage,
 } from "@langchain/core/messages";
 import { CommonService } from "@libs/modules/common/common.service";
 import {
@@ -17,6 +18,7 @@ import {
 import { ChatOpenAI } from "@langchain/openai";
 import { ChatPromptTemplate } from "node_modules/@langchain/core/dist/prompts/index.cjs";
 import { SUMMARIZER_PROMPT } from "./prompt/summarizer.prompt";
+import { EndChatSessionPayload } from "./interface/payload/end-chat-session-payload.interface";
 
 @Injectable()
 export class MemoryService {
@@ -56,6 +58,8 @@ export class MemoryService {
         } else if (baseMessage instanceof ToolMessage) {
             type = "tool";
             toolCallId = baseMessage.tool_call_id ?? null;
+        } else if (baseMessage instanceof SystemMessage) {
+            type = "system";
         }
 
         // 3. Create the object literal using the interface
@@ -114,6 +118,19 @@ export class MemoryService {
             this.userClient,
             { cmd: "user.chat.updateSummary" },
             { id: sessionId, summary, lastSummarizedSequence },
+        );
+    }
+
+    async endChatSession(userId: string, sessionId: string): Promise<void> {
+        const payload: EndChatSessionPayload = {
+            userId,
+            sessionId,
+        };
+
+        return await this.commonService.sendViaRMQ<void>(
+            this.userClient,
+            { cmd: "user.chat.endSession" },
+            payload,
         );
     }
 

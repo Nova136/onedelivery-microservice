@@ -5,6 +5,7 @@ import {
     ChatHistoryPayload,
     ChatSavePayload,
     ChatSessionDTO,
+    EndChatSessionPayload,
     GetChatSessionsPayload,
     UpdateChatSessionPayload,
     UpdateSummaryPayload,
@@ -54,5 +55,13 @@ export class ChatController {
         @Payload() payload: UpdateSummaryPayload,
     ): Promise<void> {
         await this.chatService.updateSummary(payload);
+    }
+
+    @MessagePattern({ cmd: "user.chat.endSession" })
+    async endSession(@Payload() payload: EndChatSessionPayload): Promise<void> {
+        await this.chatService.endChatSession(
+            payload.userId,
+            payload.sessionId,
+        );
     }
 }

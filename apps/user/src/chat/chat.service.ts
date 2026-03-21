@@ -173,4 +173,11 @@ export class ChatService {
             lastSummarizedSequence: payload.lastSummarizedSequence,
         });
     }
+
+    async endChatSession(userId: string, sessionId: string): Promise<void> {
+        await this.chatSessionRepo.update(
+            { id: sessionId, userId },
+            { status: "CLOSED" },
+        );
+    }
 }

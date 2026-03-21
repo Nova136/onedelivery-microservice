@@ -4,11 +4,12 @@ import { AgentsClientService } from "../agents-client/agents-client.service";
 import { KnowledgeClientService } from "../knowledge-client/knowledge-client.service";
 import { createRouteToLogisticsTool } from "../../tools/route-to-logistics.tool";
 import { createRouteToResolutionTool } from "../../tools/route-to-resolution.tool";
-import { createRouteToQaTool } from "../../tools/route-to-qa.tool";
+import { createEndChatSessionTool } from "../../tools/end-chat-session.tool";
 import { createSearchInternalSopTool } from "../../tools/search-internal-sop.tool";
 import { createSearchFaqTool } from "../../tools/search-faq.tool";
 import { createEscalateToHumanTool } from "../../tools/escalate-to-human.tool";
 import { createGetUserRecentOrdersTool } from "../../tools/get-user-recent-orders.tool";
+import { MemoryService } from "../memory/memory.service";
 
 @Injectable()
 export class McpToolRegistryService implements OnModuleInit {
@@ -18,6 +19,7 @@ export class McpToolRegistryService implements OnModuleInit {
     constructor(
         private agentsClientService: AgentsClientService,
         private knowledgeClientService: KnowledgeClientService,
+        private memoryService: MemoryService,
     ) {}
 
     onModuleInit() {
@@ -26,7 +28,12 @@ export class McpToolRegistryService implements OnModuleInit {
         this.registerTool(
             createRouteToResolutionTool(this.agentsClientService),
         );
-        this.registerTool(createRouteToQaTool(this.agentsClientService));
+        this.registerTool(
+            createEndChatSessionTool(
+                this.agentsClientService,
+                this.memoryService,
+            ),
+        );
         this.registerTool(
             createSearchInternalSopTool(this.knowledgeClientService),
         );

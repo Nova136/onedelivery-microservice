@@ -17,6 +17,7 @@ import {
     GetChatHistoryListingResponse,
     GetChatHistoryResponse,
 } from "./modules/memory/interface";
+import { HandleEndChatSessionDto } from "@libs/modules/generic/dto/handle-end-chat-session.dto";
 
 @ApiTags("Orchestrator")
 @Controller("orchestrator-agent")
@@ -109,5 +110,20 @@ export class OrchestratorAgentController {
 
         // Send the final text back to the user
         return chatHistory;
+    }
+
+    @Post("end-chat-session")
+    @ApiBearerAuth()
+    @ApiOperation({ summary: "End a chat session" })
+    @ApiBody({ type: HandleGetChatHistoryDto })
+    @ApiResponse({ status: 201, description: "AI agent's response." })
+    @ApiResponse({ status: 401, description: "Unauthorized" })
+    @UseGuards(ClientAuthGuard)
+    async endChatSession(
+        @CurrentUser() customerId: string,
+        @Body() body: HandleEndChatSessionDto,
+    ): Promise<void> {
+        // Pass the data to our multi-agent orchestrator
+        return this.memoryService.endChatSession(customerId, body.sessionId);
     }
 }
