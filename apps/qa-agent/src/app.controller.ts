@@ -2,9 +2,8 @@ import { Controller, Post, Body, Logger, Get } from "@nestjs/common";
 import { MessagePattern, Payload } from "@nestjs/microservices";
 import { ApiTags, ApiOperation, ApiResponse } from "@nestjs/swagger";
 import { AppService } from "./app.service";
-import { HandleIncomingMessageDto } from "./core/dto/handle-incoming-message.dto";
-
-export const AGENT_CHAT_PATTERN = { cmd: "agent.chat" };
+import { HandleIncomingMessageDto } from "@libs/modules/generic/dto/handle-incoming-message.dto";
+import { AGENT_CHAT_PATTERN } from "@libs/modules/generic/enum/agent-chat.pattern";
 
 @ApiTags("QA Agent")
 @Controller()
@@ -24,6 +23,18 @@ export class AppController {
             payload.message,
         );
         return { reply };
+    }
+
+    @MessagePattern({ cmd: "agent.reviewSession" })
+    async handleReviewSession(@Payload() payload: { userId: string; sessionId: string }) {
+        this.logger.log(
+            `[TCP] Reviewing session ${payload.sessionId} for user ${payload.userId}`,
+        );
+        const result = await this.appService.processChatMessageBySessionId(
+            payload.userId,
+            payload.sessionId,
+        );
+        return { result };
     }
 
     @Post()

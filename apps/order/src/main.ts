@@ -20,7 +20,7 @@ async function bootstrap() {
     .setTitle('Order API')
     .setDescription('Order microservice – health and internal RPC')
     .setVersion('1.0')
-    .addTag('order')
+    .addBearerAuth()
     .build();
   const document = SwaggerModule.createDocument(app, config);
   // Serve Swagger at /order/api so Kong (strip_path: false) forwards /order/api correctly

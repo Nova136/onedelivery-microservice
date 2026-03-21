@@ -6,6 +6,7 @@ export interface ICreateOrderResponse {
     status: string;
     customerId: string;
     deliveryAddress: string;
+    priorityOption: string;
     createdAt: string;
     items: IOrderItemResponse[];
     paymentSuccess: boolean;

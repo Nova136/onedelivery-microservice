@@ -17,14 +17,18 @@ function mapItem(item: {
     id: string;
     orderId: string;
     productId: string;
-    quantity: number;
+    productName: string;
+    quantityOrdered: number;
+    quantityRefunded: number;
     price: number;
 }) {
     return {
         id: item.id,
         orderId: item.orderId,
         productId: item.productId,
-        quantity: item.quantity,
+        productName: item.productName,
+        quantityOrdered: item.quantityOrdered,
+        quantityRefunded: item.quantityRefunded,
         price: Number(item.price),
     };
 }
@@ -50,16 +54,19 @@ export class OrderController {
                 customerId,
                 items: body.items,
                 deliveryAddress: body.deliveryAddress,
+                priorityOption: body.priorityOption,
             });
         const response: ICreateOrderResponse = {
             orderId: order.id,
             status: order.status,
             customerId: order.customerId,
             deliveryAddress: order.deliveryAddress,
+            priorityOption: order.priorityOption,
             createdAt: order.createdAt.toISOString(),
             items: order.items.map(mapItem),
             paymentSuccess,
             transactionId,
+            message: paymentSuccess ? "Order created" : "Order created but payment failed",
         };
         return response;
     }
@@ -80,9 +87,13 @@ export class OrderController {
                 status: o.status,
                 customerId: o.customerId,
                 deliveryAddress: o.deliveryAddress,
+                priorityOption: o.priorityOption,
                 transactionId: o.transactionId ?? null,
                 createdAt: o.createdAt.toISOString(),
                 items: o.items.map(mapItem),
+                totalOrderValue: Number(o.totalOrderValue),
+                totalRefundValue: Number(o.totalRefundValue),
+                refundStatus: o.refundStatus,
             })),
         };
         return response;
@@ -111,6 +122,40 @@ export class OrderController {
             customerId: order!.customerId,
             message: "Order microservice: order created",
         };
+    }
+
+    @MessagePattern({ cmd: "order.updateRefund" })
+    async updateRefund(
+        @Payload()
+        data: {
+            orderId: string;
+            items: { orderItemId: string; quantity: number }[];
+        },
+    ) {
+        try {
+            const order = await this.orderService.updateItemRefunds(
+                data.orderId,
+                data.items,
+            );
+            if (!order) return { orderId: data.orderId, success: false };
+            return {
+                success: true,
+                orderId: order.id,
+                refundStatus: order.refundStatus,
+                totalRefundValue: Number(order.totalRefundValue),
+                items: order.items.map(mapItem),
+                message: "Order microservice: refund quantities updated",
+            };
+        } catch (err) {
+            return {
+                success: false,
+                orderId: data.orderId,
+                message:
+                    err instanceof Error
+                        ? err.message
+                        : "Failed to update refund quantities",
+            };
+        }
     }
 
     @MessagePattern({ cmd: "order.list" })

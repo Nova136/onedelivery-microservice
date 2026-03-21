@@ -9,4 +9,4 @@ COPY . .
 RUN npm ci --omit=dev
 
 EXPOSE 9011
-CMD [ "node", "./dist/apps/logistic-agent/main.js" ]
+CMD [ "node", "./dist/apps/logistics-agent/main.js" ]
