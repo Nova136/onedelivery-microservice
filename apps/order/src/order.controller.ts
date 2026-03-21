@@ -108,6 +108,9 @@ export class OrderController {
             status: order.status,
             customerId: order.customerId,
             deliveryAddress: order.deliveryAddress,
+            refundStatus: order.refundStatus,
+            totalRefundValue: Number(order.totalRefundValue),
+            totalOrderValue: Number(order.totalOrderValue),
             items: order.items,
             createdAt: order.createdAt.toISOString(),
         };
