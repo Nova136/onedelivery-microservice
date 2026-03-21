@@ -13,6 +13,7 @@ import { createGetOrderDetailsTool } from "./tools/get-order-details.tool";
 import { createExecuteRefundTool } from "./tools/execute-refund.tool";
 import { createRouteToGuardianTool } from "./tools/route-to-guardian.tool";
 import { resolutionPrompt } from "./core/prompt/resolution.prompt";
+import { AGENT_CHAT_PATTERN } from "@libs/modules/generic/enum/agent-chat.pattern";
 
 @Injectable()
 export class ResolutionService {
@@ -114,6 +115,20 @@ export class ResolutionService {
             "REJECTED: Agent failed to reach a conclusion.";
 
         this.logger.log(`[${userId}] Final Result: "${result}"`);
-        return result;
+        // return result;
+
+        // Before returning to orchestrator, guardian verifies the decision against SOP
+        const verificationMessage = `Verify this resolution response against SOP before it is returned to the system. Original request: "${message}". Proposed resolution: "${result}". Confirm it is accurate and follows policy.`;
+        const guardianVerified = await this.agentsClient.send(
+            "guardian",
+            AGENT_CHAT_PATTERN,
+            { userId, sessionId: `${sessionId}-verify`, message: verificationMessage },
+        );
+        const guardianReply = guardianVerified?.reply || "";
+        const finalResult = guardianReply.startsWith("CORRECTED: ")
+            ? guardianReply.replace("CORRECTED: ", "").replace(/\[.*?\]$/, "").trim()
+            : result;
+        this.logger.log(`[${userId}] Guardian Verified Result: "${finalResult}"`);
+        return finalResult;
     }
 }

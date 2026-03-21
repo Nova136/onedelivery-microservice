@@ -4,6 +4,7 @@ import { HttpModule } from "@nestjs/axios";
 import { AppController } from "./app.controller";
 import { AppService } from "./app.service";
 import { MemoryModule } from "./memory/memory.module";
+import { KnowledgeModule } from "./knowledge/knowledge.module";
 
 @Module({
   imports: [
@@ -12,6 +13,7 @@ import { MemoryModule } from "./memory/memory.module";
     }),
     HttpModule,
     MemoryModule,
+    KnowledgeModule,
   ],
   controllers: [AppController],
   providers: [AppService],
