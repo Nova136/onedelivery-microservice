@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { StructuredTool, tool } from "@langchain/core/tools";
-import { KnowledgeClientService } from "../agents/knowledge-client.service";
+import { KnowledgeClientService } from "../modules/knowledge-client/knowledge-client.service";
 
 const fetchInternalSOPSchema = z
     .object({

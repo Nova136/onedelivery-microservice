@@ -33,4 +33,4 @@ import { KnowledgeClientService } from "./knowledge-client.service";
     providers: [KnowledgeClientService],
     exports: [KnowledgeClientService],
 })
-export class KnowledgeModule {}
+export class KnowledgeClientModule {}

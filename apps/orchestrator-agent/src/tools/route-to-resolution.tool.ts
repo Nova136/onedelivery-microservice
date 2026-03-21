@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { tool, StructuredTool } from "@langchain/core/tools";
-import type { AgentsClientService } from "../agents/agents-client.service";
+import type { AgentsClientService } from "../modules/agents-client/agents-client.service";
 
 interface ItemDetail {
     name: string;

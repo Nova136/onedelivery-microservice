@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { tool, StructuredTool } from "@langchain/core/tools";
-import type { AgentsClientService } from "../agents/agents-client.service";
+import type { AgentsClientService } from "../modules/agents-client/agents-client.service";
 
 const guardianSchema = z.object({
     userId: z
@@ -20,9 +20,15 @@ const guardianSchema = z.object({
         ),
 });
 
-export function createRouteToGuardianTool(agentsClient: AgentsClientService): StructuredTool {
+export function createRouteToGuardianTool(
+    agentsClient: AgentsClientService,
+): StructuredTool {
     return tool(
-        async (payload: { userId: string; sessionId: string; message: string }) => {
+        async (payload: {
+            userId: string;
+            sessionId: string;
+            message: string;
+        }) => {
             try {
                 const reply = await agentsClient.send("guardian", {
                     userId: payload.userId,
