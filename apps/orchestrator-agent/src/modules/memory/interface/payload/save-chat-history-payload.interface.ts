@@ -9,4 +9,5 @@ export interface SaveChatHistoryPayload {
     userId: string;
     sessionId: string;
     message: ChatMessage;
+    summary?: string;
 }

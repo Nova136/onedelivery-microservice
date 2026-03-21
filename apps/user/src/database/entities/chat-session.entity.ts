@@ -31,4 +31,12 @@ export class ChatSession {
 
     @OneToMany(() => ChatMessage, (message) => message.sessionId)
     messages: ChatMessage[];
+
+    // Store summary of the conversation
+    @Column({ type: "text", nullable: true })
+    summary: string | null;
+
+    // Store the sequence number of the last message included in the summary
+    @Column({ type: "int", default: 0 })
+    lastSummarizedSequence: number;
 }
