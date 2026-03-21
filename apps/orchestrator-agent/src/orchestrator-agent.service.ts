@@ -12,11 +12,55 @@ import {
     AIMessage,
     SystemMessage,
 } from "@langchain/core/messages";
+import { StateGraph, START, END, Annotation } from "@langchain/langgraph";
 import { MemoryService } from "./modules/memory/memory.service";
 import { ORCHESTRATOR_PROMPT } from "./prompts/orchestrator.prompt";
 import { ModerationService } from "./modules/moderation/moderation.service";
 import { PrivacyService } from "./modules/privacy/privacy.service";
 import { McpToolRegistryService } from "./modules/mcp/mcp-tool-registry.service";
+
+export const GraphState = Annotation.Root({
+    contextWindow: Annotation<BaseMessage[]>({
+        reducer: (x, y) => y ?? x,
+        default: () => [],
+    }),
+    scratchpad: Annotation<BaseMessage[]>({
+        reducer: (x, y) => x.concat(y),
+        default: () => [],
+    }),
+    activeToolNames: Annotation<string[]>({
+        reducer: (x, y) => Array.from(new Set([...x, ...y])),
+        default: () => [],
+    }),
+    circuitBreakerTriggered: Annotation<boolean>({
+        reducer: (x, y) => y ?? x,
+        default: () => false,
+    }),
+    iterations: Annotation<number>({
+        reducer: (x, y) => x + y,
+        default: () => 0,
+    }),
+    finalAiMessage: Annotation<BaseMessage | undefined>({
+        reducer: (x, y) => y ?? x,
+        default: () => undefined,
+    }),
+    userId: Annotation<string>({
+        reducer: (x, y) => y ?? x,
+        default: () => "",
+    }),
+    sessionId: Annotation<string>({
+        reducer: (x, y) => y ?? x,
+        default: () => "",
+    }),
+    activeOrderId: Annotation<string>({
+        reducer: (x, y) => y ?? x,
+        default: () => "",
+    }),
+    message: Annotation<string>({
+        reducer: (x, y) => y ?? x,
+        default: () => "",
+    }),
+});
 
 @Injectable()
 export class OrchestratorAgentService {
@@ -27,6 +71,7 @@ export class OrchestratorAgentService {
     private readonly MAX_ITERATIONS = 10;
 
     private prompt: ChatPromptTemplate;
+    private graph: any;
 
     constructor(
         private memoryService: MemoryService,
@@ -47,6 +92,223 @@ export class OrchestratorAgentService {
             ["human", "{input}"],
             new MessagesPlaceholder("agent_scratchpad"),
         ]);
+
+        // 3. Compile the LangGraph workflow
+        this.graph = this.createGraph();
+    }
+
+    private createGraph() {
+        const agentNode = async (state: typeof GraphState.State) => {
+            this.logger.log(
+                `[${state.userId}] Iteration ${state.iterations + 1}: Thinking...`,
+            );
+
+            const currentTools = Array.from(state.activeToolNames)
+                .map((name) => this.mcpToolRegistry.getTool(name))
+                .filter(Boolean) as StructuredTool[];
+            const orchestratorWithTools = this.llm.bindTools(currentTools);
+
+            const formattedPrompt = await this.prompt.formatMessages({
+                chat_history: state.contextWindow,
+                input: state.message,
+                agent_scratchpad: state.scratchpad,
+                userId: state.userId,
+                sessionId: state.sessionId,
+                activeOrderId: state.activeOrderId,
+            });
+
+            const response =
+                await orchestratorWithTools.invoke(formattedPrompt);
+
+            if (response.content && String(response.content).length > 0) {
+                this.logger.log(
+                    `[${state.userId}] Thought: ${response.content}`,
+                );
+            }
+
+            return {
+                scratchpad: [response],
+                iterations: 1, // Let the graph reducer increment our internal step counter
+            };
+        };
+
+        const toolsNode = async (state: typeof GraphState.State) => {
+            const lastMessage = state.scratchpad[
+                state.scratchpad.length - 1
+            ] as AIMessage;
+            const newScratchpad: BaseMessage[] = [];
+            const newActiveToolNames: string[] = [];
+            let circuitBreakerTriggered = false;
+            let finalAiMessage: BaseMessage | undefined = undefined;
+
+            for (const toolCall of lastMessage.tool_calls || []) {
+                const selectedTool = this.mcpToolRegistry.getTool(
+                    toolCall.name,
+                );
+                if (selectedTool) {
+                    this.logger.log(
+                        `[${state.userId}] Calling Tool "${toolCall.name}" with args: ${JSON.stringify(toolCall.args)}`,
+                    );
+                    const agentReply = await selectedTool.invoke(toolCall.args);
+                    const replyString = String(agentReply);
+                    this.logger.log(
+                        `[${state.userId}] Tool Output: "${replyString}"`,
+                    );
+
+                    for (const availableTool of this.mcpToolRegistry.getAvailableToolNames()) {
+                        if (
+                            replyString.includes(availableTool) &&
+                            !state.activeToolNames.includes(availableTool)
+                        ) {
+                            this.logger.log(
+                                `[${state.userId}] Dynamic Tool Binding: SOP unlocked restricted tool -> "${availableTool}"`,
+                            );
+                            newActiveToolNames.push(availableTool);
+                        }
+                    }
+
+                    if (replyString.startsWith("System Error:")) {
+                        this.logger.error(
+                            `[${state.userId}] Circuit Breaker Triggered by tool ${toolCall.name}: ${replyString}`,
+                        );
+                        finalAiMessage = new AIMessage({
+                            content:
+                                "I apologize, but our systems are currently experiencing technical difficulties and I cannot complete your request. Please try again later or contact our human support team.",
+                        });
+                        circuitBreakerTriggered = true;
+                        break;
+                    }
+
+                    newScratchpad.push(
+                        new ToolMessage({
+                            content: replyString,
+                            tool_call_id: toolCall.id,
+                        }),
+                    );
+                } else {
+                    this.logger.warn(
+                        `[${state.userId}] Agent tried to call unknown tool: ${toolCall.name}`,
+                    );
+                    newScratchpad.push(
+                        new ToolMessage({
+                            content: "Error: Tool not found",
+                            tool_call_id: toolCall.id,
+                        }),
+                    );
+                }
+            }
+
+            return {
+                scratchpad: newScratchpad,
+                activeToolNames: newActiveToolNames,
+                circuitBreakerTriggered,
+                finalAiMessage,
+            };
+        };
+
+        const evaluatorNode = async (state: typeof GraphState.State) => {
+            this.logger.log(
+                `[${state.userId}] Agent drafted a response. Running Output Evaluation...`,
+            );
+            const lastMessage = state.scratchpad[
+                state.scratchpad.length - 1
+            ] as AIMessage;
+            const draftContent = lastMessage.content
+                ? String(lastMessage.content)
+                : "";
+
+            const recentContext = state.contextWindow
+                .map(
+                    (msg) =>
+                        `${msg instanceof HumanMessage ? "User" : "AI"}: ${msg.content}`,
+                )
+                .join("\n");
+
+            const scratchpadContext = state.scratchpad
+                .map((msg) => {
+                    if (
+                        msg instanceof AIMessage &&
+                        msg.tool_calls &&
+                        msg.tool_calls.length > 0
+                    ) {
+                        const tools = msg.tool_calls
+                            .map((t) => t.name)
+                            .join(", ");
+                        return `[AI Action]: Called Tool -> ${tools}`;
+                    } else if (msg instanceof ToolMessage) {
+                        return `[Backend Response]: ${msg.content}`;
+                    }
+                    return "";
+                })
+                .filter((str) => str.length > 0)
+                .join("\n");
+
+            const evaluationContext = [
+                recentContext,
+                scratchpadContext
+                    ? `\n--- CURRENT BACKEND ACTIONS ---\n${scratchpadContext}`
+                    : "",
+            ]
+                .filter(Boolean)
+                .join("\n");
+
+            this.logger.log(
+                `[${state.userId}] Evaluator Context: \n${evaluationContext}`,
+            );
+
+            const outputEvaluationResult =
+                await this.moderationService.evaluateOutput(
+                    evaluationContext,
+                    draftContent,
+                );
+
+            if (outputEvaluationResult.approved) {
+                this.logger.log(
+                    `[${state.userId}] Output Evaluator approved response.`,
+                );
+                return { finalAiMessage: lastMessage };
+            } else if (state.iterations >= this.MAX_ITERATIONS) {
+                this.logger.error(
+                    `[${state.userId}] Max iterations reached. AI failed to clear Output Evaluator. Overriding.`,
+                );
+                return {
+                    finalAiMessage: new AIMessage({
+                        content:
+                            "I'm sorry, I am having trouble formatting my response right now. Could you please rephrase your question, or would you like to speak to a human?",
+                    }),
+                };
+            } else {
+                this.logger.warn(
+                    `[${state.userId}] Output Evaluator rejected response. Feedback: ${outputEvaluationResult.feedback}`,
+                );
+                return {
+                    scratchpad: [
+                        new SystemMessage({
+                            content: `SYSTEM ALERT (Output Evaluator): Your previous draft was REJECTED. Reason: ${outputEvaluationResult.feedback}. You must rewrite your response to the user fixing this issue.`,
+                        }),
+                    ],
+                };
+            }
+        };
+
+        return new StateGraph(GraphState)
+            .addNode("agent", agentNode.bind(this))
+            .addNode("tools", toolsNode.bind(this))
+            .addNode("evaluator", evaluatorNode.bind(this))
+            .addEdge(START, "agent")
+            .addConditionalEdges("agent", (state) => {
+                const lastMessage = state.scratchpad[
+                    state.scratchpad.length - 1
+                ] as AIMessage;
+                return lastMessage.tool_calls?.length ? "tools" : "evaluator";
+            })
+            .addConditionalEdges("tools", (state) =>
+                state.circuitBreakerTriggered ? END : "agent",
+            )
+            .addConditionalEdges("evaluator", (state) =>
+                state.finalAiMessage ? END : "agent",
+            )
+            .compile();
     }
 
     async processChat(
@@ -72,13 +334,48 @@ export class OrchestratorAgentService {
             await this.prepareContext(userId, sessionId, scrubbedMessage);
 
         // 4. Execute Multi-Step Agent Reasoning Loop
-        const finalAiMessage = await this.executeReasoningLoop(
+        const { finalAiMessage, scratchpad } = await this.executeReasoningLoop(
             userId,
             sessionId,
             scrubbedMessage,
             activeOrderId,
             contextWindow,
         );
+
+        let currentSequence = humanMessageSequence;
+
+        // 4b. Extract tool narrative and save as a SystemMessage
+        const toolNarrative = scratchpad
+            .map((msg) => {
+                if (
+                    msg instanceof AIMessage &&
+                    msg.tool_calls &&
+                    msg.tool_calls.length > 0
+                ) {
+                    const tools = msg.tool_calls
+                        .map((t) => `${t.name}(${JSON.stringify(t.args)})`)
+                        .join(", ");
+                    return `[ACTION TAKEN]: ${tools}`;
+                }
+                if (msg instanceof ToolMessage) {
+                    return `[ACTION RESULT]: ${msg.content}`;
+                }
+                return "";
+            })
+            .filter(Boolean)
+            .join("\n");
+
+        if (toolNarrative) {
+            currentSequence++;
+            await this.memoryService.saveHistory(
+                userId,
+                sessionId,
+                currentSequence,
+                new SystemMessage(
+                    `--- PREVIOUS BACKEND ACTIONS ---\n${toolNarrative}`,
+                ),
+            );
+        }
 
         // 5. Extract and Sanitize Final Response
         const finalResponseString =
@@ -88,7 +385,7 @@ export class OrchestratorAgentService {
         await this.saveFinalResponse(
             userId,
             sessionId,
-            humanMessageSequence,
+            currentSequence,
             finalAiMessage,
             finalResponseString,
         );
@@ -174,207 +471,32 @@ export class OrchestratorAgentService {
         message: string,
         activeOrderId: string,
         contextWindow: BaseMessage[],
-    ): Promise<BaseMessage | undefined> {
-        let finalAiMessage: BaseMessage | undefined;
-        const scratchpad: BaseMessage[] = [];
-        let circuitBreakerTriggered = false;
+    ): Promise<{
+        finalAiMessage: BaseMessage | undefined;
+        scratchpad: BaseMessage[];
+    }> {
+        const initialState = {
+            contextWindow,
+            scratchpad: [],
+            activeToolNames: [
+                "Search_Internal_SOP",
+                "Search_FAQ",
+                "Escalate_To_Human",
+            ],
+            circuitBreakerTriggered: false,
+            iterations: 0,
+            finalAiMessage: undefined,
+            userId,
+            sessionId,
+            activeOrderId,
+            message,
+        };
 
-        // 1. Initialize Default Safe Tools
-        // We start with read-only/informational tools. Action tools are unlocked dynamically by the SOP.
-        const activeToolNames = new Set<string>([
-            "Search_Internal_SOP",
-            "Search_FAQ",
-            "Get_User_Recent_Orders",
-            "Escalate_To_Human",
-        ]);
-
-        for (let i = 0; i < this.MAX_ITERATIONS; i++) {
-            this.logger.log(`[${userId}] Iteration ${i + 1}: Thinking...`);
-
-            // 2. Bind only the currently active tools discovered so far
-            const currentTools = Array.from(activeToolNames)
-                .map((name) => this.mcpToolRegistry.getTool(name))
-                .filter(Boolean) as StructuredTool[];
-            const orchestratorWithTools = this.llm.bindTools(currentTools);
-
-            const formattedPrompt = await this.prompt.formatMessages({
-                chat_history: contextWindow,
-                input: message,
-                agent_scratchpad: scratchpad,
-                userId: userId,
-                sessionId: sessionId,
-                activeOrderId: activeOrderId,
-            });
-
-            const response =
-                await orchestratorWithTools.invoke(formattedPrompt);
-
-            // Log LLM's internal thoughts for observability
-            if (response.content && String(response.content).length > 0) {
-                this.logger.log(`[${userId}] Thought: ${response.content}`);
-            }
-
-            // If the LLM didn't call any tools, it's ready to draft a response
-            if (!response.tool_calls || response.tool_calls.length === 0) {
-                this.logger.log(
-                    `[${userId}] Agent drafted a response. Running Output Evaluation...`,
-                );
-
-                const draftContent = response.content
-                    ? String(response.content)
-                    : "";
-
-                // 1. Get the historical conversation
-                const recentContext = contextWindow
-                    .map(
-                        (msg) =>
-                            `${msg instanceof HumanMessage ? "User" : "AI"}: ${msg.content}`,
-                    )
-                    .join("\n");
-
-                // 2. NEW: Extract the tool results from the current loop's scratchpad!
-                const scratchpadContext = scratchpad
-                    .map((msg) => {
-                        if (
-                            msg instanceof AIMessage &&
-                            msg.tool_calls &&
-                            msg.tool_calls.length > 0
-                        ) {
-                            // Show the evaluator what tool was called
-                            const tools = msg.tool_calls
-                                .map((t) => t.name)
-                                .join(", ");
-                            return `[AI Action]: Called Tool -> ${tools}`;
-                        } else if (msg instanceof ToolMessage) {
-                            // Show the evaluator the exact string the backend returned!
-                            return `[Backend Response]: ${msg.content}`;
-                        }
-                        return "";
-                    })
-                    .filter((str) => str.length > 0) // Remove empty strings
-                    .join("\n");
-
-                // 3. Stitch it all together for the Evaluator
-                const evaluationContext = [
-                    recentContext,
-                    scratchpadContext
-                        ? `\n--- CURRENT BACKEND ACTIONS ---\n${scratchpadContext}`
-                        : "",
-                ]
-                    .filter(Boolean)
-                    .join("\n");
-
-                this.logger.log(
-                    `[${userId}] Evaluator Context: \n${evaluationContext}`,
-                );
-
-                // Now the Evaluator will see the Logistics agent's approval!
-                const outputEvaluationResult =
-                    await this.moderationService.evaluateOutput(
-                        evaluationContext,
-                        draftContent,
-                    );
-
-                if (outputEvaluationResult.approved) {
-                    this.logger.log(
-                        `[${userId}] Output Evaluator approved response.`,
-                    );
-                    finalAiMessage = response;
-                    break;
-                } else if (i === this.MAX_ITERATIONS - 1) {
-                    this.logger.error(
-                        `[${userId}] Max iterations reached. AI failed to clear Output Evaluator. Overriding.`,
-                    );
-                    finalAiMessage = new AIMessage({
-                        content:
-                            "I'm sorry, I am having trouble formatting my response right now. Could you please rephrase your question, or would you like to speak to a human?",
-                    });
-                    break;
-                } else {
-                    this.logger.warn(
-                        `[${userId}] Output Evaluator rejected response. Feedback: ${outputEvaluationResult.feedback}`,
-                    );
-
-                    // Push feedback back into the scratchpad to force a correction retry
-                    scratchpad.push(response);
-                    scratchpad.push(
-                        new SystemMessage({
-                            content: `SYSTEM ALERT (Output Evaluator): Your previous draft was REJECTED. Reason: ${outputEvaluationResult.feedback}. You must rewrite your response to the user fixing this issue.`,
-                        }),
-                    );
-                    continue;
-                }
-            }
-
-            // Append LLM tool intent to scratchpad
-            scratchpad.push(response);
-
-            // Execute requested tools
-            for (const toolCall of response.tool_calls) {
-                const selectedTool = this.mcpToolRegistry.getTool(
-                    toolCall.name,
-                );
-
-                if (selectedTool) {
-                    this.logger.log(
-                        `[${userId}] Calling Tool "${toolCall.name}" with args: ${JSON.stringify(toolCall.args)}`,
-                    );
-                    const agentReply = await selectedTool.invoke(toolCall.args);
-                    const replyString = String(agentReply);
-                    this.logger.log(
-                        `[${userId}] Tool Output: "${replyString}"`,
-                    );
-
-                    // Dynamic Tool Discovery: Unlock tools mentioned in the SOP or tool output
-                    for (const availableTool of this.mcpToolRegistry.getAvailableToolNames()) {
-                        if (
-                            replyString.includes(availableTool) &&
-                            !activeToolNames.has(availableTool)
-                        ) {
-                            this.logger.log(
-                                `[${userId}] Dynamic Tool Binding: SOP unlocked restricted tool -> "${availableTool}"`,
-                            );
-                            activeToolNames.add(availableTool);
-                        }
-                    }
-
-                    // Circuit Breaker: Stop hallucination spirals if a critical backend system fails
-                    if (replyString.startsWith("System Error:")) {
-                        this.logger.error(
-                            `[${userId}] Circuit Breaker Triggered by tool ${toolCall.name}: ${replyString}`,
-                        );
-                        finalAiMessage = new AIMessage({
-                            content:
-                                "I apologize, but our systems are currently experiencing technical difficulties and I cannot complete your request. Please try again later or contact our human support team.",
-                        });
-                        circuitBreakerTriggered = true;
-                        break;
-                    }
-
-                    scratchpad.push(
-                        new ToolMessage({
-                            content: replyString,
-                            tool_call_id: toolCall.id,
-                        }),
-                    );
-                } else {
-                    this.logger.warn(
-                        `[${userId}] Agent tried to call unknown tool: ${toolCall.name}`,
-                    );
-                    scratchpad.push(
-                        new ToolMessage({
-                            content: "Error: Tool not found",
-                            tool_call_id: toolCall.id,
-                        }),
-                    );
-                }
-            }
-
-            // Break the outer loop if a circuit breaker event occurred during tool execution
-            if (circuitBreakerTriggered) break;
-        }
-
-        return finalAiMessage;
+        const finalState = await this.graph.invoke(initialState);
+        return {
+            finalAiMessage: finalState.finalAiMessage,
+            scratchpad: finalState.scratchpad,
+        };
     }
 
     /**
@@ -430,36 +552,54 @@ export class OrchestratorAgentService {
         currentSummary: string,
         lastSummarizedSequence: number,
     ): Promise<BaseMessage[]> {
-        // Split messages into "recent window" and "older overflow"
-        const overflowMessages = chatMessages.slice(
-            0,
-            Math.max(0, chatMessages.length - this.CHAT_HISTORY_WINDOW_SIZE),
-        );
-        const recentMessages = chatMessages.slice(
-            -this.CHAT_HISTORY_WINDOW_SIZE,
-        );
+        // 1. Group messages into conversational chunks (a chunk starts with a HumanMessage)
+        const chunks: BaseMessage[][] = [];
+        let currentChunk: BaseMessage[] = [];
 
-        const unsummarizedOverflow = overflowMessages.slice(
+        for (const msg of chatMessages) {
+            if (msg instanceof HumanMessage) {
+                if (currentChunk.length > 0) {
+                    chunks.push(currentChunk);
+                }
+                currentChunk = [msg];
+            } else {
+                currentChunk.push(msg);
+            }
+        }
+        if (currentChunk.length > 0) {
+            chunks.push(currentChunk);
+        }
+
+        // 2. Split chunks into "recent window" and "older overflow"
+        const overflowChunks = chunks.slice(
+            0,
+            Math.max(0, chunks.length - this.CHAT_HISTORY_WINDOW_SIZE),
+        );
+        const recentChunks = chunks.slice(-this.CHAT_HISTORY_WINDOW_SIZE);
+
+        const unsummarizedOverflowChunks = overflowChunks.slice(
             lastSummarizedSequence,
         );
 
         // 3. Trigger Summarization if we have overflow
         if (
-            unsummarizedOverflow.length >= this.SUMMARIZE_BATCH_SIZE ||
-            (lastSummarizedSequence === 0 && overflowMessages.length > 0)
+            unsummarizedOverflowChunks.length >= this.SUMMARIZE_BATCH_SIZE ||
+            (lastSummarizedSequence === 0 && overflowChunks.length > 0)
         ) {
             this.logger.log(
-                `Batch summarizing ${unsummarizedOverflow.length} older messages...`,
+                `Batch summarizing ${unsummarizedOverflowChunks.length} older message chunks...`,
             );
+
+            const messagesToSummarize = unsummarizedOverflowChunks.flat();
 
             // Pass the OLD summary + ONLY the NEW unsummarized messages to maintain continuity
             currentSummary = await this.memoryService.summarizeConversation(
-                unsummarizedOverflow,
+                messagesToSummarize,
                 currentSummary, // Pass existing summary to the summarizer LLM
             );
 
-            // Update the sequence marker to cover ONLY the overflow we just summarized
-            lastSummarizedSequence += unsummarizedOverflow.length;
+            // Update the sequence marker to cover ONLY the overflow chunks we just summarized
+            lastSummarizedSequence += unsummarizedOverflowChunks.length;
 
             this.memoryService.updateSessionSummary(
                 sessionId,
@@ -478,12 +618,14 @@ export class OrchestratorAgentService {
             );
         }
 
-        // Add any older overflow messages that haven't triggered a batch summary yet
-        const pendingOverflow = overflowMessages.slice(lastSummarizedSequence);
-        finalContext.push(...pendingOverflow);
+        // Add any older overflow chunks that haven't triggered a batch summary yet
+        const pendingOverflowChunks = overflowChunks.slice(
+            lastSummarizedSequence,
+        );
+        finalContext.push(...pendingOverflowChunks.flat());
 
-        // Add the sliding window of raw messages
-        finalContext.push(...recentMessages);
+        // Add the sliding window of raw message chunks
+        finalContext.push(...recentChunks.flat());
 
         return finalContext;
     }
