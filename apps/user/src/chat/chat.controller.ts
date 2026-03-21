@@ -1,13 +1,13 @@
-import { Controller, Post } from "@nestjs/common";
+import { Controller } from "@nestjs/common";
 import { MessagePattern, Payload } from "@nestjs/microservices";
 import { ChatService } from "./chat.service";
 import {
     ChatHistoryPayload,
-    ChatMessageDTO,
     ChatSavePayload,
     ChatSessionDTO,
     GetChatSessionsPayload,
     UpdateChatSessionPayload,
+    UpdateSummaryPayload,
 } from "./chat.dto";
 import { ChatSession } from "../database/entities/chat-session.entity";
 
@@ -20,7 +20,7 @@ export class ChatController {
     async getHistory(
         @Payload() payload: ChatHistoryPayload,
     ): Promise<ChatSessionDTO> {
-        return this.chatService.getHistory(payload);
+        return await this.chatService.getHistory(payload);
     }
 
     @MessagePattern({ cmd: "user.chat.saveHistory" })
@@ -47,5 +47,12 @@ export class ChatController {
         @Payload() payload: UpdateChatSessionPayload,
     ): Promise<void> {
         await this.chatService.updateSession(payload);
+    }
+
+    @MessagePattern({ cmd: "user.chat.updateSummary" })
+    async updateSummary(
+        @Payload() payload: UpdateSummaryPayload,
+    ): Promise<void> {
+        await this.chatService.updateSummary(payload);
     }
 }

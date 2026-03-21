@@ -1,5 +1,4 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
 import { ChatOpenAI } from "@langchain/openai";
 import { ChatPromptTemplate } from "@langchain/core/prompts";
 import { INPUT_VALIDATOR_PROMPT } from "./prompts/input-validator.prompt";
@@ -12,13 +11,12 @@ import {
 @Injectable()
 export class ModerationService {
     private readonly logger = new Logger(ModerationService.name);
-    private readonly criticLlm: ChatOpenAI;
+    private readonly moderationLlm: ChatOpenAI;
 
-    constructor(private configService: ConfigService) {
-        this.criticLlm = new ChatOpenAI({
+    constructor() {
+        this.moderationLlm = new ChatOpenAI({
             modelName: "gpt-4o-mini",
             temperature: 0,
-            apiKey: this.configService.get("OPENAI_API_KEY"),
         });
     }
 
@@ -31,7 +29,7 @@ export class ModerationService {
         const chain = ChatPromptTemplate.fromMessages([
             ["system", INPUT_VALIDATOR_PROMPT],
             ["human", "{input}"],
-        ]).pipe(this.criticLlm.withStructuredOutput(inputValidationSchema));
+        ]).pipe(this.moderationLlm.withStructuredOutput(inputValidationSchema));
 
         try {
             const result = await chain.invoke({ input: message });
@@ -55,7 +53,9 @@ export class ModerationService {
                 "human",
                 "Recent Conversation:\n{conversationContext}\n\nAI Draft Response: {draftResponse}",
             ],
-        ]).pipe(this.criticLlm.withStructuredOutput(outputEvaluationSchema));
+        ]).pipe(
+            this.moderationLlm.withStructuredOutput(outputEvaluationSchema),
+        );
 
         try {
             const result = await chain.invoke({

@@ -1,5 +1,3 @@
-import { ApiProperty } from "@nestjs/swagger";
-
 export class ChatHistoryPayload {
     userId: string;
     sessionId: string;
@@ -13,6 +11,8 @@ export interface ChatSessionDTO {
     createdAt: Date;
     updatedAt: Date;
     messages: ChatMessageDTO[];
+    summary?: string;
+    lastSummarizedSequence?: number;
 }
 
 export interface ChatMessageDTO {
@@ -38,4 +38,10 @@ export class GetChatSessionsPayload {
 export interface UpdateChatSessionPayload {
     id: string;
     reviewed: boolean;
+}
+
+export interface UpdateSummaryPayload {
+    id: string;
+    summary: string;
+    lastSummarizedSequence: number;
 }

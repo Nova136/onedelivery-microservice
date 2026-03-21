@@ -5,11 +5,11 @@ import { ChatMessage } from "../database/entities/chat-message.entity";
 import { ChatSession } from "../database/entities/chat-session.entity";
 import {
     ChatHistoryPayload,
-    ChatMessageDTO,
     ChatSavePayload,
     ChatSessionDTO,
     GetChatSessionsPayload,
     UpdateChatSessionPayload,
+    UpdateSummaryPayload,
 } from "./chat.dto";
 
 @Injectable()
@@ -63,6 +63,8 @@ export class ChatService {
                 createdAt: new Date(),
                 updatedAt: new Date(),
                 messages: [],
+                summary: "",
+                lastSummarizedSequence: 0,
             };
         }
 
@@ -81,6 +83,8 @@ export class ChatService {
                 sequence: msg.sequence,
                 createdAt: msg.createdAt,
             })),
+            summary: session.summary,
+            lastSummarizedSequence: session.lastSummarizedSequence,
         };
     }
 
@@ -160,6 +164,13 @@ export class ChatService {
     async updateSession(payload: UpdateChatSessionPayload): Promise<void> {
         await this.chatSessionRepo.update(payload.id, {
             reviewed: payload.reviewed,
+        });
+    }
+
+    async updateSummary(payload: UpdateSummaryPayload): Promise<void> {
+        await this.chatSessionRepo.update(payload.id, {
+            summary: payload.summary,
+            lastSummarizedSequence: payload.lastSummarizedSequence,
         });
     }
 }
