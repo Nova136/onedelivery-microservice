@@ -119,18 +119,6 @@ export default class SopSeeder implements Seeder {
                 ],
                 permittedTools: [],
             },
-            {
-                intentCode: "END_SESSION",
-                agentOwner: "orchestrator",
-                title: "Session Termination and QA Handoff",
-                requiredData: ["userId", "sessionId"],
-                workflowSteps: [
-                    "1. Execute the End_Chat_Session tool to end the chat session and trigger a QA review.",
-                    "2. Wait for the tool to return a success message.",
-                    "3. Respond to the user with a polite goodbye and close the conversation.",
-                ],
-                permittedTools: ["End_Chat_Session"],
-            },
         ];
 
         await repo.insert(sops);
