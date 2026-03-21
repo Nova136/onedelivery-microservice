@@ -17,7 +17,6 @@ import { AgentsClientService } from "./modules/agents-client/agents-client.servi
 import { createRouteToLogisticsTool } from "./tools/route-to-logistics.tool";
 import { createRouteToResolutionTool } from "./tools/route-to-resolution.tool";
 import { createRouteToQaTool } from "./tools/route-to-qa.tool";
-import { createRouteToGuardianTool } from "./tools/route-to-guardian.tool";
 import { createSearchInternalSopTool } from "./tools/search-internal-sop.tool";
 import { createSearchFaqTool } from "./tools/search-faq.tool";
 import { createEscalateToHumanTool } from "./tools/escalate-to-human.tool";
@@ -25,6 +24,7 @@ import { createGetUserRecentOrdersTool } from "./tools/get-user-recent-orders.to
 import { KnowledgeClientService } from "./modules/knowledge-client/knowledge-client.service";
 import { orchestratorPrompt } from "./prompts/orchestrator.prompt";
 import { ModerationService } from "./modules/moderation/moderation.service";
+import { PrivacyService } from "./modules/privacy/privacy.service";
 
 @Injectable()
 export class OrchestratorAgentService {
@@ -32,6 +32,7 @@ export class OrchestratorAgentService {
     private llm: ChatOpenAI;
     private readonly CHAT_HISTORY_WINDOW_SIZE = 6;
     private readonly SUMMARIZE_BATCH_SIZE = 4;
+    private readonly MAX_ITERATIONS = 5;
 
     private orchestratorWithTools: any;
     private prompt: ChatPromptTemplate;
@@ -42,6 +43,7 @@ export class OrchestratorAgentService {
         private agentsClientService: AgentsClientService,
         private knowledgeClientService: KnowledgeClientService,
         private moderationService: ModerationService,
+        private privacyService: PrivacyService,
     ) {
         this.tools = {
             Route_To_Logistics: createRouteToLogisticsTool(
@@ -51,9 +53,6 @@ export class OrchestratorAgentService {
                 this.agentsClientService,
             ),
             Route_To_QA: createRouteToQaTool(this.agentsClientService),
-            Route_To_Guardian: createRouteToGuardianTool(
-                this.agentsClientService,
-            ),
             Search_Internal_SOP: createSearchInternalSopTool(
                 this.knowledgeClientService,
             ),
@@ -94,24 +93,80 @@ export class OrchestratorAgentService {
     ): Promise<string> {
         this.logger.log(`[${userId}] User Message: "${message}"`);
 
-        // 1. Guardrail / Input Sanitization Check
-        this.logger.log(
-            `[${userId}] drafted a message. Running Input Validation...`,
-        );
-        const inputValidationResult =
-            await this.moderationService.validateInput(message);
-        if (!inputValidationResult.safe) {
-            this.logger.warn(
-                `[${userId}] Input validation failed. Blocked Reason input: "${message}". Reason: ${inputValidationResult.reason}`,
-            );
+        // 1. PII Redaction
+        const scrubbedMessage = this.privacyService.redactPii(message);
+        this.logger.log(`[${userId}] Scrubbed Message: "${scrubbedMessage}"`);
+
+        // 2. Validate Input (Guardrails)
+        const isSafe = await this.validateInput(userId, scrubbedMessage);
+        if (!isSafe) {
             return "I am sorry, but I cannot process that request as it violates our usage guidelines. Please rephrase your query.";
         }
 
-        // 2. Get the conversation context (including windowing and summarization)
+        // 3. Prepare Context and Save User Message
+        const { contextWindow, humanMessageSequence } =
+            await this.prepareContext(userId, sessionId, scrubbedMessage);
+
+        // 4. Execute Multi-Step Agent Reasoning Loop
+        const finalAiMessage = await this.executeReasoningLoop(
+            userId,
+            sessionId,
+            scrubbedMessage,
+            activeOrderId,
+            knownIssue,
+            contextWindow,
+        );
+
+        // 5. Extract and Sanitize Final Response
+        const finalResponseString =
+            await this.extractFinalResponse(finalAiMessage);
+
+        // 6. Save Final AI Message to Database
+        await this.saveFinalResponse(
+            userId,
+            sessionId,
+            humanMessageSequence,
+            finalAiMessage,
+            finalResponseString,
+        );
+
+        return finalResponseString;
+    }
+
+    /**
+     * Validates the user input against moderation guardrails to prevent injection or abuse.
+     */
+    private async validateInput(
+        userId: string,
+        message: string,
+    ): Promise<boolean> {
+        this.logger.log(`[${userId}] Running Input Validation...`);
+        const inputValidationResult =
+            await this.moderationService.validateInput(message);
+
+        if (!inputValidationResult.safe) {
+            this.logger.warn(
+                `[${userId}] Input validation failed. Reason: ${inputValidationResult.reason}`,
+            );
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Retrieves chat history, applies sliding window & rolling summarization,
+     * and persists the current user message to the database.
+     */
+    private async prepareContext(
+        userId: string,
+        sessionId: string,
+        message: string,
+    ) {
         const chatHistory = await this.memoryService.getChatHistory(
             userId,
             sessionId,
         );
+
         const chatMessages = chatHistory.messages.map((row) => {
             if (row.type === "human") return new HumanMessage(row.content);
             if (row.type === "ai") return new AIMessage(row.content);
@@ -122,18 +177,20 @@ export class OrchestratorAgentService {
                 });
             return new SystemMessage(row.content);
         });
+
         const contextWindow = await this.getContext(
             sessionId,
             chatMessages,
             chatHistory.summary,
             chatHistory.lastSummarizedSequence,
         );
-        console.log(contextWindow);
 
-        // Add current user message to the context as well
+        // Add current user message to the context window
         const userMessage = new HumanMessage(message);
-        const humanMessageSequence = chatHistory.messages.length + 1; // Sequence for the new user message
+        const humanMessageSequence = chatHistory.messages.length + 1;
         contextWindow.push(userMessage);
+
+        // Save the user message to the DB asynchronously
         await this.memoryService.saveHistory(
             userId,
             sessionId,
@@ -141,17 +198,30 @@ export class OrchestratorAgentService {
             userMessage,
         );
 
+        return { contextWindow, humanMessageSequence };
+    }
+
+    /**
+     * The core agent loop. Iterates up to MAX_ITERATIONS to allow the LLM to call tools,
+     * evaluate its own drafted output, and finalize a response.
+     */
+    private async executeReasoningLoop(
+        userId: string,
+        sessionId: string,
+        message: string,
+        activeOrderId: string,
+        knownIssue: string,
+        contextWindow: BaseMessage[],
+    ): Promise<BaseMessage | undefined> {
         let finalAiMessage: BaseMessage | undefined;
         const scratchpad: BaseMessage[] = [];
-
-        // Loop for multi-step processing (Agent Loop)
-        // We limit to 5 iterations to prevent infinite loops
         let circuitBreakerTriggered = false;
-        for (let i = 0; i < 5; i++) {
+
+        for (let i = 0; i < this.MAX_ITERATIONS; i++) {
             this.logger.log(`[${userId}] Iteration ${i + 1}: Thinking...`);
 
             const formattedPrompt = await this.prompt.formatMessages({
-                chat_history: contextWindow, // Use the windowed history
+                chat_history: contextWindow,
                 input: message,
                 agent_scratchpad: scratchpad,
                 userId: userId,
@@ -163,12 +233,12 @@ export class OrchestratorAgentService {
             const response =
                 await this.orchestratorWithTools.invoke(formattedPrompt);
 
-            // If the model returns a thought in the content, log it for observability
+            // Log LLM's internal thoughts for observability
             if (response.content && String(response.content).length > 0) {
                 this.logger.log(`[${userId}] Thought: ${response.content}`);
             }
 
-            // If no tool calls, we are done
+            // If the LLM didn't call any tools, it's ready to draft a response
             if (!response.tool_calls || response.tool_calls.length === 0) {
                 this.logger.log(
                     `[${userId}] Agent drafted a response. Running Output Evaluation...`,
@@ -178,7 +248,7 @@ export class OrchestratorAgentService {
                     ? String(response.content)
                     : "";
 
-                // Build a short conversation transcript for the evaluator to prevent context collapse
+                // Build recent context for output evaluation to prevent context collapse
                 const recentContext = contextWindow
                     .map(
                         (msg) =>
@@ -195,34 +265,41 @@ export class OrchestratorAgentService {
                         draftContent,
                     );
 
-                // If the critic approves, or if we are out of iterations, accept the response
-                if (outputEvaluationResult.approved || i === 4) {
+                if (outputEvaluationResult.approved) {
                     this.logger.log(
                         `[${userId}] Output Evaluator approved response.`,
                     );
                     finalAiMessage = response;
+                    break;
+                } else if (i === this.MAX_ITERATIONS - 1) {
+                    this.logger.error(
+                        `[${userId}] Max iterations reached. AI failed to clear Output Evaluator. Overriding.`,
+                    );
+                    finalAiMessage = new AIMessage({
+                        content:
+                            "I'm sorry, I am having trouble formatting my response right now. Could you please rephrase your question, or would you like to speak to a human?",
+                    });
                     break;
                 } else {
                     this.logger.warn(
                         `[${userId}] Output Evaluator rejected response. Feedback: ${outputEvaluationResult.feedback}`,
                     );
 
-                    // Add the drafted response and the critic's feedback to the scratchpad to force a retry
+                    // Push feedback back into the scratchpad to force a correction retry
                     scratchpad.push(response);
                     scratchpad.push(
-                        new HumanMessage({
-                            content: `Output Evaluator Feedback: Your previous draft was rejected. Reason: ${outputEvaluationResult.feedback}. Please correct your response.`,
+                        new SystemMessage({
+                            content: `SYSTEM ALERT (Output Evaluator): Your previous draft was REJECTED. Reason: ${outputEvaluationResult.feedback}. You must rewrite your response to the user fixing this issue.`,
                         }),
                     );
-
                     continue;
                 }
             }
 
-            // Add the assistant message with tool_calls first (API requires tool messages to follow this)
+            // Append LLM tool intent to scratchpad
             scratchpad.push(response);
 
-            // Execute each tool call and add a ToolMessage for each (API requires one ToolMessage per tool_call_id)
+            // Execute requested tools
             for (const toolCall of response.tool_calls) {
                 const selectedTool = this.tools[toolCall.name];
 
@@ -236,7 +313,7 @@ export class OrchestratorAgentService {
                         `[${userId}] Tool Output: "${replyString}"`,
                     );
 
-                    // Circuit Breaker Pattern: Intercept critical system errors to prevent LLM hallucinations
+                    // Circuit Breaker: Stop hallucination spirals if a critical backend system fails
                     if (replyString.startsWith("System Error:")) {
                         this.logger.error(
                             `[${userId}] Circuit Breaker Triggered by tool ${toolCall.name}: ${replyString}`,
@@ -268,39 +345,47 @@ export class OrchestratorAgentService {
                 }
             }
 
-            // Break the outer reasoning loop if the circuit breaker was triggered
-            if (circuitBreakerTriggered) {
-                break;
-            }
+            // Break the outer loop if a circuit breaker event occurred during tool execution
+            if (circuitBreakerTriggered) break;
         }
 
+        return finalAiMessage;
+    }
+
+    /**
+     * Extracts the text from the final AI message and strips out any
+     * hidden <thinking> tags to provide a clean customer experience.
+     */
+    private extractFinalResponse(
+        finalAiMessage: BaseMessage | undefined,
+    ): string {
         let finalResponseString = finalAiMessage?.content
             ? String(finalAiMessage.content)
             : "I'm sorry, I encountered an error and couldn't complete the request.";
 
-        // Strip out the hidden reasoning tags!
+        // Strip out the hidden reasoning tags for a clean customer experience
         finalResponseString = finalResponseString
             .replace(/<thinking>[\s\S]*?<\/thinking>/g, "")
             .trim();
 
-        // Before replying to human, guardian verifies the response against SOP
-        const verificationMessage = `Verify this response before it is sent to the customer. Customer's message: "${message}". Proposed response: "${finalResponseString}". Ensure it is accurate, follows SOP, and is appropriate to send.`;
-        const guardianVerified = await this.agentsClientService.send("guardian", {
-            userId,
-            sessionId: `${sessionId}-verify`,
-            message: verificationMessage,
-        });
-        const guardianReply = guardianVerified || finalResponseString;
-        finalResponseString = guardianReply.startsWith("CORRECTED: ")
-            ? guardianReply.replace("CORRECTED: ", "").replace(/\[.*?\]$/, "").trim()
-            : guardianReply;
-        this.logger.log(`[${userId}] Guardian Verified Reply: "${finalResponseString}"`);
+        return finalResponseString;
+    }
 
-        // Save the CLEAN conversation back to the database safely!
+    /**
+     * Persists the cleaned AI response back to the chat history database.
+     */
+    private async saveFinalResponse(
+        userId: string,
+        sessionId: string,
+        humanMessageSequence: number,
+        finalAiMessage: BaseMessage | undefined,
+        finalResponseString: string,
+    ): Promise<void> {
         if (finalAiMessage) {
-            // Overwrite the content with the cleaned string so the DB doesn't store the <thinking> tags
+            // Overwrite content with the cleaned string so the DB doesn't store the raw <thinking> tags
             finalAiMessage.content = finalResponseString;
             const aiMessageSequence = humanMessageSequence + 1;
+
             await this.memoryService.saveHistory(
                 userId,
                 sessionId,
@@ -312,8 +397,6 @@ export class OrchestratorAgentService {
         this.logger.log(
             `[${userId}] Final Clean Reply to Frontend: "${finalResponseString}"`,
         );
-
-        return finalResponseString;
     }
 
     async getContext(
