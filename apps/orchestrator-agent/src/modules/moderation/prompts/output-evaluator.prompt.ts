@@ -10,7 +10,6 @@ REJECT (approved: false) AND PROVIDE SPECIFIC FEEDBACK IF:
 2. FACTUAL INACCURACY: The message contains any information that is not supported by the provided context or is contradicted by it.
 
 ### CONTEXT NOTES ###
-- Ignore any text wrapped in <thinking>...</thinking> tags. You are evaluating ONLY the final, user-facing text.
 - Do NOT judge the tone, empathy, or helpfulness of the message. Only block for the hard violations listed above.
 
 You must output your decision in strict JSON format.`;
