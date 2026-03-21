@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { tool, StructuredTool } from "@langchain/core/tools";
-import type { AgentsClientService } from "../agents/agents-client.service";
+import type { AgentsClientService } from "../modules/agents-client/agents-client.service";
 
 /** Explicit payload type to avoid deep type instantiation with tool() */
 interface LogisticsPayload {

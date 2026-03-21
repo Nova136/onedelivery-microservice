@@ -6,7 +6,7 @@ import {
     SearchSopPayload,
     SearchFaqResponse,
     SearchSopResponse,
-} from "../core/interface";
+} from "../../core/interface";
 @Injectable()
 export class KnowledgeClientService {
     constructor(

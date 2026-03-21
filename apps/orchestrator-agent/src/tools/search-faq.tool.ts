@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { StructuredTool, tool } from "@langchain/core/tools";
 import { KnowledgeService } from "@apps/knowledge/src/knowledge.service";
-import { KnowledgeClientService } from "../agents/knowledge-client.service";
+import { KnowledgeClientService } from "../modules/knowledge-client/knowledge-client.service";
 
 const answerUserQuestionSchema = z
     .string()
