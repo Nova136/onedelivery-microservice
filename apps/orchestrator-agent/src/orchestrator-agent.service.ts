@@ -10,8 +10,9 @@ import {
     ToolMessage,
     BaseMessage,
     AIMessage,
+    SystemMessage,
 } from "@langchain/core/messages";
-import { MemoryService } from "./memory/memory.service";
+import { MemoryService } from "./modules/memory/memory.service";
 import { AgentsClientService } from "./modules/agents-client/agents-client.service";
 import { createRouteToLogisticsTool } from "./tools/route-to-logistics.tool";
 import { createRouteToResolutionTool } from "./tools/route-to-resolution.tool";
@@ -29,7 +30,8 @@ import { ModerationService } from "./modules/moderation/moderation.service";
 export class OrchestratorAgentService {
     private readonly logger = new Logger(OrchestratorAgentService.name);
     private llm: ChatOpenAI;
-    private readonly CHAT_HISTORY_WINDOW_SIZE = 10; // Keeps the last 5 pairs of (human, ai) messages
+    private readonly CHAT_HISTORY_WINDOW_SIZE = 6;
+    private readonly SUMMARIZE_BATCH_SIZE = 4;
 
     private orchestratorWithTools: any;
     private prompt: ChatPromptTemplate;
@@ -65,7 +67,7 @@ export class OrchestratorAgentService {
         } as Record<string, StructuredTool>;
         // 1. Initialize the LLM
         this.llm = new ChatOpenAI({
-            modelName: "gpt-4o",
+            modelName: "gpt-4o-mini",
             temperature: 0,
         });
 
@@ -105,24 +107,39 @@ export class OrchestratorAgentService {
             return "I am sorry, but I cannot process that request as it violates our usage guidelines. Please rephrase your query.";
         }
 
-        // Fetch the past conversation from the database
-        const chatHistory = await this.memoryService.getHistory(
+        // 2. Get the conversation context (including windowing and summarization)
+        const chatHistory = await this.memoryService.getChatHistory(
             userId,
             sessionId,
         );
+        const chatMessages = chatHistory.messages.map((row) => {
+            if (row.type === "human") return new HumanMessage(row.content);
+            if (row.type === "ai") return new AIMessage(row.content);
+            if (row.type === "tool")
+                return new ToolMessage({
+                    content: row.content,
+                    tool_call_id: row.toolCallId ?? "",
+                });
+            return new SystemMessage(row.content);
+        });
+        const contextWindow = await this.getContext(
+            sessionId,
+            chatMessages,
+            chatHistory.summary,
+            chatHistory.lastSummarizedSequence,
+        );
+        console.log(contextWindow);
 
-        // Add the user's brand new message to the history
-        const newHumanMessage = new HumanMessage(message);
-        chatHistory.push(newHumanMessage);
+        // Add current user message to the context as well
+        const userMessage = new HumanMessage(message);
+        const humanMessageSequence = chatHistory.messages.length + 1; // Sequence for the new user message
+        contextWindow.push(userMessage);
         await this.memoryService.saveHistory(
             userId,
             sessionId,
-            chatHistory.length,
-            newHumanMessage,
+            humanMessageSequence,
+            userMessage,
         );
-
-        // Token-saving: only use a window of the most recent messages for the prompt
-        const historyWindow = chatHistory.slice(-this.CHAT_HISTORY_WINDOW_SIZE);
 
         let finalAiMessage: BaseMessage | undefined;
         const scratchpad: BaseMessage[] = [];
@@ -134,7 +151,7 @@ export class OrchestratorAgentService {
             this.logger.log(`[${userId}] Iteration ${i + 1}: Thinking...`);
 
             const formattedPrompt = await this.prompt.formatMessages({
-                chat_history: historyWindow, // Use the windowed history
+                chat_history: contextWindow, // Use the windowed history
                 input: message,
                 agent_scratchpad: scratchpad,
                 userId: userId,
@@ -162,10 +179,10 @@ export class OrchestratorAgentService {
                     : "";
 
                 // Build a short conversation transcript for the evaluator to prevent context collapse
-                const recentContext = historyWindow
+                const recentContext = contextWindow
                     .map(
                         (msg) =>
-                            `${msg._getType() === "human" ? "User" : "AI"}: ${msg.content}`,
+                            `${msg instanceof HumanMessage ? "User" : "AI"}: ${msg.content}`,
                     )
                     .join("\n");
                 const evaluationContext = recentContext
@@ -181,20 +198,20 @@ export class OrchestratorAgentService {
                 // If the critic approves, or if we are out of iterations, accept the response
                 if (outputEvaluationResult.approved || i === 4) {
                     this.logger.log(
-                        `[${userId}] Output Evaluation approved response.`,
+                        `[${userId}] Output Evaluator approved response.`,
                     );
                     finalAiMessage = response;
                     break;
                 } else {
                     this.logger.warn(
-                        `[${userId}] Output Evaluation rejected response. Feedback: ${outputEvaluationResult.feedback}`,
+                        `[${userId}] Output Evaluator rejected response. Feedback: ${outputEvaluationResult.feedback}`,
                     );
 
                     // Add the drafted response and the critic's feedback to the scratchpad to force a retry
                     scratchpad.push(response);
                     scratchpad.push(
                         new HumanMessage({
-                            content: `System Output Evaluation Feedback: Your previous draft was rejected. Reason: ${outputEvaluationResult.feedback}. Please correct your response.`,
+                            content: `Output Evaluator Feedback: Your previous draft was rejected. Reason: ${outputEvaluationResult.feedback}. Please correct your response.`,
                         }),
                     );
 
@@ -270,11 +287,11 @@ export class OrchestratorAgentService {
         if (finalAiMessage) {
             // Overwrite the content with the cleaned string so the DB doesn't store the <thinking> tags
             finalAiMessage.content = finalResponseString;
-            chatHistory.push(finalAiMessage);
+            const aiMessageSequence = humanMessageSequence + 1;
             await this.memoryService.saveHistory(
                 userId,
                 sessionId,
-                chatHistory.length,
+                aiMessageSequence,
                 finalAiMessage,
             );
         }
@@ -286,11 +303,67 @@ export class OrchestratorAgentService {
         return finalResponseString;
     }
 
-    async getHistoryListing(userId: string) {
-        return await this.memoryService.getHistoryListing(userId);
-    }
+    async getContext(
+        sessionId: string,
+        chatMessages: BaseMessage[],
+        currentSummary: string,
+        lastSummarizedSequence: number,
+    ): Promise<BaseMessage[]> {
+        // Split messages into "recent window" and "older overflow"
+        const overflowMessages = chatMessages.slice(
+            0,
+            Math.max(0, chatMessages.length - this.CHAT_HISTORY_WINDOW_SIZE),
+        );
+        const recentMessages = chatMessages.slice(
+            -this.CHAT_HISTORY_WINDOW_SIZE,
+        );
 
-    async getChatHistory(userId: string, sessionId: string) {
-        return await this.memoryService.getChatHistory(userId, sessionId);
+        const unsummarizedOverflow = overflowMessages.slice(
+            lastSummarizedSequence,
+        );
+
+        // 3. Trigger Summarization if we have overflow
+        if (
+            unsummarizedOverflow.length >= this.SUMMARIZE_BATCH_SIZE ||
+            (lastSummarizedSequence === 0 && overflowMessages.length > 0)
+        ) {
+            this.logger.log(
+                `Batch summarizing ${unsummarizedOverflow.length} older messages...`,
+            );
+
+            // Pass the OLD summary + ONLY the NEW unsummarized messages to maintain continuity
+            currentSummary = await this.memoryService.summarizeConversation(
+                unsummarizedOverflow,
+                currentSummary, // Pass existing summary to the summarizer LLM
+            );
+
+            // Update the sequence marker to cover ONLY the overflow we just summarized
+            lastSummarizedSequence += unsummarizedOverflow.length;
+
+            this.memoryService.updateSessionSummary(
+                sessionId,
+                currentSummary,
+                lastSummarizedSequence,
+            );
+        }
+
+        // 4. Construct the Final Prompt Context
+        // This is what the LLM actually reasons with
+        const finalContext: BaseMessage[] = [];
+
+        if (currentSummary) {
+            finalContext.push(
+                new SystemMessage(`[CONTEXT SUMMARY]: ${currentSummary}`),
+            );
+        }
+
+        // Add any older overflow messages that haven't triggered a batch summary yet
+        const pendingOverflow = overflowMessages.slice(lastSummarizedSequence);
+        finalContext.push(...pendingOverflow);
+
+        // Add the sliding window of raw messages
+        finalContext.push(...recentMessages);
+
+        return finalContext;
     }
 }
