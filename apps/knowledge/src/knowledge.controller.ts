@@ -14,7 +14,11 @@ import {
     SearchSopPayload,
 } from "./core/dto";
 import { MessagePattern } from "@nestjs/microservices";
-import { SearchFaqResponse, SearchSopResponse } from "./core/interface";
+import {
+    ListSopResponse,
+    SearchFaqResponse,
+    SearchSopResponse,
+} from "./core/interface";
 
 @Controller("api/knowledge")
 export class KnowledgeController {
@@ -22,20 +26,15 @@ export class KnowledgeController {
 
     constructor(private readonly knowledgeService: KnowledgeService) {}
 
-    // TODO: Remove this endpoint in production - it's just for testing and demo purposes
-    // Endpoint to list all FAQs
-    @Get("faqs")
-    async getAllFaqs() {
-        this.logger.log("Fetching all FAQs");
-        return this.knowledgeService.getAllFaqs();
-    }
-
-    // TODO: Remove this endpoint in production - it's just for testing and demo purposes
-    // Endpoint to list all SOPs
+    @MessagePattern("sop.list")
     @Get("sops")
-    async getAllSops() {
+    async listSops(): Promise<ListSopResponse[]> {
         this.logger.log("Fetching all SOPs");
-        return this.knowledgeService.getAllSops();
+        const result = await this.knowledgeService.listSops();
+        return result.map((sop) => ({
+            intentCode: sop.intentCode,
+            title: sop.title,
+        }));
     }
 
     // ️Endpoint for the Orchestrator's "Search_FAQ" tool

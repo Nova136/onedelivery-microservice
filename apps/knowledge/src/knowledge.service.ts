@@ -19,11 +19,7 @@ export class KnowledgeService {
     private readonly SIMILARITY_THRESHOLD =
         process.env.SIMILARITY_THRESHOLD || 0.25; // Tune this based on your embedding model and needs
 
-    async getAllFaqs(): Promise<Faq[]> {
-        return this.faqRepository.find();
-    }
-
-    async getAllSops(): Promise<Sop[]> {
+    async listSops(): Promise<Sop[]> {
         return this.sopRepository.find();
     }
 
