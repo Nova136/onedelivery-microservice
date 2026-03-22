@@ -17,7 +17,7 @@ export default class SopSeeder implements Seeder {
             {
                 intentCode: "REQUEST_REFUND",
                 agentOwner: "orchestrator",
-                title: "Request Refund from Customer",
+                title: "Asking for money back for missing or wrong items or quality issur or late delivery.",
                 requiredData: [
                     "orderId",
                     "issueCategory (missing_item, quality_issue, wrong_item, late_delivery)",
@@ -68,7 +68,7 @@ export default class SopSeeder implements Seeder {
             {
                 intentCode: "CANCEL_ORDER",
                 agentOwner: "orchestrator",
-                title: "Order Cancellation Intake",
+                title: "Cancelling an ongoing order.",
                 requiredData: ["orderId", "reason for cancellation (optional)"],
                 workflowSteps: [
                     "1. Ensure you have gathered all the required data from the user. Ask clarifying questions if anything is missing.",
