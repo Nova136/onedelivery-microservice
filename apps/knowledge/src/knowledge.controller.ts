@@ -19,6 +19,7 @@ import {
     SearchFaqResponse,
     SearchSopResponse,
 } from "./core/interface";
+import { ListSopPayload } from "./core/dto/list-sop.dto";
 
 @Controller("api/knowledge")
 export class KnowledgeController {
@@ -28,9 +29,11 @@ export class KnowledgeController {
 
     @MessagePattern("sop.list")
     @Get("sops")
-    async listSops(): Promise<ListSopResponse[]> {
+    async listSops(payload: ListSopPayload): Promise<ListSopResponse[]> {
         this.logger.log("Fetching all SOPs");
-        const result = await this.knowledgeService.listSops();
+        const result = await this.knowledgeService.listSops(
+            payload.requestingAgent,
+        );
         return result.map((sop) => ({
             intentCode: sop.intentCode,
             title: sop.title,

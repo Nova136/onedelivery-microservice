@@ -1,22 +1,27 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn } from 'typeorm';
+import {
+    Entity,
+    PrimaryGeneratedColumn,
+    Column,
+    CreateDateColumn,
+} from "typeorm";
 
-@Entity({ name: 'incidents', schema: 'incident' })
+@Entity({ name: "incidents", schema: "incident" })
 export class Incident {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
+    @PrimaryGeneratedColumn("uuid")
+    id: string;
 
-  @Column({ type: 'varchar', length: 64 })
-  type: string;
+    @Column({ type: "varchar", length: 64 })
+    type: string;
 
-  @Column({ type: 'uuid', nullable: true })
-  orderId: string | null;
+    @Column({ type: "varchar", length: 15, nullable: true })
+    orderId: string | null;
 
-  @Column({ type: 'uuid', nullable: true })
-  userId: string | null;
+    @Column({ type: "uuid", nullable: true })
+    userId: string | null;
 
-  @Column('text')
-  summary: string;
+    @Column("text")
+    summary: string;
 
-  @CreateDateColumn()
-  createdAt: Date;
+    @CreateDateColumn()
+    createdAt: Date;
 }
