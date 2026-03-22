@@ -69,9 +69,9 @@ export default class SopSeeder implements Seeder {
                 intentCode: "CANCEL_ORDER",
                 agentOwner: "orchestrator",
                 title: "Cancelling an ongoing order.",
-                requiredData: ["orderId", "reason for cancellation (optional)"],
+                requiredData: ["orderId", "reason for cancellation"],
                 workflowSteps: [
-                    "1. Ensure you have gathered all the required data from the user. Ask clarifying questions if anything is missing.",
+                    "1. Ensure you have gathered all the required data from the user. If the reason for cancellation is not provided, you MUST ask the user for it (but let them know they can skip it).",
                     "2. Empathize with the user's need to cancel.",
                     "3. Execute the Route_To_Logistics tool, passing the gathered data.",
                     "4. Wait for the Route_To_Logistics tool to return a success or rejection string.",
