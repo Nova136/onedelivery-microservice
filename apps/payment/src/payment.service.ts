@@ -102,20 +102,20 @@ export class PaymentService {
       });
 
     // Log refund as incident for tracking
-    const incidentPayload: LogIncidentRequest = {
-      type: 'PAYMENT_REFUNDED',
-      summary: `Refund of ${amount} for payment ${paymentId}${reason ? `: ${reason}` : ''}`,
-      orderId: undefined,
-    };
-    console.log('[PaymentService] Sending incident log (refund)', { paymentId, amount });
-    this.commonService
-      .sendViaRMQ<LogIncidentResponse>(this.incidentClient, { cmd: 'incident.log' }, incidentPayload)
-      .then((res) => {
-        console.log('[PaymentService] Incident log sent', res?.incidentId ?? res);
-      })
-      .catch((err) => {
-        console.error('[PaymentService] Failed to send incident log for refund', err?.message ?? err);
-      });
+    // const incidentPayload: LogIncidentRequest = {
+    //   type: 'PAYMENT_REFUNDED',
+    //   summary: `Refund of ${amount} for payment ${paymentId}${reason ? `: ${reason}` : ''}`,
+    //   orderId: undefined,
+    // };
+    // console.log('[PaymentService] Sending incident log (refund)', { paymentId, amount });
+    // this.commonService
+    //   .sendViaRMQ<LogIncidentResponse>(this.incidentClient, { cmd: 'incident.log' }, incidentPayload)
+    //   .then((res) => {
+    //     console.log('[PaymentService] Incident log sent', res?.incidentId ?? res);
+    //   })
+    //   .catch((err) => {
+    //     console.error('[PaymentService] Failed to send incident log for refund', err?.message ?? err);
+    //   });
 
     return saved;
   }
