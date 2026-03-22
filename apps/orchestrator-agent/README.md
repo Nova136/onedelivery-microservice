@@ -21,6 +21,16 @@ When a user message is received (`processChat`), it undergoes a strict pipeline 
 5. **Response Sanitization**: Strips hidden `<thinking>` tags for a clean user experience.
 6. **Persistence**: Saves the final response back to the database.
 
+## Agentic Design Patterns Implemented
+
+The Orchestrator leverages several advanced AI design patterns to ensure reliability, accuracy, and safety:
+
+- **Multi-Agent Orchestration (Supervisor Pattern)**: Acts as a central router that delegates complex, domain-specific tasks to specialized sub-agents (e.g., Logistics, Resolution) via TCP microservice communication.
+- **Dynamic Tool Binding (Just-In-Time Capabilities)**: To prevent prompt bloat and hallucination, the agent starts with minimal tools. Additional tools are dynamically bound to the LLM's active registry only when explicitly authorized by an SOP.
+- **Evaluator / Reflection Node (Output Guardrails)**: Implements a "Critique and Revise" loop. Before a response is sent to the user, an evaluation node analyzes the draft. If it violates rules (e.g., leaking tool names), the agent is forced to rewrite its answer.
+- **Sliding Window & Rolling Summary Memory**: Combines short-term raw conversational memory with long-term background summarization to maintain context without exceeding LLM token limits.
+- **ReAct (Reason + Act) Loop**: Utilizes a cyclic reasoning loop within LangGraph, allowing the agent to plan, execute tools, observe outcomes, and evaluate them over up to 10 iterations.
+
 ## State Management (`GraphState`)
 
 The LangGraph state tracks the entire lifecycle of a single request:
