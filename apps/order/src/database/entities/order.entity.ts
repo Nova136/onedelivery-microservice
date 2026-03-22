@@ -7,6 +7,7 @@ import {
     OneToMany,
 } from "typeorm";
 import { OrderItem } from "./order-item.entity";
+import { OrderStatus, PriorityOption, RefundStatus } from "./order.enum";
 
 @Entity({ name: "order", schema: "order" })
 export class Order {
@@ -16,8 +17,8 @@ export class Order {
     @Column({ type: "varchar", length: 255 })
     customerId: string;
 
-    @Column({ type: "varchar", length: 32, default: "PENDING" })
-    status: string;
+    @Column({ type: "enum", enum: OrderStatus, default: OrderStatus.CREATED })
+    status: OrderStatus;
 
     @Column({ type: "varchar", length: 512 })
     deliveryAddress: string;
@@ -40,9 +41,13 @@ export class Order {
     @Column({ type: "decimal", precision: 10, scale: 2, default: 0 })
     totalRefundValue: number;
 
-    @Column({ type: "varchar", length: 32, default: "NONE" })
-    refundStatus: string;
+    @Column({ type: "enum", enum: RefundStatus, default: RefundStatus.NONE })
+    refundStatus: RefundStatus;
 
-    @Column({ type: "varchar", length: 32, default: "PRIO-STD" })
-    priorityOption: string;
+    @Column({
+        type: "enum",
+        enum: PriorityOption,
+        default: PriorityOption.STANDARD,
+    })
+    priorityOption: PriorityOption;
 }

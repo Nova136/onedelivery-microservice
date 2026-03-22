@@ -1,0 +1,21 @@
+export enum OrderStatus {
+    CREATED = "CREATED",
+    PREPARATION = "PREPARATION",
+    IN_DELIVERY = "IN_DELIVERY",
+    DELIVERED = "DELIVERED",
+    CANCELLED = "CANCELLED",
+    PAYMENT_COMPLETED = "PAYMENT_COMPLETED",
+    PAYMENT_FAILED = "PAYMENT_FAILED",
+}
+
+export enum RefundStatus {
+    NONE = "NONE",
+    PENDING = "PENDING",
+    PARTIAL = "PARTIAL",
+    FULL = "FULL",
+}
+
+export enum PriorityOption {
+    STANDARD = "PRIO-STD",
+    FAST = "PRIO-FAST",
+}

@@ -1,6 +1,6 @@
 import { Injectable, Inject } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Repository } from "typeorm";
+import { MoreThan, Repository } from "typeorm";
 import { ClientProxy } from "@nestjs/microservices";
 import { Order } from "./database/entities/order.entity";
 import { OrderItem } from "./database/entities/order-item.entity";
@@ -13,6 +13,11 @@ import {
     LogIncidentResponse,
 } from "@libs/utils/rabbitmq-interfaces";
 import { CreateOrderDto, CreateOrderWithPaymentResultDto } from "./core/dto";
+import {
+    OrderStatus,
+    PriorityOption,
+    RefundStatus,
+} from "./database/entities/order.enum";
 
 @Injectable()
 export class OrderService {
@@ -45,8 +50,10 @@ export class OrderService {
         const order = this.orderRepo.create({
             customerId: dto.customerId,
             deliveryAddress: dto.deliveryAddress,
-            priorityOption: dto.priorityOption ? dto.priorityOption :"PRIO-STD",
-            status: "CREATED",
+            priorityOption: dto.priorityOption
+                ? dto.priorityOption
+                : PriorityOption.STANDARD,
+            status: OrderStatus.CREATED,
             totalOrderValue,
         });
         const saved = await this.orderRepo.save(order);
@@ -106,7 +113,9 @@ export class OrderService {
         const paymentSuccess = paymentResult.success === true;
         const transactionId = paymentResult.transactionId ?? null;
         await this.orderRepo.update(order.id, {
-            status: paymentSuccess ? "PAYMENT_COMPLETED" : "PAYMENT_FAILED",
+            status: paymentSuccess
+                ? OrderStatus.PAYMENT_COMPLETED
+                : OrderStatus.PAYMENT_FAILED,
             transactionId,
         });
 
@@ -220,8 +229,7 @@ export class OrderService {
         });
 
         const totalRefundValue = refreshed!.items.reduce(
-            (sum, it) =>
-                sum + it.quantityRefunded * Number(it.price),
+            (sum, it) => sum + it.quantityRefunded * Number(it.price),
             0,
         );
 
@@ -232,9 +240,9 @@ export class OrderService {
             (it) => it.quantityRefunded > 0,
         );
 
-        let refundStatus = "NONE";
-        if (fullyRefunded) refundStatus = "FULL";
-        else if (partiallyRefunded) refundStatus = "PARTIAL";
+        let refundStatus = RefundStatus.NONE;
+        if (fullyRefunded) refundStatus = RefundStatus.FULL;
+        else if (partiallyRefunded) refundStatus = RefundStatus.PARTIAL;
 
         await this.orderRepo.update(orderId, {
             totalRefundValue,
@@ -250,6 +258,18 @@ export class OrderService {
     async listByCustomer(customerId: string) {
         return this.orderRepo.find({
             where: { customerId },
+            relations: ["items"],
+            order: { createdAt: "DESC" },
+        });
+    }
+
+    async listRecent(customerId: string) {
+        const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        return this.orderRepo.find({
+            where: {
+                createdAt: MoreThan(twentyFourHoursAgo),
+                customerId: customerId,
+            },
             relations: ["items"],
             order: { createdAt: "DESC" },
         });
