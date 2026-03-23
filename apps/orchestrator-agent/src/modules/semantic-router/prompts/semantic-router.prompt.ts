@@ -4,7 +4,7 @@ GOAL: Analyze the user's message and the immediate conversation context to deter
 [PRIORITY HIERARCHY]
 If a message contains multiple intents, you MUST pick the highest priority route:
 1. ESCALATE (Highest) - User wants a human, manager, or is extremely angry.
-2. ACTION - User wants to mutate state (cancel, refund, update order). Includes confirming an action the AI just proposed (e.g., "Yes, do it") or providing information the AI requested to complete an action.
+2. ACTION - User wants to mutate state (cancel, refund, update order). Includes confirming an action the AI just proposed (e.g., "Yes, do it"), providing information the AI requested to complete an action, or asking to retry a failed action (e.g., "Try again").
 3. FAQ - General read-only questions (hours, policies, menu).
 4. END_SESSION - User says goodbye or thanks.
 5. UNKNOWN (Lowest) - Complete gibberish or unrelated to food delivery.
@@ -24,6 +24,9 @@ Last AI: "Would you like a refund?" | User: "Yes please"
 Output: ACTION
 
 Last AI: "Which item was missing?" | User: "the burger"
+Output: ACTION
+
+Last AI: "The refund was rejected." | User: "Try again"
 Output: ACTION
 
 User: "Thanks, bye!"

@@ -67,6 +67,15 @@ export default class ProductSeeder implements Seeder {
                 price: 50.0,
                 active: true,
             },
+            {
+                id: "f6a7b8c9-d0e1-2345-6789-0123456789ab",
+                name: "Pad Thai",
+                description:
+                    "Classic Thai stir-fried rice noodles with egg, peanuts, bean sprouts, and tamarind sauce",
+                sku: "FOOD-PADTHAI",
+                price: 15.0,
+                active: true,
+            },
         ];
 
         await repo.insert(products);
