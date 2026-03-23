@@ -1,10 +1,4 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { ChatOpenAI } from "@langchain/openai";
-import {
-    ChatPromptTemplate,
-    MessagesPlaceholder,
-} from "@langchain/core/prompts";
-import { StructuredTool } from "@langchain/core/tools";
 import {
     HumanMessage,
     ToolMessage,
@@ -14,121 +8,159 @@ import {
 } from "@langchain/core/messages";
 import { StateGraph, START, END, Annotation } from "@langchain/langgraph";
 import { MemoryService } from "./modules/memory/memory.service";
-import { ORCHESTRATOR_PROMPT } from "./prompts/orchestrator.prompt";
 import { ModerationService } from "./modules/moderation/moderation.service";
 import { PrivacyService } from "./modules/privacy/privacy.service";
 import { McpToolRegistryService } from "./modules/mcp/mcp-tool-registry.service";
-
-export const GraphState = Annotation.Root({
-    contextWindow: Annotation<BaseMessage[]>({
-        reducer: (x, y) => y ?? x,
-        default: () => [],
-    }),
-    scratchpad: Annotation<BaseMessage[]>({
-        reducer: (x, y) => x.concat(y),
-        default: () => [],
-    }),
-    activeToolNames: Annotation<string[]>({
-        reducer: (x, y) => Array.from(new Set([...x, ...y])),
-        default: () => [],
-    }),
-    circuitBreakerTriggered: Annotation<boolean>({
-        reducer: (x, y) => y ?? x,
-        default: () => false,
-    }),
-    iterations: Annotation<number>({
-        reducer: (x, y) => x + y,
-        default: () => 0,
-    }),
-    finalAiMessage: Annotation<BaseMessage | undefined>({
-        reducer: (x, y) => y ?? x,
-        default: () => undefined,
-    }),
-    userId: Annotation<string>({
-        reducer: (x, y) => y ?? x,
-        default: () => "",
-    }),
-    sessionId: Annotation<string>({
-        reducer: (x, y) => y ?? x,
-        default: () => "",
-    }),
-    activeOrderId: Annotation<string>({
-        reducer: (x, y) => y ?? x,
-        default: () => "",
-    }),
-    message: Annotation<string>({
-        reducer: (x, y) => y ?? x,
-        default: () => "",
-    }),
-});
+import { SemanticRouterService } from "./modules/semantic-router/semantic-router.service";
+import { GraphState } from "./state/graph.state";
+import { SpecializedAgentsService } from "./modules/specialized-agents/specialized-agents.service";
 
 @Injectable()
 export class OrchestratorAgentService {
     private readonly logger = new Logger(OrchestratorAgentService.name);
-    private llm: ChatOpenAI;
-    private readonly CHAT_HISTORY_WINDOW_SIZE = 6;
-    private readonly SUMMARIZE_BATCH_SIZE = 4;
+    private readonly CHAT_HISTORY_WINDOW_SIZE = 5;
+    private readonly SUMMARIZE_BATCH_SIZE = 2;
     private readonly MAX_ITERATIONS = 10;
 
-    private prompt: ChatPromptTemplate;
     private graph: any;
+
+    // In-memory Dialog State Tracking (DST) for deterministic routing.
+    // In a production environment, this would be persisted in Redis or a DB.
+    private sessionStates = new Map<string, "IDLE" | "AWAITING_ACTION">();
 
     constructor(
         private memoryService: MemoryService,
         private moderationService: ModerationService,
         private privacyService: PrivacyService,
         private mcpToolRegistry: McpToolRegistryService,
+        private semanticRouterService: SemanticRouterService,
+        private specializedAgentsService: SpecializedAgentsService,
     ) {
-        // 1. Initialize the LLM
-        this.llm = new ChatOpenAI({
-            modelName: "gpt-4o-mini",
-            temperature: 0,
-        });
-
-        // 2. Set up the prompt template
-        this.prompt = ChatPromptTemplate.fromMessages([
-            ["system", ORCHESTRATOR_PROMPT],
-            new MessagesPlaceholder("chat_history"),
-            ["human", "{input}"],
-            new MessagesPlaceholder("agent_scratchpad"),
-        ]);
-
-        // 3. Compile the LangGraph workflow
+        // 1. Compile the LangGraph workflow
         this.graph = this.createGraph();
+        console.log(this.getMermaidGraph());
+    }
+
+    /**
+     * Returns the Mermaid syntax representation of the LangGraph state machine.
+     */
+    public getMermaidGraph(): string {
+        return this.graph.getGraph().drawMermaid();
     }
 
     private createGraph() {
-        const agentNode = async (state: typeof GraphState.State) => {
-            this.logger.log(
-                `[${state.userId}] Iteration ${state.iterations + 1}: Thinking...`,
-            );
+        const routerNode = async (state: typeof GraphState.State) => {
+            // --- DETERMINISTIC STATE MACHINE: BYPASS ---
+            const currentState =
+                this.sessionStates.get(state.sessionId) || "IDLE";
 
-            const currentTools = Array.from(state.activeToolNames)
-                .map((name) => this.mcpToolRegistry.getTool(name))
-                .filter(Boolean) as StructuredTool[];
-            const orchestratorWithTools = this.llm.bindTools(currentTools);
-
-            const formattedPrompt = await this.prompt.formatMessages({
-                chat_history: state.contextWindow,
-                input: state.message,
-                agent_scratchpad: state.scratchpad,
-                userId: state.userId,
-                sessionId: state.sessionId,
-                activeOrderId: state.activeOrderId,
-            });
-
-            const response =
-                await orchestratorWithTools.invoke(formattedPrompt);
-
-            if (response.content && String(response.content).length > 0) {
+            if (currentState === "AWAITING_ACTION") {
                 this.logger.log(
-                    `[${state.userId}] Thought: ${response.content}`,
+                    `[${state.userId}] Deterministic State Bypass: Routing directly to Action Agent for Slot Filling.`,
                 );
+                return {
+                    intent: "ACTION",
+                    activeToolNames: ["Search_Internal_SOP"],
+                };
+            }
+            // -------------------------------------------
+
+            // 1. Search backward through the context window for the last AI Message
+            let lastAiMessage = "None";
+            for (let i = state.contextWindow.length - 1; i >= 0; i--) {
+                const msg = state.contextWindow[i];
+                if (msg instanceof AIMessage) {
+                    lastAiMessage = String(msg.content);
+                    break;
+                }
             }
 
+            this.logger.log(
+                `[${state.userId}] Router using lastAiMessage: "${lastAiMessage}"`,
+            );
+
+            // 2. Pass it down to your service!
+            return await this.semanticRouterService.classifyIntent(
+                state.userId,
+                state.message,
+                lastAiMessage, // <-- Injecting it here
+            );
+        };
+
+        const actionAgentNode = async (state: typeof GraphState.State) =>
+            this.specializedAgentsService.invokeActionAgent(state);
+        const faqAgentNode = async (state: typeof GraphState.State) =>
+            this.specializedAgentsService.invokeFaqAgent(state);
+
+        const escalationNode = async (state: typeof GraphState.State) => {
+            const lastMessage = state.scratchpad[state.scratchpad.length - 1];
+            if (lastMessage instanceof ToolMessage) {
+                return {
+                    scratchpad: [
+                        new AIMessage(
+                            "I am transferring you to a human support agent now. They will review your chat history and be with you shortly.",
+                        ),
+                    ],
+                };
+            }
             return {
-                scratchpad: [response],
-                iterations: 1, // Let the graph reducer increment our internal step counter
+                scratchpad: [
+                    new AIMessage({
+                        content: "",
+                        tool_calls: [
+                            {
+                                id: "call_escalate_" + Date.now(),
+                                name: "Escalate_To_Human",
+                                args: {
+                                    userId: state.userId,
+                                    sessionId: state.sessionId,
+                                    message:
+                                        "User requested human agent escalation.",
+                                },
+                            },
+                        ],
+                    }),
+                ],
+            };
+        };
+
+        const endSessionNode = async (state: typeof GraphState.State) => {
+            const lastMessage = state.scratchpad[state.scratchpad.length - 1];
+            if (lastMessage instanceof ToolMessage) {
+                return {
+                    scratchpad: [
+                        new AIMessage(
+                            "Thank you for contacting OneDelivery. Have a great day!",
+                        ),
+                    ],
+                };
+            }
+            return {
+                scratchpad: [
+                    new AIMessage({
+                        content: "",
+                        tool_calls: [
+                            {
+                                id: "call_end_session_" + Date.now(),
+                                name: "End_Chat_Session",
+                                args: {
+                                    userId: state.userId,
+                                    sessionId: state.sessionId,
+                                },
+                            },
+                        ],
+                    }),
+                ],
+            };
+        };
+
+        const unknownIntentNode = async (state: typeof GraphState.State) => {
+            return {
+                scratchpad: [
+                    new AIMessage(
+                        "I'm sorry, but I can only assist with OneDelivery-related queries such as food orders, refunds, and general FAQ. How can I help you with your delivery today?",
+                    ),
+                ],
             };
         };
 
@@ -149,15 +181,33 @@ export class OrchestratorAgentService {
                     this.logger.log(
                         `[${state.userId}] Calling Tool "${toolCall.name}" with args: ${JSON.stringify(toolCall.args)}`,
                     );
-                    const agentReply = await selectedTool.invoke(toolCall.args);
-                    const replyString = String(agentReply);
-                    this.logger.log(
-                        `[${state.userId}] Tool Output: "${replyString.length > 200 ? replyString.substring(0, 200) + "... (truncated)" : replyString}"`,
-                    );
+
+                    let replyString = "";
+                    try {
+                        const agentReply = await selectedTool.invoke(
+                            toolCall.args,
+                        );
+                        replyString = String(agentReply);
+                        this.logger.log(
+                            `[${state.userId}] Tool Output: "${replyString.length > 200 ? replyString.substring(0, 200) + "... (truncated)" : replyString}"`,
+                        );
+                    } catch (error) {
+                        this.logger.error(
+                            `[${state.userId}] Uncaught Exception in tool ${toolCall.name}: ${error instanceof Error ? error.message : String(error)}`,
+                            error instanceof Error ? error.stack : undefined,
+                        );
+                        finalAiMessage = new AIMessage({
+                            content:
+                                "I apologize, but our systems are currently experiencing technical difficulties and I cannot complete your request. Please try again later or contact our human support team.",
+                        });
+                        circuitBreakerTriggered = true;
+                        break;
+                    }
 
                     for (const availableTool of this.mcpToolRegistry.getAvailableToolNames()) {
+                        const toolRegex = new RegExp(`\\b${availableTool}\\b`);
                         if (
-                            replyString.includes(availableTool) &&
+                            toolRegex.test(replyString) &&
                             !state.activeToolNames.includes(availableTool)
                         ) {
                             this.logger.log(
@@ -220,14 +270,32 @@ export class OrchestratorAgentService {
             // Strip out thinking tags so the evaluator doesn't falsely flag internal reasoning
             draftContent = draftContent
                 .replace(/<thinking>[\s\S]*?<\/thinking>/g, "")
+                .replace(/<sop_complete\/>/g, "")
                 .trim();
 
-            const recentContext = state.contextWindow
+            // Safely extract the compressed rolling summary without passing the full raw history
+            const summaryMessage = state.contextWindow.find(
+                (msg) =>
+                    msg instanceof SystemMessage &&
+                    String(msg.content).startsWith("[CONTEXT SUMMARY]"),
+            );
+            const sessionSummary = summaryMessage
+                ? String(summaryMessage.content)
+                : "None";
+
+            // Extract a clean transcript of the recent sliding window, omitting bulky tool/system messages
+            const recentTranscript = state.contextWindow
+                .filter(
+                    (msg) =>
+                        msg instanceof HumanMessage || msg instanceof AIMessage,
+                )
                 .map(
                     (msg) =>
                         `${msg instanceof HumanMessage ? "User" : "AI"}: ${msg.content}`,
                 )
                 .join("\n");
+
+            const recentContext = `Active Order ID: ${state.activeOrderId}\nSession Summary: ${sessionSummary}\nRecent Conversation:\n${recentTranscript || "None"}\nCurrent User Request: ${state.message}`;
 
             const scratchpadContext = state.scratchpad
                 .map((msg) => {
@@ -264,6 +332,9 @@ export class OrchestratorAgentService {
                 );
 
             if (outputEvaluationResult.approved) {
+                this.logger.log(
+                    `[${state.userId}] Output Evaluator approved response.`,
+                );
                 return { finalAiMessage: lastMessage };
             } else if (state.iterations >= this.MAX_ITERATIONS) {
                 this.logger.error(
@@ -289,22 +360,118 @@ export class OrchestratorAgentService {
             }
         };
 
+        const fastTrackFinalizerNode = async (
+            state: typeof GraphState.State,
+        ) => {
+            const lastMessage = state.scratchpad[
+                state.scratchpad.length - 1
+            ] as AIMessage;
+            return { finalAiMessage: lastMessage };
+        };
+
+        const checkToolCalls = (state: typeof GraphState.State) => {
+            const lastMessage = state.scratchpad[
+                state.scratchpad.length - 1
+            ] as AIMessage;
+
+            // --- LLM BAILOUT EVALUATION ---
+            if (String(lastMessage.content).includes("BAILOUT_TRIGGERED")) {
+                this.logger.warn(
+                    `[${state.userId}] LLM Bailout Triggered! Drastic context change detected.`,
+                );
+                // Clear the state so the semantic router doesn't get bypassed again
+                this.sessionStates.set(state.sessionId, "IDLE");
+                return "router";
+            }
+            // ------------------------------
+
+            return lastMessage.tool_calls?.length ? "tools" : "evaluator";
+        };
+
+        const checkFastTrackToolCalls = (state: typeof GraphState.State) => {
+            const lastMessage = state.scratchpad[
+                state.scratchpad.length - 1
+            ] as AIMessage;
+            return lastMessage.tool_calls?.length
+                ? "tools"
+                : "fastTrackFinalizer";
+        };
+
+        const routeBackToAgent = (state: typeof GraphState.State) => {
+            if (state.intent === "FAQ") return "faqAgent";
+            if (state.intent === "ESCALATE") return "escalation";
+            if (state.intent === "END_SESSION") return "endSession";
+            if (state.intent === "UNKNOWN") return "unknownIntent";
+            return "actionAgent";
+        };
+
         return new StateGraph(GraphState)
-            .addNode("agent", agentNode.bind(this))
+            .addNode("router", routerNode.bind(this))
+            .addNode("actionAgent", actionAgentNode.bind(this))
+            .addNode("faqAgent", faqAgentNode.bind(this))
+            .addNode("escalation", escalationNode.bind(this))
+            .addNode("endSession", endSessionNode.bind(this))
+            .addNode("unknownIntent", unknownIntentNode.bind(this))
             .addNode("tools", toolsNode.bind(this))
             .addNode("evaluator", evaluatorNode.bind(this))
-            .addEdge(START, "agent")
-            .addConditionalEdges("agent", (state) => {
-                const lastMessage = state.scratchpad[
-                    state.scratchpad.length - 1
-                ] as AIMessage;
-                return lastMessage.tool_calls?.length ? "tools" : "evaluator";
+            .addNode("fastTrackFinalizer", fastTrackFinalizerNode.bind(this))
+            .addEdge(START, "router")
+            .addConditionalEdges("router", (state) => routeBackToAgent(state), {
+                actionAgent: "actionAgent",
+                faqAgent: "faqAgent",
+                escalation: "escalation",
+                endSession: "endSession",
+                unknownIntent: "unknownIntent",
             })
-            .addConditionalEdges("tools", (state) =>
-                state.circuitBreakerTriggered ? END : "agent",
+            .addConditionalEdges("actionAgent", checkToolCalls, {
+                router: "router",
+                tools: "tools",
+                evaluator: "evaluator",
+            })
+            .addConditionalEdges("faqAgent", checkFastTrackToolCalls, {
+                tools: "tools",
+                fastTrackFinalizer: "fastTrackFinalizer",
+            })
+            .addConditionalEdges("escalation", checkFastTrackToolCalls, {
+                tools: "tools",
+                fastTrackFinalizer: "fastTrackFinalizer",
+            })
+            .addConditionalEdges("endSession", checkFastTrackToolCalls, {
+                tools: "tools",
+                fastTrackFinalizer: "fastTrackFinalizer",
+            })
+            .addConditionalEdges("unknownIntent", checkFastTrackToolCalls, {
+                tools: "tools",
+                fastTrackFinalizer: "fastTrackFinalizer",
+            })
+            .addEdge("fastTrackFinalizer", END)
+            .addConditionalEdges(
+                "tools",
+                (state) =>
+                    state.circuitBreakerTriggered
+                        ? END
+                        : routeBackToAgent(state),
+                {
+                    [END]: END,
+                    actionAgent: "actionAgent",
+                    faqAgent: "faqAgent",
+                    escalation: "escalation",
+                    endSession: "endSession",
+                    unknownIntent: "unknownIntent",
+                },
             )
-            .addConditionalEdges("evaluator", (state) =>
-                state.finalAiMessage ? END : "agent",
+            .addConditionalEdges(
+                "evaluator",
+                (state) =>
+                    state.finalAiMessage ? END : routeBackToAgent(state),
+                {
+                    [END]: END,
+                    actionAgent: "actionAgent",
+                    faqAgent: "faqAgent",
+                    escalation: "escalation",
+                    endSession: "endSession",
+                    unknownIntent: "unknownIntent",
+                },
             )
             .compile();
     }
@@ -328,14 +495,29 @@ export class OrchestratorAgentService {
         const { contextWindow, humanMessageSequence } =
             await this.prepareContext(userId, sessionId, scrubbedMessage);
 
-        // 4. Execute Multi-Step Agent Reasoning Loop
-        const { finalAiMessage, scratchpad } = await this.executeReasoningLoop(
-            userId,
-            sessionId,
-            scrubbedMessage,
-            activeOrderId,
-            contextWindow,
-        );
+        let finalAiMessage: BaseMessage | undefined = undefined;
+        let scratchpad: BaseMessage[] = [];
+        let resultIntent = "";
+
+        try {
+            // 4. Execute Multi-Step Agent Reasoning Loop
+            const result = await this.executeReasoningLoop(
+                userId,
+                sessionId,
+                scrubbedMessage,
+                activeOrderId,
+                contextWindow,
+            );
+            finalAiMessage = result.finalAiMessage;
+            scratchpad = result.scratchpad;
+            resultIntent = result.intent;
+        } catch (error) {
+            this.logger.error(
+                `[${userId}] Graph execution crashed: ${error instanceof Error ? error.message : String(error)}`,
+                error instanceof Error ? error.stack : undefined,
+            );
+            return "I apologize, but our systems are currently experiencing technical difficulties and I cannot complete your request. Please try again later.";
+        }
 
         let currentSequence = humanMessageSequence;
 
@@ -374,6 +556,30 @@ export class OrchestratorAgentService {
 
         // 5. Extract and Sanitize Final Response
         const finalResponseString = this.extractFinalResponse(finalAiMessage);
+
+        // Check if the agent signalled that the SOP is complete
+        const rawContent = finalAiMessage?.content
+            ? String(finalAiMessage.content)
+            : "";
+        const isSopCompleted = rawContent.includes("<sop_complete/>");
+
+        // 7. Update Session State (Deterministic Slot-Filling)
+        if (resultIntent === "ACTION" && !isSopCompleted) {
+            this.sessionStates.set(sessionId, "AWAITING_ACTION");
+            this.logger.log(
+                `[${userId}] State Machine: Locked into AWAITING_ACTION slot-filling loop.`,
+            );
+        } else {
+            if (
+                this.sessionStates.get(sessionId) === "AWAITING_ACTION" &&
+                isSopCompleted
+            ) {
+                this.logger.log(
+                    `[${userId}] State Machine: SOP completed successfully. Resetting routing state to IDLE.`,
+                );
+            }
+            this.sessionStates.set(sessionId, "IDLE");
+        }
 
         // 6. Save Final AI Message to Database
         await this.saveFinalResponse(
@@ -466,16 +672,12 @@ export class OrchestratorAgentService {
     ): Promise<{
         finalAiMessage: BaseMessage | undefined;
         scratchpad: BaseMessage[];
+        intent: string;
     }> {
         const initialState = {
             contextWindow,
             scratchpad: [],
-            activeToolNames: [
-                "Search_Internal_SOP",
-                "Search_FAQ",
-                "Escalate_To_Human",
-                "End_Chat_Session",
-            ],
+            activeToolNames: [],
             circuitBreakerTriggered: false,
             iterations: 0,
             finalAiMessage: undefined,
@@ -483,6 +685,7 @@ export class OrchestratorAgentService {
             sessionId,
             activeOrderId,
             message,
+            intent: "",
         };
 
         const finalState = await this.graph.invoke(initialState, {
@@ -499,6 +702,7 @@ export class OrchestratorAgentService {
         return {
             finalAiMessage: finalState.finalAiMessage,
             scratchpad: finalState.scratchpad,
+            intent: finalState.intent,
         };
     }
 
@@ -516,6 +720,8 @@ export class OrchestratorAgentService {
         // Strip out the hidden reasoning tags for a clean customer experience
         finalResponseString = finalResponseString
             .replace(/<thinking>[\s\S]*?<\/thinking>/g, "")
+            .replace(/BAILOUT_TRIGGERED/g, "")
+            .replace(/<sop_complete\/>/g, "")
             .trim();
 
         return finalResponseString;

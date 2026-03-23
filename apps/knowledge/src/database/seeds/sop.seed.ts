@@ -17,7 +17,7 @@ export default class SopSeeder implements Seeder {
             {
                 intentCode: "REQUEST_REFUND",
                 agentOwner: "orchestrator",
-                title: "Asking for money back for missing or wrong items or quality issur or late delivery.",
+                title: "Asking for money back for missing or wrong items or quality issue or late delivery.",
                 requiredData: [
                     "orderId",
                     "issueCategory (missing_item, quality_issue, wrong_item, late_delivery)",
@@ -57,7 +57,7 @@ export default class SopSeeder implements Seeder {
                     "10. If the refund is > $20, return a rejection string: 'Exceeds auto-approval limit, requires human review'.",
                     "11. If the refund is <= $20, execute the Route_To_Guardian tool to check for fraud/quota approval.",
                     "12. If approved by Guardian, execute the Execute_Refund tool.",
-                    "13. Return a simple success/failure status with the final amount to the Orchestrator.",
+                    "13. Return a simple success/failure status explicitly stating the final refund amount and the reason to the Orchestrator.",
                 ],
                 permittedTools: [
                     "Get_Order_Details",
@@ -95,7 +95,7 @@ export default class SopSeeder implements Seeder {
                     "6. Wait for the Guardian Agent's response.",
                     "7. If rejected by Guardian, return a rejection string to the Orchestrator stating: 'Rejected by Guardian, requires manual review'.",
                     "8. If approved by Guardian, execute the Execute_Cancellation_And_Refund tool.",
-                    "9. Return a simple success/failure status with the reason to the Orchestrator.",
+                    "9. Return a simple success/failure status explicitly confirming the cancellation and refund, along with the reason, to the Orchestrator.",
                 ],
                 permittedTools: [
                     "Get_Order_Details",

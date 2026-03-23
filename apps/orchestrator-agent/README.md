@@ -25,6 +25,7 @@ When a user message is received (`processChat`), it undergoes a strict pipeline 
 
 The Orchestrator leverages several advanced AI design patterns to ensure reliability, accuracy, and safety:
 
+- **Semantic Router Pattern**: Separates intent classification from execution into a dedicated module, safely routing the user's intent to specialized sub-agents.
 - **Multi-Agent Orchestration (Supervisor Pattern)**: Acts as a central router that delegates complex, domain-specific tasks to specialized sub-agents (e.g., Logistics, Resolution) via TCP microservice communication.
 - **Dynamic Tool Binding (Just-In-Time Capabilities)**: To prevent prompt bloat and hallucination, the agent starts with minimal tools. Additional tools are dynamically bound to the LLM's active registry only when explicitly authorized by an SOP.
 - **Evaluator / Reflection Node (Output Guardrails)**: Implements a "Critique and Revise" loop. Before a response is sent to the user, an evaluation node analyzes the draft. If it violates rules (e.g., leaking tool names), the agent is forced to rewrite its answer.

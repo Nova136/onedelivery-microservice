@@ -6,6 +6,7 @@ import {
     SearchSopPayload,
     SearchFaqResponse,
     SearchSopResponse,
+    ListSopResponse,
 } from "./interface";
 @Injectable()
 export class KnowledgeClientService {
@@ -26,6 +27,15 @@ export class KnowledgeClientService {
     ): Promise<SearchSopResponse> {
         const result = await firstValueFrom(
             this.knowledgeClient.send<SearchSopResponse>("sop", payload),
+        );
+        return result;
+    }
+
+    async listSops(): Promise<ListSopResponse[]> {
+        const result = await firstValueFrom(
+            this.knowledgeClient.send<ListSopResponse[]>("sop.list", {
+                requestingAgent: "orchestrator",
+            }),
         );
         return result;
     }

@@ -9,4 +9,4 @@ import { MemoryModule } from "../memory/memory.module";
     providers: [McpToolRegistryService],
     exports: [McpToolRegistryService],
 })
-export class McpModule {}
+export class McpToolRegistryModule {}
