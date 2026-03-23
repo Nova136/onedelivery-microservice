@@ -134,8 +134,8 @@ Expected Status: ${expectedStatus}
 Expected Concept/Reason: ${expectedConcept}
 AI Response (Prediction): ${prediction}
 
-1. The AI Response MUST start with the Expected Status (e.g., "SUCCESS:" or "REJECTED:").
-2. The AI Response MUST adequately contain the Expected Concept/Reason. Ignore exact wording, focus on semantic meaning.
+1. STATUS CHECK: The AI Response MUST start with the Expected Status (It is perfectly fine if it is followed by a colon and a space, e.g. "REJECTED: ").
+2. CONCEPT CHECK: The AI Response MUST adequately contain the Expected Concept/Reason. Ignore exact wording, focus on semantic meaning.
 
 Does the AI Response meet both criteria?`;
 
