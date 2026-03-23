@@ -6,12 +6,9 @@ export default class SopSeeder implements Seeder {
     public async run(dataSource: DataSource): Promise<void> {
         const repo = dataSource.getRepository(Sop);
 
-        // Avoid duplicating seed data if it already exists
-        const existing = await repo.count();
-        if (existing > 0) {
-            console.log("Internal SOP data already seeded. Skipping...");
-            return;
-        }
+        // Clear existing SOP data to ensure updates to this file are always applied
+        console.log("Clearing existing SOP data...");
+        await repo.clear();
 
         const sops: Partial<Sop>[] = [
             {
@@ -91,8 +88,8 @@ export default class SopSeeder implements Seeder {
                 requiredData: ["orderId"],
                 workflowSteps: [
                     "1. Execute Get_Order_Details to fetch the current state of the order.",
-                    "2. Check the 'status' field. If the status is 'CREATED' or 'PREPARATION', the order is eligible for standard cancellation. Proceed to step 4.",
-                    "3. If the status is 'PREPARATION' or 'IN_DELIVERY', the order cannot normally be cancelled. Check the 'updatedAt' timestamp against the current time. If the delivery is MORE than 3 hours late, it is eligible for late-cancellation, proceed to step 4. Otherwise, return a rejection string stating the food is being prepared or out for delivery.",
+                    "2. Check the 'status' field. If the status is 'CREATED' or 'PREPARATION', the order is eligible for standard cancellation. Proceed to step 5.",
+                    "3. If the status is 'PREPARATION' or 'IN_DELIVERY', the order cannot normally be cancelled. Check the 'updatedAt' timestamp against the current time. If the delivery is MORE than 3 hours late, it is eligible for late-cancellation, proceed to step 5. Otherwise, return a rejection string stating the food is being prepared or out for delivery.",
                     "4. If the status is 'DELIVERED' or 'CANCELLED', the order is not eligible for cancellation. Return a rejection string stating the food has already been delivered/cancelled.",
                     "5. If eligible for cancellation, execute the Route_To_Guardian tool to check the user's cancellation quota and fraud risk.",
                     "6. Wait for the Guardian Agent's response.",
