@@ -9,7 +9,7 @@ import {
 } from "typeorm";
 import { ChatSession } from "./chat-session.entity";
 
-export type ChatMessageType = "human" | "ai" | "tool" | "unknown";
+export type ChatMessageType = "human" | "ai" | "tool" | "system" | "unknown";
 
 @Entity({ name: "chat_message", schema: "users" })
 export class ChatMessage {

@@ -12,7 +12,7 @@ export class OrderItem {
     @PrimaryGeneratedColumn("uuid")
     id: string;
 
-    @Column({ type: "uuid" })
+    @Column({ type: "varchar", length: 15 })
     orderId: string;
 
     @ManyToOne(() => Order, (order) => order.items, { onDelete: "CASCADE" })

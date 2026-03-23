@@ -51,7 +51,7 @@ export class ModerationService {
             ["system", OUTPUT_EVALUATOR_PROMPT],
             [
                 "human",
-                "Recent Conversation:\n{conversationContext}\n\nAI Draft Response: {draftResponse}",
+                "<context>{conversationContext}</context>\n\n<draft_response>{draftResponse}</draft_response>",
             ],
         ]).pipe(
             this.moderationLlm.withStructuredOutput(outputEvaluationSchema),
