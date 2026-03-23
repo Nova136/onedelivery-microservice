@@ -40,7 +40,9 @@
         "start-debug-docker": "npm install && npm run nest-build-all && docker-compose -f docker-compose.debug.yml up --build",
         "nest-build-all-shx": "concurrently \"nest build audit && shx cp .env dist/apps/audit\" \"nest build logistics && shx cp .env dist/apps/logistics\" \"nest build order && shx cp .env dist/apps/order\" \"nest build payment && shx cp .env dist/apps/payment\" \"nest build user && shx cp .env dist/apps/user\" \"nest build incident && shx cp .env dist/apps/incident\" \"nest build knowledge && shx cp .env dist/apps/knowledge\" \"nest build orchestrator-agent && shx cp .env dist/apps/orchestrator-agent\" \"nest build logistics-agent && shx cp .env dist/apps/logistics-agent\" \"nest build resolution-agent && shx cp .env dist/apps/resolution-agent\" \"nest build guardian-agent && shx cp .env dist/apps/guardian-agent\" \"nest build qa-agent && shx cp .env dist/apps/qa-agent\"",
         "start-debug-docker-shx": "npm install && npm run nest-build-all-shx && docker-compose -f docker-compose.debug.yml up --build",
-        "stop-debug-docker": "docker-compose -f docker-compose.debug.yml down"
+        "stop-debug-docker": "docker-compose -f docker-compose.debug.yml down",
+        "test-orchestrator-agent": "npx ts-node -r tsconfig-paths/register --transpile-only apps/orchestrator-agent/scripts/langsmith-eval.ts",
+        "test-logistics-agent": "npx ts-node -r tsconfig-paths/register --transpile-only apps/logistics-agent/scripts/langsmith-eval.ts"
     },
     "dependencies": {
         "@langchain/openai": "^1.2.11",
@@ -62,12 +64,17 @@
         "amqplib": "^0.10.3",
         "bcrypt": "^6.0.0",
         "class-validator": "^0.14.0",
+        "compromise": "^14.15.0",
         "concurrently": "^7.5.0",
         "jest": "^30.1.1",
         "jsonwebtoken": "^9.0.3",
         "langchain": "^1.2.28",
+        "langsmith": "^0.5.12",
         "moment": "^2.29.4",
         "moment-timezone": "^0.5.43",
+        "nanoid": "^5.1.7",
+        "openai": "^6.32.0",
+        "openevals": "^0.1.5",
         "passport": "^0.7.0",
         "passport-jwt": "^4.0.1",
         "pg": "^8.13.1",

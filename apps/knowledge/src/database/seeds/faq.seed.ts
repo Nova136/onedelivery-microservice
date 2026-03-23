@@ -33,6 +33,16 @@ export default class FaqSeeder implements Seeder {
                 content:
                     "To ensure your food arrives hot and our drivers aren't sent off-route, you cannot manually change your delivery address in the app once the order is confirmed. If you accidentally entered the wrong address, please reach out to support immediately. If the new address is very close to the original one, we might be able to accommodate it, but if it is too far, the order may need to be cancelled.",
             },
+            {
+                title: "What is your order cancellation policy?",
+                content:
+                    "Orders can be cancelled if they are still in the 'Created' stage. Once your food is in preparation or out for delivery, it cannot be cancelled unless the delivery is severely delayed (more than 3 hours late). Delivered orders are not eligible for cancellation. If you need to cancel an eligible order, just ask me to cancel it and provide your Order ID!",
+            },
+            {
+                title: "What is your refund policy for missing, incorrect, or late orders?",
+                content:
+                    "If your order has missing or incorrect items, quality issues, or is delivered late, you may be eligible for a refund. You must request the refund within 2 hours of the delivery time. Depending on the issue, we offer partial or full refunds for the affected items. To request a refund, please let me know your Order ID and detail the specific issue you encountered.",
+            },
         ];
 
         // 2. Generate the embeddings in a clean, automated loop

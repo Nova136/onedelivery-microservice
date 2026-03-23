@@ -6,23 +6,20 @@ export default class SopSeeder implements Seeder {
     public async run(dataSource: DataSource): Promise<void> {
         const repo = dataSource.getRepository(Sop);
 
-        // Avoid duplicating seed data if it already exists
-        const existing = await repo.count();
-        if (existing > 0) {
-            console.log("Internal SOP data already seeded. Skipping...");
-            return;
-        }
+        // Clear existing SOP data to ensure updates to this file are always applied
+        console.log("Clearing existing SOP data...");
+        await repo.clear();
 
         const sops: Partial<Sop>[] = [
             {
                 intentCode: "REQUEST_REFUND",
                 agentOwner: "orchestrator",
-                title: "Request Refund from Customer",
+                title: "Asking for money back for missing or wrong items or quality issue or late delivery.",
                 requiredData: [
                     "orderId",
                     "issueCategory (missing_item, quality_issue, wrong_item, late_delivery)",
                     "description",
-                    "items (array of objects with item name and quantity. NOTE: Only require this if the category is missing_item or wrong_item. If late_delivery or quality_issue, skip this.)",
+                    "items (array of objects with item name and quantity. NOTE: Only require this if the category is missing_item or wrong_item. DO NOT assume or infer quantity from singular/plural words. You MUST explicitly ask the user for the exact numeric quantity if it is not explicitly provided.)",
                 ],
                 workflowSteps: [
                     "1. Ensure you have gathered all the required data from the user. Ask clarifying questions if anything is missing.",
@@ -71,15 +68,18 @@ export default class SopSeeder implements Seeder {
             {
                 intentCode: "CANCEL_ORDER",
                 agentOwner: "orchestrator",
-                title: "Order Cancellation Intake",
-                requiredData: ["orderId", "reason for cancellation (optional)"],
+                title: "Cancelling an ongoing order.",
+                requiredData: [
+                    "orderId",
+                    "reason for cancellation (extract this from the user's message if provided naturally, e.g., 'I don't want it anymore', 'taking too long')",
+                ],
                 workflowSteps: [
-                    "1. Ensure you have gathered all the required data from the user. Ask clarifying questions if anything is missing.",
+                    "1. Ensure you have gathered all the required data from the user. If the user already provided a reason, proceed immediately. If the reason for cancellation is not provided, you MUST ask the user for it (but let them know they can skip it).",
                     "2. Empathize with the user's need to cancel.",
                     "3. Execute the Route_To_Logistics tool, passing the gathered data.",
                     "4. Wait for the Route_To_Logistics tool to return a success or rejection string.",
                     "5. If successful, confirm to the user that the order has been cancelled and their refund is processing.",
-                    "6. If rejected, politely explain why (based on the Logistics return string) and ask if they'd like to be transferred to human support.",
+                    "6. If rejected, politely explain why and ask if they'd like to be transferred to human support.",
                     "7. If the user agrees to be transferred, execute the Escalate_To_Human tool.",
                 ],
                 permittedTools: ["Route_To_Logistics", "Escalate_To_Human"],
@@ -90,15 +90,18 @@ export default class SopSeeder implements Seeder {
                 title: "Order Cancellation Validation and Execution",
                 requiredData: ["orderId"],
                 workflowSteps: [
-                    "1. Execute Get_Order_Details to fetch the current state of the order.",
-                    "2. Check the 'status' field. If the status is 'CREATED' or 'PREPARATION', the order is eligible for standard cancellation. Proceed to step 4.",
-                    "3. If the status is 'PREPARATION' or 'IN_DELIVERY', the order cannot normally be cancelled. Check the 'updatedAt' timestamp against the current time. If the delivery is MORE than 3 hours late, it is eligible for late-cancellation, proceed to step 4. Otherwise, return a rejection string stating the food is being prepared or out for delivery.",
-                    "4. If the status is 'DELIVERED' or 'CANCELLED', the order is not eligible for cancellation. Return a rejection string stating the food has already been delivered/cancelled.",
-                    "5. If eligible for cancellation, execute the Route_To_Guardian tool to check the user's cancellation quota and fraud risk.",
-                    "6. Wait for the Guardian Agent's response.",
-                    "7. If rejected by Guardian, return a rejection string to the Orchestrator stating: 'Rejected by Guardian, requires manual review'.",
-                    "8. If approved by Guardian, execute the Execute_Cancellation_And_Refund tool.",
-                    "9. Return a simple success/failure status with the reason to the Orchestrator.",
+                    "1. Execute Get_Order_Details tool to fetch the current state of the order.",
+                    "2. Wait for the Get_Order_Details tool's response.",
+                    "3. Check the 'status' field. If the status is 'CREATED', the order is eligible for standard cancellation, proceed to step 7.",
+                    "4. If the status is 'PREPARATION' or 'IN_DELIVERY', the order cannot normally be cancelled. You MUST calculate the time difference between the 'updatedAt' timestamp and the CURRENT SYSTEM TIME.",
+                    "5. If the calculated time difference is MORE than 3 hours, the order is eligible for late-cancellation. Proceed to step 7.",
+                    "6. If the calculated time difference is LESS than or EQUAL to 3 hours, STOP immediately and return a rejection string stating the food is out for delivery. DO NOT execute any other tools.",
+                    "7. If the status is 'DELIVERED' or 'CANCELLED', the order is not eligible for cancellation. STOP immediately and return a rejection string stating the food has already been delivered/cancelled. DO NOT execute any other tools.",
+                    "8. If eligible for cancellation, execute the Route_To_Guardian tool to check the user's cancellation quota and fraud risk.",
+                    "9. Wait for the Guardian Agent's response.",
+                    "10. If rejected by Guardian, return a rejection string to the Orchestrator stating: 'Rejected by Guardian, requires manual review'.",
+                    "11. If approved by Guardian, execute the Execute_Cancellation_And_Refund tool.",
+                    "12. Return a simple success/failure status explicitly confirming the cancellation and refund, along with the reason, to the Orchestrator.",
                 ],
                 permittedTools: [
                     "Get_Order_Details",
