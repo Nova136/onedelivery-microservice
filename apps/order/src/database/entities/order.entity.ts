@@ -1,12 +1,10 @@
 import {
     Entity,
-    PrimaryGeneratedColumn,
     Column,
     CreateDateColumn,
     UpdateDateColumn,
     OneToMany,
     BeforeInsert,
-    Index,
     PrimaryColumn,
 } from "typeorm";
 import { OrderItem } from "./order-item.entity";
