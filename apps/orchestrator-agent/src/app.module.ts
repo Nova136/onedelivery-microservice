@@ -4,26 +4,21 @@ import { HttpModule } from "@nestjs/axios";
 import { OrchestratorAgentController } from "./orchestrator-agent.controller";
 import { OrchestratorAgentService } from "./orchestrator-agent.service";
 import { MemoryModule } from "./modules/memory/memory.module";
-import { AgentsClientModule } from "./modules/agents-client/agents-client.module";
-import { CommonModule } from "@libs/modules/common/common.module";
-import { KnowledgeClientModule } from "./modules/knowledge-client/knowledge-client.module";
+
 import { ModerationModule } from "./modules/moderation/moderation.module";
 import { PrivacyModule } from "./modules/privacy/privacy.module";
-import { McpModule } from "./modules/mcp/mcp.module";
+import { McpToolRegistryModule } from "./modules/mcp/mcp-tool-registry.module";
+import { SemanticRouterModule } from "./modules/semantic-router/semantic-router.module";
+import { SpecializedAgentsModule } from "./modules/specialized-agents/specialized-agents.module";
 
 @Module({
     imports: [
-        CommonModule,
-        ConfigModule.forRoot({
-            isGlobal: true,
-        }),
-        HttpModule,
         MemoryModule,
-        AgentsClientModule,
-        KnowledgeClientModule,
         ModerationModule,
         PrivacyModule,
-        McpModule,
+        McpToolRegistryModule,
+        SemanticRouterModule,
+        SpecializedAgentsModule,
     ],
     controllers: [OrchestratorAgentController],
     providers: [OrchestratorAgentService],

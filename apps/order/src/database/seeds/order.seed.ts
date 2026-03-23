@@ -28,6 +28,8 @@ export default class OrderSeeder implements Seeder {
                 status: OrderStatus.DELIVERED,
                 deliveryAddress: "123 Delivered St, City",
                 totalOrderValue: 12.0,
+                createdAt: new Date(),
+                updatedAt: new Date(),
                 priorityOption: PriorityOption.STANDARD,
             },
             // Scenario 2: Created order for cancellation testing
@@ -37,6 +39,8 @@ export default class OrderSeeder implements Seeder {
                 status: OrderStatus.CREATED,
                 deliveryAddress: "456 Created Ave, Town",
                 totalOrderValue: 5.5,
+                createdAt: new Date(),
+                updatedAt: new Date(),
                 priorityOption: PriorityOption.STANDARD,
             },
             // Scenario 3: Order in preparation for cancellation testing
@@ -46,6 +50,8 @@ export default class OrderSeeder implements Seeder {
                 status: OrderStatus.PREPARATION,
                 deliveryAddress: "789 Preparation Rd, Village",
                 totalOrderValue: 6.5,
+                createdAt: new Date(),
+                updatedAt: new Date(),
                 priorityOption: PriorityOption.FAST,
             },
             // Scenario 4: Order in delivery for late-cancellation testing
@@ -55,6 +61,7 @@ export default class OrderSeeder implements Seeder {
                 status: OrderStatus.IN_DELIVERY,
                 deliveryAddress: "101 Delivery Cres, Hamlet",
                 totalOrderValue: 5.0,
+                createdAt: new Date(),
                 updatedAt: new Date(Date.now() - 4 * 60 * 60 * 1000), // 4 hours ago
                 priorityOption: PriorityOption.STANDARD,
             },
@@ -65,6 +72,8 @@ export default class OrderSeeder implements Seeder {
                 status: OrderStatus.CANCELLED,
                 deliveryAddress: "212 Cancelled Lane, City",
                 totalOrderValue: 4.5,
+                createdAt: new Date(),
+                updatedAt: new Date(),
                 priorityOption: PriorityOption.STANDARD,
             },
             // Scenario 6: Partially refunded order
@@ -76,6 +85,8 @@ export default class OrderSeeder implements Seeder {
                 totalOrderValue: 6.0,
                 totalRefundValue: 3.0,
                 refundStatus: RefundStatus.PARTIAL,
+                createdAt: new Date(),
+                updatedAt: new Date(),
                 priorityOption: PriorityOption.STANDARD,
             },
             // Scenario 7: Fully refunded order
@@ -87,6 +98,30 @@ export default class OrderSeeder implements Seeder {
                 totalOrderValue: 5.5,
                 totalRefundValue: 5.5,
                 refundStatus: RefundStatus.FULL,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+                priorityOption: PriorityOption.STANDARD,
+            },
+            // Scenario 8: Order in delivery but NOT late (Standard rejection)
+            {
+                id: "FD-0000-000008",
+                customerId,
+                status: OrderStatus.IN_DELIVERY,
+                deliveryAddress: "555 Fresh Delivery St, City",
+                totalOrderValue: 15.0,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+                priorityOption: PriorityOption.FAST,
+            },
+            // Scenario 9: High value order for $20+ refund limit test
+            {
+                id: "FD-0000-000009",
+                customerId,
+                status: OrderStatus.DELIVERED,
+                deliveryAddress: "777 High Roller Blvd, City",
+                totalOrderValue: 55.0,
+                createdAt: new Date(),
+                updatedAt: new Date(),
                 priorityOption: PriorityOption.STANDARD,
             },
         ];
@@ -164,6 +199,24 @@ export default class OrderSeeder implements Seeder {
                 quantityOrdered: 1,
                 quantityRefunded: 1,
                 itemValue: 5.5,
+            },
+            // Item for Scenario 8
+            {
+                orderId: "FD-0000-000008",
+                productId: "f6a7b8c9-d0e1-2345-6789-0123456789ab", // Pad Thai
+                productName: "Pad Thai",
+                price: 15.0,
+                quantityOrdered: 1,
+                itemValue: 15.0,
+            },
+            // Item for Scenario 9
+            {
+                orderId: "FD-0000-000009",
+                productId: "ae61d854-8baa-471c-a8c0-bfdd19ff3e3d", // Whole Lobster
+                productName: "Whole Lobster",
+                price: 50.0,
+                quantityOrdered: 1,
+                itemValue: 50.0,
             },
         ];
 

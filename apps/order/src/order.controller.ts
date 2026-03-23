@@ -112,6 +112,10 @@ export class OrderController {
             deliveryAddress: order.deliveryAddress,
             items: order.items,
             createdAt: order.createdAt.toISOString(),
+            updatedAt: order.updatedAt.toISOString(),
+            totalOrderValue: order.totalOrderValue,
+            totalRefundValue: order.totalRefundValue,
+            refundStatus: order.refundStatus,
         };
     }
 
