@@ -13,64 +13,30 @@ export class AppController {
     constructor(private readonly appService: AppService) {}
 
     @MessagePattern(AGENT_CHAT_PATTERN)
-    async handleAgentChat(@Payload() payload: HandleIncomingMessageDto) {
+    async handleReviewSession(@Payload() payload: HandleIncomingMessageDto) {
         this.logger.log(
             `[TCP] Received for user ${payload.userId}, session ${payload.sessionId}`,
         );
-        const reply = await this.appService.processChat(
+        const reply = await this.appService.processChatMessageBySessionId(
             payload.userId,
             payload.sessionId,
-            payload.message,
         );
         return { reply };
     }
 
-    @MessagePattern({ cmd: "agent.reviewSession" })
-    async handleReviewSession(@Payload() payload: { userId: string; sessionId: string }) {
-        this.logger.log(
-            `[TCP] Reviewing session ${payload.sessionId} for user ${payload.userId}`,
-        );
-        const result = await this.appService.processChatMessageBySessionId(
-            payload.userId,
-            payload.sessionId,
-        );
-        return { result };
-    }
-
-    @Post()
-    @ApiOperation({ summary: "Process a user chat message" })
-    @ApiResponse({ status: 201, description: "The AI agent's response." })
-    async handleIncomingMessage(@Body() requestData: HandleIncomingMessageDto) {
-        this.logger.log(
-            `Received request for user ${requestData.userId}, session ${requestData.sessionId}, message: "${requestData.message}"`,
-        );
-
-        // Pass the data to our multi-agent orchestrator
-        const aiResponse = await this.appService.processChat(
-            requestData.userId,
-            requestData.sessionId,
-            requestData.message,
-        );
-
-        // Send the final text back to the user
-        return { reply: aiResponse };
-    }
-
-    @Get('/analyze-trends')
+    @Get("/analyze-trends")
     @ApiOperation({ summary: "Analyze incidents trends" })
     @ApiResponse({ status: 201, description: "The AI agent's response." })
     async analyzeTrends(@Body() requestData: HandleIncomingMessageDto) {
         // this.logger.log(
         //     `Received request for admin ${requestData.userId}, session ${requestData.sessionId}, message: "${requestData.message}"`,
         // );
-
         // // Pass the data to our multi-agent orchestrator
         // const aiResponse = await this.appService.processChat(
         //     requestData.userId,
         //     requestData.sessionId,
         //     requestData.message,
         // );
-
         // // Send the final text back to the user
         // return { reply: aiResponse };
     }
