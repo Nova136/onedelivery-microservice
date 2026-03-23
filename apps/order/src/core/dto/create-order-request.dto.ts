@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { OrderItemInputDto } from './order-item-input.dto';
+import { PriorityOption } from '../../database/entities/order.enum';
 
 /** HTTP request body for POST /order */
 export class CreateOrderRequestDto {
@@ -8,9 +9,11 @@ export class CreateOrderRequestDto {
   @ApiProperty({ example: '123 Main St, City' })
   deliveryAddress!: string;
   @ApiProperty({
-    example: 'PRIO-STD',
+    enum: PriorityOption,
+    example: PriorityOption.STANDARD,
     description: 'Delivery priority option SKU (PRIO-EXPRESS, PRIO-STD, PRIO-ECON)',
     required: false,
+    default: PriorityOption.STANDARD,
   })
-  priorityOption?: string;
+  priorityOption?: PriorityOption;
 }

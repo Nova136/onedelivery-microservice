@@ -1,15 +1,15 @@
 import {
     Entity,
-    PrimaryGeneratedColumn,
     Column,
     CreateDateColumn,
     UpdateDateColumn,
+    PrimaryColumn,
 } from "typeorm";
 import { Role } from "./role.enum";
 
 @Entity({ name: "user", schema: "users" })
 export class User {
-    @PrimaryGeneratedColumn("uuid")
+    @PrimaryColumn("uuid")
     id: string;
 
     @Column({ type: "varchar", length: 255, unique: true })

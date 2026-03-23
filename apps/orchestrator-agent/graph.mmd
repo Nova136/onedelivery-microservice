@@ -1,0 +1,39 @@
+%%{init: {'flowchart': {'curve': 'linear'}}}%%
+graph TD;
+        __start__([<p>__start__</p>]):::first
+        router(router)
+        actionAgent(actionAgent)
+        faqAgent(faqAgent)
+        escalation(escalation)
+        endSession(endSession)
+        tools(tools)
+        evaluator(evaluator)
+        fastTrackFinalizer(fastTrackFinalizer)
+        __end__([<p>__end__</p>]):::last
+        __start__ --> router;
+        fastTrackFinalizer --> __end__;
+        router -.-> actionAgent;
+        router -.-> faqAgent;
+        router -.-> escalation;
+        router -.-> endSession;
+        actionAgent -.-> tools;
+        actionAgent -.-> evaluator;
+        faqAgent -.-> tools;
+        faqAgent -.-> fastTrackFinalizer;
+        escalation -.-> tools;
+        escalation -.-> fastTrackFinalizer;
+        endSession -.-> tools;
+        endSession -.-> fastTrackFinalizer;
+        tools -.-> __end__;
+        tools -.-> actionAgent;
+        tools -.-> faqAgent;
+        tools -.-> escalation;
+        tools -.-> endSession;
+        evaluator -.-> __end__;
+        evaluator -.-> actionAgent;
+        evaluator -.-> faqAgent;
+        evaluator -.-> escalation;
+        evaluator -.-> endSession;
+        classDef default fill:#f2f0ff,line-height:1.2;
+        classDef first fill-opacity:0;
+        classDef last fill:#bfb6fc;

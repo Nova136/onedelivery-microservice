@@ -66,7 +66,9 @@ export class OrderController {
             items: order.items.map(mapItem),
             paymentSuccess,
             transactionId,
-            message: paymentSuccess ? "Order created" : "Order created but payment failed",
+            message: paymentSuccess
+                ? "Order created"
+                : "Order created but payment failed",
         };
         return response;
     }
@@ -113,6 +115,10 @@ export class OrderController {
             totalOrderValue: Number(order.totalOrderValue),
             items: order.items,
             createdAt: order.createdAt.toISOString(),
+            updatedAt: order.updatedAt.toISOString(),
+            totalOrderValue: order.totalOrderValue,
+            totalRefundValue: order.totalRefundValue,
+            refundStatus: order.refundStatus,
         };
     }
 
@@ -166,6 +172,24 @@ export class OrderController {
         const orders = await this.orderService.listByCustomer(
             data.customerId ?? "",
         );
+        return {
+            orders: orders.map((o) => ({
+                orderId: o.id,
+                status: o.status,
+                customerId: o.customerId,
+                createdAt: o.createdAt.toISOString(),
+                items: o.items,
+            })),
+            message: "Order microservice: list returned",
+        };
+    }
+
+    @MessagePattern({ cmd: "order.getRecent" })
+    async getRecentOrders(@Payload() data: { customerId?: string }) {
+        const orders = await this.orderService.listRecent(
+            data.customerId ?? "",
+        );
+        console.log(orders);
         return {
             orders: orders.map((o) => ({
                 orderId: o.id,

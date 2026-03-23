@@ -5,19 +5,28 @@ import {
     CreateDateColumn,
     UpdateDateColumn,
     OneToMany,
+    BeforeInsert,
+    Index,
+    PrimaryColumn,
 } from "typeorm";
 import { OrderItem } from "./order-item.entity";
+import { OrderStatus, PriorityOption, RefundStatus } from "./order.enum";
+import { customAlphabet } from "nanoid";
+
+// Define a friendly alphabet (Removed 0, O, I, 1, L to prevent reading errors)
+const alphabet = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+const generateNanoId = customAlphabet(alphabet, 6);
 
 @Entity({ name: "order", schema: "order" })
 export class Order {
-    @PrimaryGeneratedColumn("uuid")
+    @PrimaryColumn({ type: "varchar", length: 15, unique: true })
     id: string;
 
-    @Column({ type: "varchar", length: 255 })
+    @Column({ type: "uuid" })
     customerId: string;
 
-    @Column({ type: "varchar", length: 32, default: "PENDING" })
-    status: string;
+    @Column({ type: "enum", enum: OrderStatus, default: OrderStatus.CREATED })
+    status: OrderStatus;
 
     @Column({ type: "varchar", length: 512 })
     deliveryAddress: string;
@@ -40,9 +49,20 @@ export class Order {
     @Column({ type: "decimal", precision: 10, scale: 2, default: 0 })
     totalRefundValue: number;
 
-    @Column({ type: "varchar", length: 32, default: "NONE" })
-    refundStatus: string;
+    @Column({ type: "enum", enum: RefundStatus, default: RefundStatus.NONE })
+    refundStatus: RefundStatus;
 
-    @Column({ type: "varchar", length: 32, default: "PRIO-STD" })
-    priorityOption: string;
+    @Column({
+        type: "enum",
+        enum: PriorityOption,
+        default: PriorityOption.STANDARD,
+    })
+    priorityOption: PriorityOption;
+
+    @BeforeInsert()
+    generateId() {
+        const date = new Date();
+        const prefix = `${date.getFullYear().toString().slice(-2)}${date.getMonth() + 1}`;
+        this.id = `FD-${prefix}-${generateNanoId()}`;
+    }
 }

@@ -17,7 +17,7 @@ export default class SopSeeder implements Seeder {
             {
                 intentCode: "REQUEST_REFUND",
                 agentOwner: "orchestrator",
-                title: "Request Refund from Customer",
+                title: "Asking for money back for missing or wrong items or quality issue or late delivery.",
                 requiredData: [
                     "orderId",
                     "issueCategory (missing_item, quality_issue, wrong_item, late_delivery)",
@@ -71,15 +71,15 @@ export default class SopSeeder implements Seeder {
             {
                 intentCode: "CANCEL_ORDER",
                 agentOwner: "orchestrator",
-                title: "Order Cancellation Intake",
-                requiredData: ["orderId", "reason for cancellation (optional)"],
+                title: "Cancelling an ongoing order.",
+                requiredData: ["orderId", "reason for cancellation"],
                 workflowSteps: [
-                    "1. Ensure you have gathered all the required data from the user. Ask clarifying questions if anything is missing.",
+                    "1. Ensure you have gathered all the required data from the user. If the reason for cancellation is not provided, you MUST ask the user for it (but let them know they can skip it).",
                     "2. Empathize with the user's need to cancel.",
                     "3. Execute the Route_To_Logistics tool, passing the gathered data.",
                     "4. Wait for the Route_To_Logistics tool to return a success or rejection string.",
                     "5. If successful, confirm to the user that the order has been cancelled and their refund is processing.",
-                    "6. If rejected, politely explain why (based on the Logistics return string) and ask if they'd like to be transferred to human support.",
+                    "6. If rejected, politely explain why and ask if they'd like to be transferred to human support.",
                     "7. If the user agrees to be transferred, execute the Escalate_To_Human tool.",
                 ],
                 permittedTools: ["Route_To_Logistics", "Escalate_To_Human"],
@@ -98,7 +98,7 @@ export default class SopSeeder implements Seeder {
                     "6. Wait for the Guardian Agent's response.",
                     "7. If rejected by Guardian, return a rejection string to the Orchestrator stating: 'Rejected by Guardian, requires manual review'.",
                     "8. If approved by Guardian, execute the Execute_Cancellation_And_Refund tool.",
-                    "9. Return a simple success/failure status with the reason to the Orchestrator.",
+                    "9. Return a simple success/failure status explicitly confirming the cancellation and refund, along with the reason, to the Orchestrator.",
                 ],
                 permittedTools: [
                     "Get_Order_Details",
