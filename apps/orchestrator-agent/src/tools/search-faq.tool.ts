@@ -2,21 +2,23 @@ import { z } from "zod";
 import { StructuredTool, tool } from "@langchain/core/tools";
 import { KnowledgeClientService } from "../modules/knowledge-client/knowledge-client.service";
 
-const answerUserQuestionSchema = z
-    .string()
-    .describe(
-        "The user's specific question summarized into a search query (e.g., 'What are the delivery hours?').",
-    );
+const answerUserQuestionSchema = z.object({
+    query: z
+        .string()
+        .describe(
+            "The user's specific question summarized into a search query (e.g., 'What are the delivery hours?').",
+        ),
+});
 
 export function createSearchFaqTool(
     knowledgeClient: KnowledgeClientService,
 ): StructuredTool {
     return tool(
-        async (query: string) => {
+        async ({ query }: { query: string }) => {
             try {
                 // 1. Fetch the raw data from your pure API
                 const rawFaqContent = await knowledgeClient.searchFaq({
-                    query: query,
+                    query,
                 });
 
                 // 2. Handle the empty state inside the tool
@@ -32,13 +34,7 @@ export function createSearchFaqTool(
                     .join("\n\n");
 
                 // 4. Wrap the formatted data with your strict LLM instructions
-                return `
-### SEARCH RESULTS ###
-${formattedFaqs}
-
-### STRICT RULE ###
-If the user's exact question is not clearly answered by the text above, DO NOT guess or use outside knowledge. Reply EXACTLY with: "I'm sorry, I don't have the answer to that specific question."
-                `.trim();
+                return `### SEARCH RESULTS ###\n${formattedFaqs}`.trim();
             } catch (err) {
                 const msg = err instanceof Error ? err.message : String(err);
                 // 4. Give the LLM instructions on how to handle the crash gracefully

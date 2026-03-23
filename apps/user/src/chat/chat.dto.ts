@@ -17,7 +17,7 @@ export interface ChatSessionDTO {
 
 export interface ChatMessageDTO {
     id?: string;
-    type: "human" | "ai" | "tool" | "unknown";
+    type: "human" | "ai" | "tool" | "system" | "unknown";
     content: string;
     toolCallId?: string;
     sequence: number;
@@ -44,4 +44,9 @@ export interface UpdateSummaryPayload {
     id: string;
     summary: string;
     lastSummarizedSequence: number;
+}
+
+export interface EndChatSessionPayload {
+    userId: string;
+    sessionId: string;
 }
