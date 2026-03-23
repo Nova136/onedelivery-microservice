@@ -36,7 +36,7 @@ export default class FaqSeeder implements Seeder {
             {
                 title: "What is your order cancellation policy?",
                 content:
-                    "Orders can be cancelled if they are still in the 'Created' or 'Preparation' stages. Once your food is out for delivery, it cannot be cancelled unless the delivery is severely delayed (more than 3 hours late). Delivered orders are not eligible for cancellation. If you need to cancel an eligible order, just ask me to cancel it and provide your Order ID!",
+                    "Orders can be cancelled if they are still in the 'Created' stage. Once your food is in preparation or out for delivery, it cannot be cancelled unless the delivery is severely delayed (more than 3 hours late). Delivered orders are not eligible for cancellation. If you need to cancel an eligible order, just ask me to cancel it and provide your Order ID!",
             },
             {
                 title: "What is your refund policy for missing, incorrect, or late orders?",

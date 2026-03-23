@@ -801,20 +801,24 @@ export class OrchestratorAgentService {
 
             const messagesToSummarize = unsummarizedOverflowChunks.flat();
 
-            // Pass the OLD summary + ONLY the NEW unsummarized messages to maintain continuity
-            currentSummary = await this.memoryService.summarizeConversation(
-                messagesToSummarize,
-                currentSummary, // Pass existing summary to the summarizer LLM
-            );
+            // FIRE AND FORGET: Do not block the user's request waiting for background summarization
+            this.memoryService
+                .summarizeConversation(messagesToSummarize, currentSummary)
+                .then((newSummary) => {
+                    const newSequence =
+                        lastSummarizedSequence +
+                        unsummarizedOverflowChunks.length;
+                    this.memoryService.updateSessionSummary(
+                        sessionId,
+                        newSummary,
+                        newSequence,
+                    );
+                })
+                .catch((err) =>
+                    this.logger.error("Background summarization failed", err),
+                );
 
-            // Update the sequence marker to cover ONLY the overflow chunks we just summarized
-            lastSummarizedSequence += unsummarizedOverflowChunks.length;
-
-            this.memoryService.updateSessionSummary(
-                sessionId,
-                currentSummary,
-                lastSummarizedSequence,
-            );
+            // The current request will proceed using the existing summary for this turn.
         }
 
         // 4. Construct the Final Prompt Context

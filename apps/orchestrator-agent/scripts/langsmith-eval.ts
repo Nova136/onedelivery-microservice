@@ -1,10 +1,28 @@
+import * as path from "path";
+// Load environment variables from the root .env file
+require("dotenv").config({ path: path.resolve(__dirname, "../../../.env") });
+
+// 1. Disable background tracing to avoid cluttering your standard LangSmith project
+process.env.LANGCHAIN_TRACING_V2 = "false";
+
+// 2. Swap to evaluation-specific API keys if they exist in the .env file
+if (process.env.EVAL_LANGSMITH_API_KEY) {
+    process.env.LANGSMITH_API_KEY = process.env.EVAL_LANGSMITH_API_KEY;
+}
+if (process.env.EVAL_OPENAI_API_KEY) {
+    process.env.OPENAI_API_KEY = process.env.EVAL_OPENAI_API_KEY;
+}
+
 import { Client } from "langsmith";
 import { evaluate } from "langsmith/evaluation";
 import { v4 as uuidv4 } from "uuid";
 import { ChatOpenAI } from "@langchain/openai";
 import { z } from "zod";
 
-const client = new Client();
+// Explicitly pass the API key to bypass import hoisting issues!
+const client = new Client({
+    apiKey: process.env.LANGSMITH_API_KEY || process.env.LANGCHAIN_API_KEY,
+});
 const DATASET_NAME = "OneDelivery-Orchestrator-Experiments";
 
 /**
@@ -97,7 +115,8 @@ const testCases = [
     {
         // FD-0000-000008 is IN_DELIVERY but NOT late. Should be rejected.
         inputs: {
-            question: "I want to cancel order FD-0000-000008 right now.",
+            question:
+                "I want to cancel order FD-0000-000008 right now because I changed my mind.",
         },
         outputs: {
             expected_intent: "ACTION",
@@ -108,13 +127,28 @@ const testCases = [
             description: "Cancellation Rejection (Standard Out for Delivery)",
         },
     },
+    {
+        // FD-0000-000005 is CANCELLED.
+        inputs: {
+            question:
+                "Cancel order FD-0000-000005 please, I don't need it anymore.",
+        },
+        outputs: {
+            expected_intent: "ACTION",
+            expected_concept: "already been cancelled",
+        },
+        metadata: {
+            category: "sop_logic_cancel",
+            description: "Cancellation Rejection (Already Cancelled)",
+        },
+    },
 
     // 3. REFUNDS: SOP Logic Validations
     {
         // FD-0000-000001 - Standard Missing Item Refund (< $20 limit)
         inputs: {
             question:
-                "I need a refund for FD-0000-000001. The Laksa was missing.",
+                "I need a refund for FD-0000-000001. 1 Laksa was missing.",
         },
         outputs: {
             expected_intent: "ACTION",
@@ -129,7 +163,7 @@ const testCases = [
         // FD-0000-000007 - Already fully refunded order
         inputs: {
             question:
-                "Can I get a refund for my order FD-0000-000007? The food was terrible.",
+                "Can I get a refund for my order FD-0000-000007? 1 Hainanese Chicken Rice was terrible.",
         },
         outputs: {
             expected_intent: "ACTION",
@@ -144,7 +178,7 @@ const testCases = [
         // FD-0000-000009 - Lobster is $50, exceeds $20 limit
         inputs: {
             question:
-                "My Whole Lobster was missing from order FD-0000-000009. I need a refund.",
+                "1 Whole Lobster was missing from order FD-0000-000009. I need a refund.",
         },
         outputs: {
             expected_intent: "ACTION",
@@ -153,6 +187,51 @@ const testCases = [
         metadata: {
             category: "sop_logic_refund",
             description: "Refund Rejection ($20 Auto-Approval Limit)",
+        },
+    },
+    {
+        // FD-0000-000006 is PARTIALLY REFUNDED.
+        inputs: {
+            question:
+                "I need a refund for 1 Roti Prata in order FD-0000-000006.",
+        },
+        outputs: {
+            expected_intent: "ACTION",
+            expected_concept: "already been refunded",
+        },
+        metadata: {
+            category: "sop_logic_refund",
+            description: "Refund Rejection (Partial Refund Block)",
+        },
+    },
+    {
+        // FD-0000-000001 - Quality issue calculation (20% of $5.50 = $1.10)
+        inputs: {
+            question:
+                "I want a refund for order FD-0000-000001. 1 Hainanese Chicken Rice was cold and tasted weird.",
+        },
+        outputs: {
+            expected_intent: "ACTION",
+            expected_concept: "1.10", // Expecting the exact math output
+        },
+        metadata: {
+            category: "sop_logic_refund",
+            description: "Refund Success (Quality Issue Calculation)",
+        },
+    },
+    {
+        // FD-0000-000001 - Late delivery calculation ($5 flat)
+        inputs: {
+            question:
+                "My order FD-0000-000001 arrived very late. I want a refund.",
+        },
+        outputs: {
+            expected_intent: "ACTION",
+            expected_concept: "5", // Expecting the flat $5 rule to apply
+        },
+        metadata: {
+            category: "sop_logic_refund",
+            description: "Refund Success (Late Delivery Flat Fee)",
         },
     },
 
@@ -266,21 +345,24 @@ async function predictOrchestrator(inputs: {
 }
 
 async function main() {
-    console.log(`Creating LangSmith dataset: ${DATASET_NAME}...`);
-
-    // 1. Create the Dataset
-    const dataset = await client.createDataset(DATASET_NAME, {
-        description: "Evaluations for the OneDelivery Orchestrator Agent",
-    });
-
-    // 2. Populate the Dataset
-    for (const testCase of testCases) {
-        await client.createExample(testCase.inputs, testCase.outputs, {
-            datasetId: dataset.id,
-            metadata: testCase.metadata,
+    console.log(`Checking if dataset ${DATASET_NAME} exists...`);
+    try {
+        await client.readDataset({ datasetName: DATASET_NAME });
+        console.log("Dataset already exists. Skipping creation.");
+    } catch {
+        console.log(`Creating LangSmith dataset: ${DATASET_NAME}...`);
+        const dataset = await client.createDataset(DATASET_NAME, {
+            description: "Evaluations for the OneDelivery Orchestrator Agent",
         });
+
+        await client.createExamples({
+            datasetId: dataset.id,
+            inputs: testCases.map((tc) => tc.inputs),
+            outputs: testCases.map((tc) => tc.outputs),
+            metadata: testCases.map((tc) => tc.metadata),
+        });
+        console.log("Dataset populated successfully.");
     }
-    console.log("Dataset populated successfully.");
 
     // 3. Run the Evaluation
     console.log("Running evaluation...");
@@ -290,6 +372,7 @@ async function main() {
             data: DATASET_NAME,
             evaluators: [llmJudgeEvaluator],
             experimentPrefix: "orchestrator-eval-run",
+            client,
         },
     );
 
