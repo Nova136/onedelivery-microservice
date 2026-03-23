@@ -12,6 +12,9 @@ import { ChatService } from "./chat/chat.service";
 import { ChatController } from "./chat/chat.controller";
 import { CommonModule } from "@libs/modules/common/common.module";
 import { SnakeNamingStrategy } from "typeorm-naming-strategies";
+import { Sentiment } from "./database/entities/sentiment.entity";
+import { SentimentController } from "./sentiment/sentiment.controller";
+import { SentimentService } from "./sentiment/sentiment.service";
 
 @Module({
     imports: [
@@ -27,13 +30,13 @@ import { SnakeNamingStrategy } from "typeorm-naming-strategies";
                 process.env.DATABASE_URL ??
                 "postgresql://postgres:postgres@localhost:5432/onedelivery",
             schema: "user",
-            entities: [User, ChatSession, ChatMessage],
+            entities: [User, ChatSession, ChatMessage, Sentiment],
             synchronize: process.env.NODE_ENV !== "production",
             namingStrategy: new SnakeNamingStrategy(),
         }),
-        TypeOrmModule.forFeature([ChatMessage, ChatSession]),
+        TypeOrmModule.forFeature([ChatMessage, ChatSession, Sentiment]),
     ],
-    controllers: [ChatController],
-    providers: [ClientAuthGuard, ChatService],
+    controllers: [ChatController, SentimentController],
+    providers: [ClientAuthGuard, ChatService, SentimentService],
 })
 export class AppModule {}
