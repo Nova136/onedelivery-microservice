@@ -4,4 +4,7 @@ format: table
 exit-code: 1
 severity: CRITICAL,HIGH
 ignore-unfixed: true
-scanners: vuln
+# Trivy 0.69+ expects scanners under `scan` (root `scanners` is ignored).
+scan:
+  scanners:
+    - vuln
