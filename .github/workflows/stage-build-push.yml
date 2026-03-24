@@ -19,6 +19,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -33,12 +36,39 @@ jobs:
         env:
           ECR_REGISTRY: ${{ steps.ecr.outputs.registry }}
         run: |
+          get_port() {
+            case "$1" in
+              audit) echo "9001" ;;
+              logistics) echo "9002" ;;
+              order) echo "9003" ;;
+              payment) echo "9004" ;;
+              user) echo "9005" ;;
+              incident) echo "9006" ;;
+              knowledge) echo "9007" ;;
+              orchestrator-agent) echo "9010" ;;
+              logistics-agent) echo "9011" ;;
+              resolution-agent) echo "9012" ;;
+              guardian-agent) echo "9013" ;;
+              qa-agent) echo "9014" ;;
+              *) echo "80" ;;
+            esac
+          }
+
           while IFS= read -r name || [[ -n "$name" ]]; do
             name=$(echo "$name" | tr -d '\r' | xargs)
             [[ -z "$name" ]] && continue
             repo="onedelivery-$name"
+            port="$(get_port "$name")"
             echo "Building and pushing $name..."
-            docker build -f .docker/Dockerfile.$name -t $ECR_REGISTRY/$repo:${{ env.IMAGE_TAG }} -t $ECR_REGISTRY/$repo:latest .
-            docker push $ECR_REGISTRY/$repo:${{ env.IMAGE_TAG }}
-            docker push $ECR_REGISTRY/$repo:latest
+            docker buildx build \
+              --platform linux/amd64 \
+              --file .docker/Dockerfile.template \
+              --build-arg SERVICE_NAME="$name" \
+              --build-arg EXPOSE_PORT="$port" \
+              --cache-from type=gha \
+              --cache-to type=gha,mode=max \
+              --tag $ECR_REGISTRY/$repo:${{ env.IMAGE_TAG }} \
+              --tag $ECR_REGISTRY/$repo:latest \
+              --push \
+              .
           done < .github/workflows/microservice.list
