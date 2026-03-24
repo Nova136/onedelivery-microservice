@@ -59,4 +59,22 @@ export class IncidentController {
     const incident = await this.incidentService.getIncidents();
     return { incidents: incident };
   }
+
+  @Get('/incidents/trends')
+  @ApiOperation({ summary: 'Get incident trends via REST' })
+  async trendAnalysis() {
+    const trendAnalysis = await this.incidentService.analyzeTrends();
+    return trendAnalysis;
+  }
+  
+  @MessagePattern({ cmd: 'incident.getByDateRange' })
+  @ApiOperation({ summary: 'Get incidents by date range via REST' })
+  async getIncidentsByDateRange(@Payload() data: { startDate: string; endDate: string }) {
+    const startDate = new Date(data.startDate);
+    const endDate = new Date(data.endDate);
+    const incidents = await this.incidentService.getIncidentByDateRange(startDate, endDate);
+    return { incidents };
+  }
+
+  
 }

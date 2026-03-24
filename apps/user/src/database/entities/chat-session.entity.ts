@@ -5,8 +5,11 @@ import {
     CreateDateColumn,
     UpdateDateColumn,
     OneToMany,
+    OneToOne,
+    JoinColumn,
 } from "typeorm";
 import { ChatMessage } from "./chat-message.entity";
+import { Sentiment } from "./sentiment.entity";
 export type ChatStatus = "OPEN" | "CLOSED";
 
 @Entity({ name: "chat_session", schema: "users" })
@@ -39,4 +42,9 @@ export class ChatSession {
     // Store the sequence number of the last message included in the summary
     @Column({ type: "int", default: 0 })
     lastSummarizedSequence: number;
+
+    // NEW: FK to Sentiment (optional)
+    @OneToOne(() => Sentiment, { nullable: true, eager: false })
+    @JoinColumn({ name: "sentiment_id" })
+    sentiment: Sentiment | null;
 }
