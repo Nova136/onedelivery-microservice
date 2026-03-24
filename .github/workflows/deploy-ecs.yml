@@ -76,10 +76,9 @@ jobs:
         run: npm run build --workspaces --if-present
 
       - name: Run LangSmith evaluations (single-turn + multi-turn)
-        if: ${{ secrets.EVAL_LANGSMITH_API_KEY != '' && secrets.EVAL_OPENAI_API_KEY != '' }}
         env:
-          EVAL_LANGSMITH_API_KEY: ${{ secrets.EVAL_LANGSMITH_API_KEY }}
-          EVAL_OPENAI_API_KEY: ${{ secrets.EVAL_OPENAI_API_KEY }}
+          LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           npm run test-orchestrator-agent
           npm run test-orchestrator-agent-multiturn
@@ -87,10 +86,16 @@ jobs:
           npm run test-resolution-agent
 
       - name: SonarCloud Scan
-        if: ${{ secrets.SONAR_TOKEN != '' }}
         uses: SonarSource/sonarqube-scan-action@v5
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: >
+            -Dsonar.projectKey=Nova136_onedelivery-microservice
+            -Dsonar.organization=Nova136
+            -Dsonar.projectName=onedelivery-microservice
+            -Dsonar.sources=apps,packages
+            -Dsonar.exclusions=**/*.spec.ts,**/*.test.ts,**/dist/**,**/node_modules/**
 
   build-and-push:
     name: Build and push to ECR
