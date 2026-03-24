@@ -24,20 +24,17 @@ export class AppController {
         return { reply };
     }
 
+    @MessagePattern({ cmd: "qa.analyzeTrends" })
+    async handleAnalyzeTrends() {
+        this.logger.log("[RMQ] Received qa.analyzeTrends request");
+        return this.appService.analyzeTrends();
+    }
+
     @Get("/analyze-trends")
-    @ApiOperation({ summary: "Analyze incidents trends" })
-    @ApiResponse({ status: 201, description: "The AI agent's response." })
-    async analyzeTrends(@Body() requestData: HandleIncomingMessageDto) {
-        // this.logger.log(
-        //     `Received request for admin ${requestData.userId}, session ${requestData.sessionId}, message: "${requestData.message}"`,
-        // );
-        // // Pass the data to our multi-agent orchestrator
-        // const aiResponse = await this.appService.processChat(
-        //     requestData.userId,
-        //     requestData.sessionId,
-        //     requestData.message,
-        // );
-        // // Send the final text back to the user
-        // return { reply: aiResponse };
+    @ApiOperation({ summary: "Analyze this month's incident trends via QA agent" })
+    @ApiResponse({ status: 200, description: "AI-generated trend analysis." })
+    async analyzeTrends() {
+        this.logger.log("[HTTP] GET /analyze-trends");
+        return this.appService.analyzeTrends();
     }
 }
