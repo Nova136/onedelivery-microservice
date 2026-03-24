@@ -1,0 +1,44 @@
+name: Stage - Build and Push
+
+on:
+  workflow_call:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION || 'ap-southeast-1' }}
+  IMAGE_TAG: ${{ github.sha }}
+
+jobs:
+  build-and-push:
+    name: Build and push to ECR
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push microservices
+        env:
+          ECR_REGISTRY: ${{ steps.ecr.outputs.registry }}
+        run: |
+          while IFS= read -r name || [[ -n "$name" ]]; do
+            name=$(echo "$name" | tr -d '\r' | xargs)
+            [[ -z "$name" ]] && continue
+            repo="onedelivery-$name"
+            echo "Building and pushing $name..."
+            docker build -f .docker/Dockerfile.$name -t $ECR_REGISTRY/$repo:${{ env.IMAGE_TAG }} -t $ECR_REGISTRY/$repo:latest .
+            docker push $ECR_REGISTRY/$repo:${{ env.IMAGE_TAG }}
+            docker push $ECR_REGISTRY/$repo:latest
+          done < .github/workflows/microservice.list
