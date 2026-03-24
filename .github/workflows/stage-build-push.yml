@@ -1,29 +1,15 @@
-# Build microservices into Docker images and push to ECR.
-# Task definition updates and ECS deploy are done separately via: node scripts/deploy-task-definitions.js
-#
-# Microservices are read from .github/workflows/microservice.list (one name per line).
-# ECR repository per service: onedelivery-<name>.
-#
-# --- GitHub configuration (Settings → Secrets and variables → Actions) ---
-#
-# REQUIRED (Secret): AWS_ROLE_ARN (IAM role for OIDC + ECR push)
-# OPTIONAL (Variables): AWS_REGION (ap-southeast-1), ECS_CLUSTER (onedelivery-cluster)
-#
-name: Build and Push to ECR
+name: Stage - Build and Push
 
 on:
-  push:
-    branches: [main]
-  workflow_dispatch:
-
-env:
-  AWS_REGION: ${{ vars.AWS_REGION || 'ap-southeast-1' }}
-  ECS_CLUSTER: ${{ vars.ECS_CLUSTER || 'onedelivery-cluster' }}
-  IMAGE_TAG: ${{ github.sha }}
+  workflow_call:
 
 permissions:
   id-token: write
   contents: read
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION || 'ap-southeast-1' }}
+  IMAGE_TAG: ${{ github.sha }}
 
 jobs:
   build-and-push:
