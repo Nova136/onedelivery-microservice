@@ -45,10 +45,3 @@ jobs:
         uses: SonarSource/sonarqube-scan-action@v6
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        with:
-          args: >
-            -Dsonar.projectKey=Nova136_onedelivery-microservice
-            -Dsonar.organization=Nova136
-            -Dsonar.projectName=onedelivery-microservice
-            -Dsonar.sources=apps,packages
-            -Dsonar.exclusions=**/*.spec.ts,**/*.test.ts,**/dist/**,**/node_modules/**
