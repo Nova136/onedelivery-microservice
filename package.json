@@ -6,6 +6,11 @@
     "engines": {
         "node": ">=24.0.0"
     },
+    "overrides": {
+        "immutable": "4.3.8",
+        "minimatch": "9.0.7",
+        "multer": "2.1.1"
+    },
     "workspaces": [
         "apps/*",
         "packages/*"
