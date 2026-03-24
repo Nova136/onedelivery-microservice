@@ -1,0 +1,15 @@
+FROM node:24-alpine
+
+WORKDIR /app
+
+# Copy repo (node_modules excluded by .dockerignore)
+COPY . .
+
+# Install runtime deps only.
+RUN npm ci --omit=dev
+
+ARG SERVICE_NAME
+ARG EXPOSE_PORT=80
+
+EXPOSE ${EXPOSE_PORT}
+CMD sh -c "node ./dist/apps/${SERVICE_NAME}/main.js"
