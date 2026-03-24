@@ -1,15 +1,24 @@
-# Build microservices into Docker images and push to ECR.
-# Task definition updates and ECS deploy are done separately via: node scripts/deploy-task-definitions.js
-#
+# Build microservices into Docker images, push to ECR, then deploy to ECS.
 # Microservices are read from .github/workflows/microservice.list (one name per line).
-# ECR repository per service: onedelivery-<name>.
 #
-# --- GitHub configuration (Settings → Secrets and variables → Actions) ---
+# REQUIRED SECRETS:
+# - AWS_ROLE_ARN
 #
-# REQUIRED (Secret): AWS_ROLE_ARN (IAM role for OIDC + ECR push)
-# OPTIONAL (Variables): AWS_REGION (ap-southeast-1), ECS_CLUSTER (onedelivery-cluster)
+# OPTIONAL VARIABLES:
+# - AWS_REGION (default: ap-southeast-1)
+# - ECS_CLUSTER (default: onedelivery-cluster)
+# - ECS_TASK_EXECUTION_ROLE_ARN
+# - ECS_TASK_ROLE_ARN
+# - ECS_TASK_CPU (default: 256)
+# - ECS_TASK_MEMORY (default: 512)
+# - ECS_NETWORK_MODE (default: awsvpc)
+# - ECS_REQUIRES_COMPATIBILITIES (default: FARGATE)
 #
-name: Build and Push to ECR
+# OPTIONAL APP ENV VARS/SECRETS for task definition values:
+# - NODE_ENV, DATABASE_URL, JWT_SECRET, RABBITMQ_URL, CORS_ORIGIN,
+#   DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD
+#
+name: Build, Evaluate, Push, Deploy ECS
 
 on:
   push:
@@ -26,8 +35,24 @@ permissions:
   contents: read
 
 jobs:
+  prepare-matrix:
+    name: Prepare microservice matrix
+    runs-on: ubuntu-latest
+    outputs:
+      microservices: ${{ steps.matrix.outputs.microservices }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate matrix from microservice.list
+        id: matrix
+        run: |
+          matrix_json=$(jq -R -s -c 'split("\n") | map(gsub("\r";"") | gsub("^\\s+|\\s+$";"")) | map(select(length > 0))' .github/workflows/microservice.list)
+          echo "microservices=$matrix_json" >> "$GITHUB_OUTPUT"
+
   run-tests:
     name: Run tests/checks
+    needs: prepare-matrix
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -54,14 +79,14 @@ jobs:
           EVAL_LANGSMITH_API_KEY: ${{ secrets.EVAL_LANGSMITH_API_KEY }}
           EVAL_OPENAI_API_KEY: ${{ secrets.EVAL_OPENAI_API_KEY }}
         run: |
-          # npm run test-orchestrator-agent
+          npm run test-orchestrator-agent
           npm run test-orchestrator-agent-multiturn
-          # npm run test-logistics-agent
-          # npm run test-resolution-agent
+          npm run test-logistics-agent
+          npm run test-resolution-agent
 
   build-and-push:
     name: Build and push to ECR
-    needs: run-tests
+    needs: [prepare-matrix, run-tests]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -80,21 +105,159 @@ jobs:
       - name: Build and push microservices
         env:
           ECR_REGISTRY: ${{ steps.ecr.outputs.registry }}
+          MICROSERVICES_JSON: ${{ needs.prepare-matrix.outputs.microservices }}
         run: |
-          while IFS= read -r name || [[ -n "$name" ]]; do
-            name=$(echo "$name" | tr -d '\r' | xargs)
-            [[ -z "$name" ]] && continue
+          for name in $(echo "$MICROSERVICES_JSON" | jq -r '.[]'); do
             repo="onedelivery-$name"
             echo "Building and pushing $name..."
             docker build -f .docker/Dockerfile.$name -t $ECR_REGISTRY/$repo:${{ env.IMAGE_TAG }} -t $ECR_REGISTRY/$repo:latest .
             docker push $ECR_REGISTRY/$repo:${{ env.IMAGE_TAG }}
             docker push $ECR_REGISTRY/$repo:latest
-          done < .github/workflows/microservice.list
+          done
+
+  deploy-ecs:
+    name: Deploy ECS task definitions
+    needs: [prepare-matrix, build-and-push]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        microservice: ${{ fromJson(needs.prepare-matrix.outputs.microservices) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Prepare task definition for microservice
+        env:
+          MICROSERVICE_NAME: ${{ matrix.microservice }}
+          AWS_REGION: ${{ env.AWS_REGION }}
+          ECS_TASK_EXECUTION_ROLE_ARN: ${{ vars.ECS_TASK_EXECUTION_ROLE_ARN }}
+          ECS_TASK_ROLE_ARN: ${{ vars.ECS_TASK_ROLE_ARN }}
+          ECS_TASK_CPU: ${{ vars.ECS_TASK_CPU || '256' }}
+          ECS_TASK_MEMORY: ${{ vars.ECS_TASK_MEMORY || '512' }}
+          ECS_NETWORK_MODE: ${{ vars.ECS_NETWORK_MODE || 'awsvpc' }}
+          ECS_REQUIRES_COMPATIBILITIES: ${{ vars.ECS_REQUIRES_COMPATIBILITIES || 'FARGATE' }}
+
+          NODE_ENV: ${{ vars.NODE_ENV || 'production' }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL || vars.DATABASE_URL || '' }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET || vars.JWT_SECRET || '' }}
+          RABBITMQ_URL: ${{ secrets.RABBITMQ_URL || vars.RABBITMQ_URL || '' }}
+          CORS_ORIGIN: ${{ vars.CORS_ORIGIN || '*' }}
+          DB_HOST: ${{ vars.DB_HOST || 'postgres' }}
+          DB_PORT: ${{ vars.DB_PORT || '5432' }}
+          DB_NAME: ${{ vars.DB_NAME || 'onedelivery' }}
+          DB_USER: ${{ secrets.DB_USER || vars.DB_USER || 'postgres' }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD || vars.DB_PASSWORD || 'postgres' }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${ECS_TASK_EXECUTION_ROLE_ARN:-}" || -z "${ECS_TASK_ROLE_ARN:-}" ]]; then
+            ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+            ECS_TASK_EXECUTION_ROLE_ARN="arn:aws:iam::${ACCOUNT_ID}:role/onedelivery-ecs-exec"
+            ECS_TASK_ROLE_ARN="arn:aws:iam::${ACCOUNT_ID}:role/onedelivery-ecs-task"
+          fi
+
+          mkdir -p .github/workflows/generated-task-definitions
+          OUT=".github/workflows/generated-task-definitions/${MICROSERVICE_NAME}.json"
+
+          jq -n \
+            --arg family "onedelivery-${MICROSERVICE_NAME}" \
+            --arg networkMode "${ECS_NETWORK_MODE}" \
+            --arg requiresCompat "${ECS_REQUIRES_COMPATIBILITIES}" \
+            --arg cpu "${ECS_TASK_CPU}" \
+            --arg memory "${ECS_TASK_MEMORY}" \
+            --arg execRole "${ECS_TASK_EXECUTION_ROLE_ARN}" \
+            --arg taskRole "${ECS_TASK_ROLE_ARN}" \
+            --arg cname "${MICROSERVICE_NAME}" \
+            --arg image "placeholder" \
+            --arg awsRegion "${AWS_REGION}" \
+            --arg nodeEnv "${NODE_ENV}" \
+            --arg databaseUrl "${DATABASE_URL}" \
+            --arg jwtSecret "${JWT_SECRET}" \
+            --arg rabbitmqUrl "${RABBITMQ_URL}" \
+            --arg corsOrigin "${CORS_ORIGIN}" \
+            --arg dbHost "${DB_HOST}" \
+            --arg dbPort "${DB_PORT}" \
+            --arg dbName "${DB_NAME}" \
+            --arg dbUser "${DB_USER}" \
+            --arg dbPassword "${DB_PASSWORD}" \
+            '{
+              family: $family,
+              networkMode: $networkMode,
+              requiresCompatibilities: [$requiresCompat],
+              cpu: $cpu,
+              memory: $memory,
+              executionRoleArn: $execRole,
+              taskRoleArn: $taskRole,
+              containerDefinitions: [
+                {
+                  name: $cname,
+                  image: $image,
+                  portMappings: [
+                    { containerPort: 80, hostPort: 80, protocol: "tcp" }
+                  ],
+                  environment: [
+                    { name: "NODE_ENV", value: $nodeEnv },
+                    { name: "DATABASE_URL", value: $databaseUrl },
+                    { name: "JWT_SECRET", value: $jwtSecret },
+                    { name: "RABBITMQ_URL", value: $rabbitmqUrl },
+                    { name: "CORS_ORIGIN", value: $corsOrigin },
+                    { name: "DB_HOST", value: $dbHost },
+                    { name: "DB_PORT", value: $dbPort },
+                    { name: "DB_NAME", value: $dbName },
+                    { name: "DB_USER", value: $dbUser },
+                    { name: "DB_PASSWORD", value: $dbPassword }
+                  ],
+                  logConfiguration: {
+                    logDriver: "awslogs",
+                    options: {
+                      "awslogs-group": ("/ecs/onedelivery-" + $cname),
+                      "awslogs-region": $awsRegion,
+                      "awslogs-stream-prefix": $cname
+                    }
+                  }
+                }
+              ]
+            }' > "$OUT"
+
+      - name: Set image URI
+        id: build-image
+        env:
+          MICROSERVICE_NAME: ${{ matrix.microservice }}
+          ECR_REGISTRY: ${{ steps.ecr.outputs.registry }}
+        run: |
+          echo "image=$ECR_REGISTRY/onedelivery-$MICROSERVICE_NAME:${{ env.IMAGE_TAG }}" >> "$GITHUB_OUTPUT"
+
+      - name: Fill in the new image ID in the Amazon ECS task definition
+        id: task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: .github/workflows/generated-task-definitions/${{ matrix.microservice }}.json
+          container-name: ${{ matrix.microservice }}
+          image: ${{ steps.build-image.outputs.image }}
+
+      - name: Deploy Amazon ECS task definition
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+        with:
+          task-definition: ${{ steps.task-def.outputs.task-definition }}
+          service: ${{ matrix.microservice }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: true
 
   notify-outcome:
     name: Notify outcome
     runs-on: ubuntu-latest
-    needs: [run-tests, build-and-push]
+    needs: [prepare-matrix, run-tests, build-and-push, deploy-ecs]
     if: always()
     steps:
       - name: Pipeline result notification
@@ -109,4 +272,9 @@ jobs:
             exit 1
           fi
 
-          echo "Build, tests/checks, and push completed successfully."
+          if [[ "${{ needs.deploy-ecs.result }}" != "success" ]]; then
+            echo "ECS deploy failed."
+            exit 1
+          fi
+
+          echo "Build, tests/checks, push, and ECS deploy completed successfully."
