@@ -1,7 +1,9 @@
-import { Injectable, Logger } from "@nestjs/common";
+import { Inject, Injectable, Logger } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Between, Repository } from "typeorm";
+import { ClientProxy } from "@nestjs/microservices";
 import { Incident } from "./database/entities/incidents.entity";
+import { CommonService } from "@libs/modules/common/common.service";
 
 @Injectable()
 export class IncidentService {
@@ -10,6 +12,9 @@ export class IncidentService {
   constructor(
     @InjectRepository(Incident)
     private readonly incidentRepo: Repository<Incident>,
+    private readonly commonService: CommonService,
+    @Inject("QA_AGENT_SERVICE")
+    private readonly qaAgentClient: ClientProxy,
   ) {}
 
   async logIncident(
@@ -51,16 +56,11 @@ export class IncidentService {
   }
 
   async analyzeTrends() {
-    const trendAnalysisData = {
-      summary: {
-        totalByThisMonth: 45,
-        mostCommon: "MISSING_ITEMS",
-        percentage: 60,
-        trend: "+15% vs previous month",
-        peakTime: "6-8 PM",
-        issues: ["Food items missing from orders", "Delivery delays"],
-      }
-    };
-    return trendAnalysisData;
+    this.logger.log("Delegating trend analysis to QA agent...");
+    return this.commonService.sendViaRMQ(
+      this.qaAgentClient,
+      { cmd: "qa.analyzeTrends" },
+      {},
+    );
   }
 }
