@@ -57,6 +57,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js 24
         uses: actions/setup-node@v4
@@ -83,6 +85,12 @@ jobs:
           npm run test-orchestrator-agent-multiturn
           npm run test-logistics-agent
           npm run test-resolution-agent
+
+      - name: SonarCloud Scan
+        if: ${{ secrets.SONAR_TOKEN != '' }}
+        uses: SonarSource/sonarqube-scan-action@v5
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
   build-and-push:
     name: Build and push to ECR
