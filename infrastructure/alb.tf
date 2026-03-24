@@ -154,6 +154,19 @@ resource "aws_lb_listener_rule" "incident" {
   }
 }
 
+resource "aws_lb_listener_rule" "knowledge" {
+  count        = var.enable_alb ? 1 : 0
+  listener_arn = aws_lb_listener.http[0].arn
+  priority     = 155
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.service["knowledge"].arn
+  }
+  condition {
+    path_pattern { values = ["/knowledge", "/knowledge/*"] }
+  }
+}
+
 resource "aws_lb_listener_rule" "orchestrator_agent" {
   count        = var.enable_alb ? 1 : 0
   listener_arn = aws_lb_listener.http[0].arn

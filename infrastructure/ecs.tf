@@ -9,8 +9,8 @@ resource "aws_iam_role" "ecs_task_execution" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Action = "sts:AssumeRole"
-      Effect = "Allow"
+      Action    = "sts:AssumeRole"
+      Effect    = "Allow"
       Principal = { Service = "ecs-tasks.amazonaws.com" }
     }]
   })
@@ -27,8 +27,8 @@ resource "aws_iam_role" "ecs_task" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Action = "sts:AssumeRole"
-      Effect = "Allow"
+      Action    = "sts:AssumeRole"
+      Effect    = "Allow"
       Principal = { Service = "ecs-tasks.amazonaws.com" }
     }]
   })
@@ -57,20 +57,21 @@ resource "aws_security_group" "ecs_tasks" {
 
 # Task definition and service per microservice
 locals {
-  services = toset(["order", "logistics", "payment", "audit", "user", "incident", "orchestrator-agent", "guardian-agent", "logistics-agent", "resolution-agent", "qa-agent"])
+  services = toset(["order", "logistics", "payment", "audit", "user", "incident", "knowledge", "orchestrator-agent", "guardian-agent", "logistics-agent", "resolution-agent", "qa-agent"])
   # Container port 80 so ALB path-based routing works when apps expose HTTP
   service_ports = {
-    order             = 80
-    logistics         = 80
-    payment           = 80
-    audit             = 80
-    user              = 80
-    incident          = 80
+    order              = 80
+    logistics          = 80
+    payment            = 80
+    audit              = 80
+    user               = 80
+    incident           = 80
+    knowledge          = 80
     orchestrator-agent = 80
     guardian-agent     = 80
-    logistics-agent     = 80
+    logistics-agent    = 80
     resolution-agent   = 80
-    qa-agent          = 80
+    qa-agent           = 80
   }
 }
 
