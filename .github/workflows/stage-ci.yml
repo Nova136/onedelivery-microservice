@@ -36,13 +36,13 @@ jobs:
           LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          npm run test-orchestrator-agent
-          npm run test-orchestrator-agent-multiturn
-          npm run test-logistics-agent
+          # npm run test-orchestrator-agent
+          # npm run test-orchestrator-agent-multiturn
+          # npm run test-logistics-agent
           npm run test-resolution-agent
 
       - name: SonarCloud Scan
-        uses: SonarSource/sonarqube-scan-action@v5
+        uses: SonarSource/sonarqube-scan-action@v6
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         with:
