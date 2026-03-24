@@ -62,11 +62,14 @@ jobs:
             echo "Building and pushing $name..."
             docker buildx build \
               --platform linux/amd64 \
+              --progress=plain \
               --file .docker/Dockerfile.template \
               --build-arg SERVICE_NAME="$name" \
               --build-arg EXPOSE_PORT="$port" \
               --cache-from type=gha \
-              --cache-to type=gha,mode=max \
+              --cache-to type=gha,mode=min \
+              --provenance=false \
+              --sbom=false \
               --tag $ECR_REGISTRY/$repo:${{ env.IMAGE_TAG }} \
               --tag $ECR_REGISTRY/$repo:latest \
               --push \
