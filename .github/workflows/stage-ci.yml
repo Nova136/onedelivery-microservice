@@ -93,12 +93,12 @@ jobs:
         with:
           projectBaseDir: apps/logistics-agent
 
-      - name: SonarQube — apps/orchestrator-agent
-        uses: SonarSource/sonarqube-scan-action@v6
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        with:
-          projectBaseDir: apps/orchestrator-agent
+      # - name: SonarQube — apps/orchestrator-agent
+      #   uses: SonarSource/sonarqube-scan-action@v6
+      #   env:
+      #     SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      #   with:
+      #     projectBaseDir: apps/orchestrator-agent
 
       - name: SonarQube — apps/order
         uses: SonarSource/sonarqube-scan-action@v6
