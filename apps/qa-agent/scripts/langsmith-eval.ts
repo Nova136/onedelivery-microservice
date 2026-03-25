@@ -14,7 +14,6 @@ import {
   BaseMessage,
 } from "@langchain/core/messages";
 
-
 let currentTestHistory: any[] = [
   {
     id: "7c962672-822c-4fe5-b240-0772a54593eb",
@@ -133,7 +132,8 @@ const testCases = [
     inputs: {
       userId: "83593ca4-b975-4fef-a521-4a2a8d72dd81",
       sessionId: "f9df1095-5165-40a7-a364-7e3e925e138d",
-      message: "Please review this chat session. Session ID: 83593ca4-b975-4fef-a521-4a2a8d72dd81. User ID: f9df1095-5165-40a7-a364-7e3e925e138d. Extract the order ID from the conversation if mentioned. Log any incidents using log_incident if applicable. Then call save_sentiment with the overall sentiment score for this session.",
+      message:
+        "Please review this chat session. Session ID: 83593ca4-b975-4fef-a521-4a2a8d72dd81. User ID: f9df1095-5165-40a7-a364-7e3e925e138d. Extract the order ID from the conversation if mentioned. Log any incidents using log_incident if applicable. Then call save_sentiment with the overall sentiment score for this session.",
       // This is the history that will be "moved" to the mock
       // i should change this to something else right ?
     },
@@ -150,7 +150,7 @@ const testCases = [
  * OVERRIDE TOOLS WITH REALISTIC MOCKS
  * This ensures your test logs look like your server logs.
  */
-qaService['tools'] = {
+qaService["tools"] = {
   log_incident: {
     invoke: async (args: any) => {
       console.log(`[Test-Tool] log_incident called with:`, args);
@@ -160,46 +160,73 @@ qaService['tools'] = {
           success: true,
           incidentId: "test-uuid-" + Math.random().toString(36).substr(2, 9),
           type: args.type || "LATE_DELIVERY",
-          orderId: args.orderId || "UNKNOWN"
-        }
+          orderId: args.orderId || "UNKNOWN",
+        },
       });
-    }
+    },
   } as any,
   save_sentiment: {
     invoke: async (args: any) => {
       console.log(`[Test-Tool] save_sentiment called with:`, args);
-      return JSON.stringify({ summary: "Sentiment saved successfully.", data: { success: true } });
-    }
-  } as any
+      return JSON.stringify({
+        summary: "Sentiment saved successfully.",
+        data: { success: true },
+      });
+    },
+  } as any,
 };
 
 /**
- * 3. THE TARGET FUNCTION (The Predictor)
+ * 3. THE TARGET FUNCTION (Updated to return tool metadata)
  */
 async function target(inputs: any) {
-  /**
-   * STEP 1: Move the history from the dataset to the mock bridge.
-   * This ensures the Service 'sees' the messages for this specific test case.
-   */
-//   this.currentTestHistory = this.currentTestHistory || [];
+  // Capture tool calls in a local array for this specific run
+  const toolCallsMade: any[] = [];
 
-  /**
-   * STEP 2: Execute the actual service method.
-   */
+  // Temporarily override tools to capture their arguments
+  const originalLog = qaService["tools"].log_incident;
+  const originalSave = qaService["tools"].save_sentiment;
+
+  qaService["tools"].log_incident = {
+    invoke: async (args: any) => {
+      toolCallsMade.push({ tool: "log_incident", args });
+      return originalLog.invoke(args);
+    },
+  } as any;
+
+  qaService["tools"].save_sentiment = {
+    invoke: async (args: any) => {
+      toolCallsMade.push({ tool: "save_sentiment", args });
+      return originalSave.invoke(args);
+    },
+  } as any;
+
   try {
     const result = await qaService.processChatMessageBySessionId(
       inputs.userId,
       inputs.sessionId,
     );
-    return { output: result };
+
+    // RETURN EVERYTHING to LangSmith so the Evaluator can see it
+    return {
+      output: result,
+      toolCalls: toolCallsMade,
+    };
   } catch (error) {
-    console.error(`Error processing session ${inputs.sessionId}:`, error);
-    return { output: `Error: ${error.message}` };
+    return { output: `Error: ${error.message}`, toolCalls: [] };
+  } finally {
+    // Restore original tools to prevent memory leaks/state pollution
+    qaService["tools"].log_incident = originalLog;
+    qaService["tools"].save_sentiment = originalSave;
   }
 }
 
+/**
+ * 3. THE EVALUATOR (LLM Judge)
+ */
 const qaEvaluator = async ({ run, example }: any) => {
   const agentOutput = run.outputs?.output || "";
+  const tools = run.outputs?.toolCalls || [];
   
   const llm = new ChatOpenAI({ modelName: "gpt-4o-mini", temperature: 0 });
   const structuredLlm = llm.withStructuredOutput(
@@ -210,18 +237,21 @@ const qaEvaluator = async ({ run, example }: any) => {
   );
 
   const prompt = `
-    Review the QA Agent's performance.
-    Agent Result String: "${agentOutput}"
-    Expected Action: Log an incident for order ${example.outputs.expected_order_id}
+    Check the QA Agent's performance for Order: ${example.outputs.expected_order_id}.
+    
+    Agent Summary: "${agentOutput}"
+    Tools Triggered by Agent: ${JSON.stringify(tools)}
 
-    Criteria:
-    1. Does the output indicate an incident was logged?
-    2. Does it confirm the review is complete?
-  `;
-
+    Evaluation Criteria:
+    1. Was 'log_incident' called?
+    2. If 'log_incident' was called, was the incident type provided as expected (expected incident type: LATE_DELIVERY)?
+    3. Was 'save_sentiment' called with a sentiment score between -1.0 and 1.0?
+    `;
   const result = await structuredLlm.invoke(prompt);
+
+  console.log('prompt :: ', prompt);
   return {
-    key: "incident_logged_correctly",
+    key: "qa_logic_accuracy",
     score: result.passed ? 1 : 0,
     comment: result.reasoning,
   };
