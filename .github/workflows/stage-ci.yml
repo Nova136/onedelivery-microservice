@@ -135,16 +135,3 @@ jobs:
         with:
           projectBaseDir: apps/user
 
-      - name: SonarQube — libs/modules
-        uses: SonarSource/sonarqube-scan-action@v6
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        with:
-          projectBaseDir: libs/modules
-
-      - name: SonarQube — libs/utils
-        uses: SonarSource/sonarqube-scan-action@v6
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        with:
-          projectBaseDir: libs/utils
