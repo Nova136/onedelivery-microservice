@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "es2017",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "strictNullChecks": false,
+    "noImplicitAny": false,
+    "baseUrl": "../../",
+    "paths": {
+      "@libs/*": ["libs/*"]
+    }
+  },
+  "include": ["src/**/*.ts", "typeorm-config.ts"],
+  "exclude": ["node_modules", "dist", "test", "scripts", "**/*.spec.ts"]
+}
