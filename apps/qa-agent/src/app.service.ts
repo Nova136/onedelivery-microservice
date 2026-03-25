@@ -294,6 +294,8 @@ export class AppService {
       return new HumanMessage(msg.content);
     });
 
+    this.logger.log(`chatHistory for session ${sessionId}: ${JSON.stringify(chatHistory)}`);
+
     // Format prompt for review, passing sessionId as context so LLM can call save_sentiment
     const formattedReview = await this.prompt.formatMessages({
       chat_history: chatHistory,
