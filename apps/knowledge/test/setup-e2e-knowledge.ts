@@ -1,16 +1,14 @@
-import {
-  inMemPostgres,
-  user_e2e_port,
-} from '@libs/utils/tests/e2e-setup';
+import { inMemPostgres, knowledge_e2e_port } from '@libs/utils/tests/e2e-setup';
 import { mockGuard } from '@libs/utils/tests/in-memory-datasource';
 import { Test, TestingModule } from '@nestjs/testing';
 import { DataSource } from 'typeorm';
-import { AppModule } from '../src/app.module';
-import { ClientAuthGuard } from '@libs/utils/guards/auth.guard';
 import { Transport } from '@nestjs/microservices';
+import { ClientAuthGuard } from '@libs/utils/guards/auth.guard';
+import { AppModule } from '../src/app.module';
 
-export const createUserApp = async () => {
+export const createKnowledgeApp = async () => {
   const dataSource = inMemPostgres.ds;
+
   const fixture: TestingModule = await Test.createTestingModule({
     imports: [AppModule],
   })
@@ -19,13 +17,16 @@ export const createUserApp = async () => {
     .overrideProvider(ClientAuthGuard)
     .useValue(mockGuard)
     .compile();
-  
+
   const app = fixture.createNestApplication();
   const microservice = fixture.createNestMicroservice({
-      transport: Transport.TCP,
-      options: { port: user_e2e_port },
+    transport: Transport.TCP,
+    options: { port: knowledge_e2e_port },
   });
+
   await microservice.listen();
   await app.init();
+
   return { app, dataSource, db: inMemPostgres.db, microservice };
 };
+

@@ -8,7 +8,6 @@ import { promisify } from 'util';
 
 import { decode } from 'jsonwebtoken';
 import { DataType, newDb } from 'pg-mem';
-import { owner, token } from './e2e-setup';
 
 const execPromise = promisify(exec);
 export const setupInMemoryDataSource = async (config: any, schemaNames?: string[]) => {
@@ -112,24 +111,28 @@ export const mockGuard: CanActivate = {
       if (request.url && exlcudeRequests.includes(request.url.split('?')[0])) {
         return true;
       }
-      request.userId = owner;
-      if (request.headers) {
-        if (request.headers.token) {
-          const token = request.headers.token;
-          const decodeToken = decode(token.toString());
-          request.userId = decodeToken['userId'];
-          return true;
-        } else {
-          request.headers.token = token;
-          request.headers.owner = owner;
-          request.headers.apiversion = 1.0;
-          request.headers['Content-Type'] = 'application/json';
-        }
+
+      // Tests should rely only on `Authorization: Bearer <jwt>` (see `libs/utils/guards/auth.guard.ts`).
+      const authHeader = request?.headers?.authorization;
+      if (!authHeader || typeof authHeader !== 'string') {
+        return false;
       }
+      if (!authHeader.startsWith('Bearer ')) {
+        return false;
+      }
+
+      const authToken = authHeader.slice(7);
+      const decoded = decode(authToken.toString()) as { sub?: string; userId?: string } | null;
+      if (!decoded) {
+        return false;
+      }
+
+      request.userId = decoded.sub ?? decoded.userId;
+      return true;
     } catch (e) {
       console.log(e);
+      return false;
     }
-    return true;
   },
 };
 
