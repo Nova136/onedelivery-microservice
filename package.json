@@ -9,7 +9,8 @@
     "overrides": {
         "immutable": "4.3.8",
         "minimatch": "9.0.7",
-        "multer": "2.1.1"
+        "multer": "2.1.1",
+        "underscore": ">=1.13.8"
     },
     "workspaces": [
         "apps/*",
