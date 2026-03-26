@@ -39,99 +39,68 @@ jobs:
       - name: Build validation (if present)
         run: npm run build --workspaces --if-present
 
-      - name: Run LangSmith evaluations (single-turn + multi-turn)
+  langsmith-eval:
+    name: LangSmith — ${{ matrix.evaluation }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        evaluation:
+          # - test-orchestrator-agent
+          # - test-orchestrator-agent-multiturn
+          - test-logistics-agent
+          - test-resolution-agent
+          - test-qa-agent
+          - test-qa-trends
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run evaluation
         env:
           LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: |
-          # npm run test-orchestrator-agent
-          # npm run test-orchestrator-agent-multiturn
-          # npm run test-logistics-agent
-          # npm run test-resolution-agent
+        run: npm run ${{ matrix.evaluation }}
 
-      # One analysis per module; each uses its own sonar-project.properties via projectBaseDir.
-      # https://github.com/SonarSource/sonarqube-scan-action#projectbasedir
-      - name: SonarQube — apps/audit
+  # One analysis per module; each uses its own sonar-project.properties via projectBaseDir.
+  # https://github.com/SonarSource/sonarqube-scan-action#projectbasedir
+  sonar-scan:
+    name: SonarQube — ${{ matrix.app }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        app:
+          - apps/audit
+          - apps/guardian-agent
+          - apps/incident
+          - apps/knowledge
+          - apps/logistics
+          - apps/logistics-agent
+          # - apps/orchestrator-agent
+          - apps/order
+          - apps/payment
+          - apps/qa-agent
+          - apps/resolution-agent
+          - apps/user
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: SonarQube scan
         uses: SonarSource/sonarqube-scan-action@v6
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         with:
-          projectBaseDir: apps/audit
-
-      - name: SonarQube — apps/guardian-agent
-        uses: SonarSource/sonarqube-scan-action@v6
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        with:
-          projectBaseDir: apps/guardian-agent
-
-      - name: SonarQube — apps/incident
-        uses: SonarSource/sonarqube-scan-action@v6
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        with:
-          projectBaseDir: apps/incident
-
-      - name: SonarQube — apps/knowledge
-        uses: SonarSource/sonarqube-scan-action@v6
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        with:
-          projectBaseDir: apps/knowledge
-
-      - name: SonarQube — apps/logistics
-        uses: SonarSource/sonarqube-scan-action@v6
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        with:
-          projectBaseDir: apps/logistics
-
-      - name: SonarQube — apps/logistics-agent
-        uses: SonarSource/sonarqube-scan-action@v6
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        with:
-          projectBaseDir: apps/logistics-agent
-
-      # - name: SonarQube — apps/orchestrator-agent
-      #   uses: SonarSource/sonarqube-scan-action@v6
-      #   env:
-      #     SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-      #   with:
-      #     projectBaseDir: apps/orchestrator-agent
-
-      - name: SonarQube — apps/order
-        uses: SonarSource/sonarqube-scan-action@v6
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        with:
-          projectBaseDir: apps/order
-
-      - name: SonarQube — apps/payment
-        uses: SonarSource/sonarqube-scan-action@v6
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        with:
-          projectBaseDir: apps/payment
-
-      - name: SonarQube — apps/qa-agent
-        uses: SonarSource/sonarqube-scan-action@v6
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        with:
-          projectBaseDir: apps/qa-agent
-
-      - name: SonarQube — apps/resolution-agent
-        uses: SonarSource/sonarqube-scan-action@v6
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        with:
-          projectBaseDir: apps/resolution-agent
-
-      - name: SonarQube — apps/user
-        uses: SonarSource/sonarqube-scan-action@v6
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        with:
-          projectBaseDir: apps/user
-
+          projectBaseDir: ${{ matrix.app }}
