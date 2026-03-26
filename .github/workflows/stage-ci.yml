@@ -41,13 +41,13 @@ jobs:
 
   langsmith-eval:
     name: LangSmith — ${{ matrix.evaluation }}
-    if: ${{ secrets.ENABLE_LANGSMITH_EVALUATOR == 'true' }}
+    if: ${{ vars.ENABLE_LANGSMITH_EVALUATOR == 'true' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         evaluation:
-          # - test-orchestrator-agent
+          - test-orchestrator-agent
           # - test-orchestrator-agent-multiturn
           - test-logistics-agent
           - test-resolution-agent
