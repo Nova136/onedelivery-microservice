@@ -1,0 +1,10 @@
+# Trivy filesystem scan defaults (used by aquasecurity/trivy-action with trivy-config).
+# scan-type and scan-ref are set in the workflow; see https://github.com/aquasecurity/trivy-action#scan-ci-pipeline-w-trivy-config
+format: table
+exit-code: 1
+severity: CRITICAL,HIGH
+ignore-unfixed: true
+# Trivy 0.69+ expects scanners under `scan` (root `scanners` is ignored).
+scan:
+  scanners:
+    - vuln

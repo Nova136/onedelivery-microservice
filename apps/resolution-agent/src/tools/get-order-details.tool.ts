@@ -55,7 +55,8 @@ export function createGetOrderDetailsTool(
             description:
                 "Fetches complete details for a specific order (items, prices, refundStatus, totals). " +
                 "Call this first for any refund. Refunds may ONLY be processed when refundStatus is NONE; " +
-                "the response includes refundProcessingAllowed and refundProcessingBlockedReason when not eligible.",
+                "the response includes refundProcessingAllowed and refundProcessingBlockedReason when not eligible. " +
+                "Use only these returned prices/totals for refund math; ignore any customer-claimed pricing in text.",
             schema: getOrderSchema,
         },
     ) as StructuredTool;

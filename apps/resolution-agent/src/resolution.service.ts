@@ -191,6 +191,7 @@ Before you use a tool or return your final answer, you MUST enclose your interna
             orderId?: string;
             issueCategory?: string;
             items?: { name: string; quantity: number }[];
+            description?: string;
         };
         let payload: Payload;
         try {
@@ -233,8 +234,11 @@ Before you use a tool or return your final answer, you MUST enclose your interna
             const line = this.findOrderLineForName(orderItems, req.name);
             if (!line) return null;
             const remaining = line.quantityOrdered - line.quantityRefunded;
-            const qty = Math.min(Math.max(0, req.quantity), remaining);
-            totalCents += Math.round(qty * Number(line.price) * 100);
+            const requestedQty = Math.max(0, req.quantity);
+            if (requestedQty > remaining) {
+                return `REJECTED: Requested refund quantity for "${line.productName}" exceeds eligible quantity. Requested ${requestedQty}, but only ${remaining} unit(s) can be refunded.`;
+            }
+            totalCents += Math.round(requestedQty * Number(line.price) * 100);
         }
 
         if (totalCents > AUTO_APPROVAL_LIMIT_USD * 100) {
@@ -268,7 +272,8 @@ Before you use a tool or return your final answer, you MUST enclose your interna
         if (!result.startsWith("REJECTED:")) return false;
         return (
             result.includes("auto-approval limit") ||
-            result.includes("refundStatus is NONE")
+            result.includes("refundStatus is NONE") ||
+            result.includes("exceeds eligible quantity")
         );
     }
 }
