@@ -1,19 +1,19 @@
-aws_region   = "ap-southeast-1"
-environment  = "dev"
+aws_region  = "ap-southeast-1"
+environment = "dev"
 
 # RDS credentials (choose your own strong password)
-db_username  = "postgres"
-db_password  = "64M4YXh08pe7"
+db_username = "postgres"
+db_password = "64M4YXh08pe7"
 
 # Optional overrides
-aws_account_id                  = "542829982577"
-postgres_instance_class         = "db.t3.micro"
-postgres_engine_version         = "17.6"
-postgres_allocated_storage      = 20
-postgres_max_allocated_storage  = 20
+aws_account_id                   = "542829982577"
+postgres_instance_class          = "db.t3.micro"
+postgres_engine_version          = "17.6"
+postgres_allocated_storage       = 20
+postgres_max_allocated_storage   = 20
 postgres_backup_retention_period = 7
-ecs_desired_count               = 0
-enable_alb                      = false
+ecs_desired_count                = 0
+enable_alb                       = false
 
 # Existing VPC where Terraform will CREATE public/private subnets
 vpc_id   = "vpc-01f4d46470a373bd0"

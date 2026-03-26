@@ -38,17 +38,18 @@ variable "ecr_repository_names" {
   description = "ECR repository names for each microservice"
   type        = map(string)
   default = {
-    order             = "onedelivery-order"
-    logistics         = "onedelivery-logistics"
-    payment           = "onedelivery-payment"
-    audit             = "onedelivery-audit"
-    user              = "onedelivery-user"
-    incident          = "onedelivery-incident"
+    order              = "onedelivery-order"
+    logistics          = "onedelivery-logistics"
+    payment            = "onedelivery-payment"
+    audit              = "onedelivery-audit"
+    user               = "onedelivery-user"
+    incident           = "onedelivery-incident"
+    knowledge          = "onedelivery-knowledge"
     orchestrator-agent = "onedelivery-orchestrator-agent"
     guardian-agent     = "onedelivery-guardian-agent"
-    logistics-agent     = "onedelivery-logistics-agent"
+    logistics-agent    = "onedelivery-logistics-agent"
     resolution-agent   = "onedelivery-resolution-agent"
-    qa-agent          = "onedelivery-qa-agent"
+    qa-agent           = "onedelivery-qa-agent"
   }
 }
 

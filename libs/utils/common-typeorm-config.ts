@@ -33,31 +33,7 @@ export const db_config: TypeOrmModuleOptions & PostgresConnectionOptions = {
   autoLoadEntities: true, //This will help auto populate entities from path like **/*.entity{.ts,.js}
   migrationsRun: false,
   maxQueryExecutionTime: 10000, //10second,
-  cache: {
-    type: 'ioredis/cluster',
-    duration: 1000, // 1 seconds
-    options: {
-      startupNodes: process.env.REDIS_CLUSTER_NODES.split(',').map((x) => ({
-        host: x.split(':')[0],
-        port: parseInt(x.split(':')[1]),
-      })),
-      options: {
-        slotsRefreshTimeout: 60000,
-        slotsRefreshInterval: 60000,
-        enableOfflineQueue: false,
-        enableReadyCheck: false,
-        dnsLookup: (address, callback) => callback(null, address),
-        redisOptions: {
-          maxRetriesPerRequest: null,
-          tls: {
-            rejectUnauthorized: false,
-          },
-          password: process.env.REDIS_PASSWORD,
-        },
-      },
-      ignoreErrors: true,
-    },
-  },
+  
 };
 
 export const connectionSource = new DataSource(db_config);

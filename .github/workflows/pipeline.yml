@@ -1,0 +1,68 @@
+name: Pipeline
+
+# CI (lint, tests, Trivy): pull requests and every branch push.
+# Build + deploy to stage: only when code lands on main (push after merge).
+on:
+  pull_request:
+  push:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: read
+
+jobs:
+  ci:
+    name: CI Stage
+    uses: ./.github/workflows/stage-ci.yml
+    secrets: inherit
+
+  build:
+    name: Build and Push Stage
+    needs: ci
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    uses: ./.github/workflows/stage-build-push.yml
+    secrets: inherit
+
+  deploy:
+    name: Deploy Stage
+    needs: build
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    uses: ./.github/workflows/stage-deploy-ecs.yml
+    secrets: inherit
+
+  notify:
+    name: Notify outcome
+    runs-on: ubuntu-latest
+    needs: [ci, build, deploy]
+    if: always()
+    steps:
+      - name: Pipeline result notification
+        env:
+          CI_RESULT: ${{ needs.ci.result }}
+          BUILD_RESULT: ${{ needs.build.result }}
+          DEPLOY_RESULT: ${{ needs.deploy.result }}
+          IS_MAIN_RELEASE: ${{ github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
+        run: |
+          if [[ "$CI_RESULT" != "success" ]]; then
+            echo "CI checks failed."
+            exit 1
+          fi
+
+          if [[ "$IS_MAIN_RELEASE" != "true" ]]; then
+            echo "CI completed successfully (build/deploy only runs on push to main or workflow_dispatch on main)."
+            exit 0
+          fi
+
+          if [[ "$BUILD_RESULT" != "success" ]]; then
+            echo "Build/push failed."
+            exit 1
+          fi
+
+          if [[ "$DEPLOY_RESULT" != "success" ]]; then
+            echo "ECS deploy failed."
+            exit 1
+          fi
+
+          echo "All pipeline stages completed successfully."

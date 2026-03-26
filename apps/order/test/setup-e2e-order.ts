@@ -7,6 +7,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { DataSource } from 'typeorm';
 import { AppModule } from '../src/app.module';
 import { ClientAuthGuard } from '@libs/utils/guards/auth.guard';
+import { Transport } from '@nestjs/microservices';
 
 export const createOrderApp = async () => {
   const dataSource = inMemPostgres.ds;
@@ -18,9 +19,13 @@ export const createOrderApp = async () => {
     .overrideProvider(ClientAuthGuard)
     .useValue(mockGuard)
     .compile();
-
-  const app = fixture.createNestApplication();
-  await app.init();
-  await app.listen(order_e2e_port);
-  return { app, dataSource, db: inMemPostgres.db, microservice: null };
+    const app = fixture.createNestApplication();
+    const microservice = fixture.createNestMicroservice({
+        transport: Transport.TCP,
+        options: { port: order_e2e_port },
+    });
+    await microservice.listen();
+    await app.init();
+    return { app, dataSource, db: inMemPostgres.db, microservice };
+ 
 };

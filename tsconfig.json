@@ -26,6 +26,6 @@
         "libs/*"
       ]
     },
-    "esModuleInterop": true,
+    "esModuleInterop": true
   }
 }
