@@ -42,7 +42,9 @@
         "start-debug-docker-shx": "npm install && npm run nest-build-all-shx && docker-compose -f docker-compose.debug.yml up --build",
         "stop-debug-docker": "docker-compose -f docker-compose.debug.yml down",
         "test-orchestrator-agent": "npx ts-node -r tsconfig-paths/register --transpile-only apps/orchestrator-agent/scripts/langsmith-eval.ts",
-        "test-logistics-agent": "npx ts-node -r tsconfig-paths/register --transpile-only apps/logistics-agent/scripts/langsmith-eval.ts"
+        "test-logistics-agent": "npx ts-node -r tsconfig-paths/register --transpile-only apps/logistics-agent/scripts/langsmith-eval.ts",
+        "test-qa-agent": "npx ts-node -r tsconfig-paths/register --transpile-only apps/qa-agent/scripts/langsmith-eval.ts",
+        "test-qa-trends": "npx ts-node -r tsconfig-paths/register --transpile-only apps/qa-agent/scripts/langsmith-trends-eval.ts"
     },
     "dependencies": {
         "@langchain/openai": "^1.2.11",
