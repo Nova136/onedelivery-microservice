@@ -41,6 +41,7 @@ jobs:
 
   langsmith-eval:
     name: LangSmith — ${{ matrix.evaluation }}
+    if: ${{ secrets.ENABLE_LANGSMITH_EVALUATOR == 'true' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
