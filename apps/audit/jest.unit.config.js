@@ -19,4 +19,5 @@ module.exports = {
   testMatch: ['**/+(*.)+(spec).+(ts)'],
   moduleFileExtensions: ['js', 'json', 'ts'],
   coveragePathIgnorePatterns: ['index.ts', 'node_modules', 'jest.config.js', '.seed.ts', 'main.ts'],
+  coverageProvider: 'v8',
 };
