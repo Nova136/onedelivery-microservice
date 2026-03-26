@@ -98,9 +98,18 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: SonarQube scan
-        uses: SonarSource/sonarqube-scan-action@v6
+      - name: SonarQube scan (with retry)
+        uses: nick-fields/retry@v3
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         with:
-          projectBaseDir: ${{ matrix.app }}
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: |
+            docker run --rm \
+              -e SONAR_TOKEN \
+              -e SONAR_HOST_URL=https://sonarcloud.io \
+              -v "$GITHUB_WORKSPACE:/usr/src" \
+              sonarsource/sonar-scanner-cli \
+              -Dsonar.projectBaseDir=/usr/src/${{ matrix.app }}
