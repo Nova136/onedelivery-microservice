@@ -19,11 +19,211 @@ import { v4 as uuidv4 } from "uuid";
 import { ChatOpenAI } from "@langchain/openai";
 import { z } from "zod";
 
+// Import the real service classes
+import { OrchestratorAgentService } from "../src/orchestrator-agent.service";
+import { ModerationService } from "../src/modules/moderation/moderation.service";
+import { PrivacyService } from "../src/modules/privacy/privacy.service";
+import { SemanticRouterService } from "../src/modules/semantic-router/semantic-router.service";
+import { McpToolRegistryService } from "../src/modules/mcp/mcp-tool-registry.service";
+import { SpecializedAgentsService } from "../src/modules/specialized-agents/specialized-agents.service";
+
 // Explicitly pass the API key to bypass import hoisting issues!
 const client = new Client({
     apiKey: process.env.LANGSMITH_API_KEY || process.env.LANGCHAIN_API_KEY,
 });
 const DATASET_NAME = "OneDelivery-Orchestrator-Experiments";
+
+// ---------------------------------------------------------------------------
+// MOCK DEPENDENCIES
+// ---------------------------------------------------------------------------
+
+/** MemoryService mock: each test case starts with a clean empty session */
+const mockMemoryService = {
+    getChatHistory: async (userId: string, sessionId: string) => ({
+        id: sessionId,
+        userId,
+        status: "ACTIVE",
+        reviewed: false,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        messages: [],
+        summary: null,
+        lastSummarizedSequence: 0,
+    }),
+    saveHistory: async () => {},
+    summarizeConversation: async () => "",
+    updateSessionSummary: async () => {},
+    endChatSession: async () => {},
+    getHistoryListing: async () => [],
+};
+
+/** KnowledgeClientService mock: returns realistic SOP and FAQ data */
+const MOCK_SOPS: Record<string, any> = {
+    CANCEL_ORDER: {
+        intentCode: "CANCEL_ORDER",
+        agentOwner: "logistics",
+        title: "Cancelling an ongoing order.",
+        requiredData: [
+            "orderId",
+            "reason for cancellation (extract this from the user's message if provided naturally)",
+        ],
+        workflowSteps: [
+            "1. Ensure you have gathered all the required data from the user. If the user already provided a reason, proceed immediately.",
+            "2. Empathize with the user's need to cancel.",
+            "3. Execute the Route_To_Logistics tool, passing the gathered data.",
+            "4. Wait for the Route_To_Logistics tool to return a success or rejection string.",
+            "5. If successful, confirm to the user that the order has been cancelled and their refund is processing.",
+            "6. If rejected, politely explain why and ask if they'd like to be transferred to human support.",
+            "7. If the user agrees to be transferred, execute the Escalate_To_Human tool.",
+        ],
+        permittedTools: ["Route_To_Logistics", "Escalate_To_Human"],
+    },
+    REQUEST_REFUND: {
+        intentCode: "REQUEST_REFUND",
+        agentOwner: "resolution",
+        title: "Asking for money back for missing or wrong items or quality issue or late delivery.",
+        requiredData: [
+            "orderId",
+            "issueCategory (missing_item, quality_issue, wrong_item, late_delivery)",
+            "description",
+            "items (array of objects with item name and quantity — only if category is missing_item or wrong_item)",
+        ],
+        workflowSteps: [
+            "1. Ensure you have gathered all the required data from the user. Ask clarifying questions if anything is missing.",
+            "2. Empathize with the user and apologize for the mistake with their food.",
+            "3. Execute the Route_To_Resolution tool, passing the gathered data.",
+            "4. Wait for the Route_To_Resolution tool to return a success or rejection string.",
+            "5. If successful, confirm the specific refund amount with the user so they know what to expect.",
+            "6. If rejected, politely explain that the request requires a manual review and ask if they'd like to be transferred to human support.",
+            "7. If the user agrees to be transferred, execute the Escalate_To_Human tool.",
+        ],
+        permittedTools: ["Route_To_Resolution", "Escalate_To_Human"],
+    },
+};
+
+const MOCK_FAQS = [
+    {
+        title: "Can I change my delivery address after I place the order?",
+        content:
+            "To ensure your food arrives hot and our drivers aren't sent off-route, you cannot manually change your delivery address in the app once the order is confirmed. If you accidentally entered the wrong address, please reach out to support immediately.",
+    },
+    {
+        title: "What are your delivery hours?",
+        content:
+            "We operate from 8:00 AM to 11:00 PM daily. Orders placed after 10:30 PM may not be fulfilled.",
+    },
+    {
+        title: "How can I pay for my delivery?",
+        content:
+            "We accept major Credit/Debit Cards, our native in-app Wallet, PayPal, and Cash on Delivery for orders under $50.",
+    },
+];
+
+const mockKnowledgeClientService = {
+    listSops: async () =>
+        Object.values(MOCK_SOPS).map((s) => ({
+            intentCode: s.intentCode,
+            title: s.title,
+        })),
+    searchInternalSop: async (payload: { intentCode: string }) =>
+        MOCK_SOPS[payload.intentCode] ?? null,
+    searchFaq: async (_payload: { query: string }) => MOCK_FAQS,
+};
+
+/**
+ * AgentsClientService mock: parses the message payload and returns realistic
+ * responses based on orderId and issueCategory, matching the test case data.
+ */
+const mockAgentsClientService = {
+    send: async (agent: string, payload: any): Promise<string> => {
+        // Fire-and-forget agents — return silently
+        if (agent === "qa" || agent === "guardian") {
+            return "OK";
+        }
+
+        let data: any = {};
+        try {
+            data = JSON.parse(payload.message);
+        } catch {
+            return "System Error: Could not parse payload.";
+        }
+
+        // --- Logistics Agent ---
+        if (agent === "logistic" && data.action === "cancel_order") {
+            switch (data.orderId) {
+                case "FD-0000-000002":
+                    return "SUCCESS: Order FD-0000-000002 has been successfully cancelled and a refund has been initiated.";
+                case "FD-0000-000001":
+                    return "REJECTED: Order FD-0000-000001 cannot be cancelled as it has already been delivered.";
+                case "FD-0000-000004":
+                    return "SUCCESS: Order FD-0000-000004 has been cancelled due to exceeding the 3-hour late delivery threshold.";
+                case "FD-0000-000008":
+                    return "REJECTED: Order FD-0000-000008 is currently out for delivery and cannot be cancelled at this stage.";
+                case "FD-0000-000005":
+                    return "REJECTED: Order FD-0000-000005 has already been cancelled.";
+                default:
+                    return `REJECTED: Order ${data.orderId ?? "unknown"} cannot be cancelled.`;
+            }
+        }
+
+        // --- Resolution Agent ---
+        if (agent === "resolution" && data.action === "request_refund") {
+            switch (data.orderId) {
+                case "FD-0000-000007":
+                    return "REJECTED: Order FD-0000-000007 has already been fully refunded. No further refunds are permitted.";
+                case "FD-0000-000006":
+                    return "REJECTED: A partial refund has already been applied to Order FD-0000-000006. No further refunds are permitted.";
+                case "FD-0000-000009":
+                    return "REJECTED: The refund amount exceeds the $20 auto-approval limit. This request requires manual review by our support team.";
+                case "FD-0000-000001":
+                    if (data.issueCategory === "missing_item") {
+                        return "SUCCESS: Refund of $6.5 processed for order FD-0000-000001.";
+                    }
+                    if (data.issueCategory === "quality_issue") {
+                        return "SUCCESS: Refund of $1.10 (20% of $5.50) processed for order FD-0000-000001.";
+                    }
+                    if (data.issueCategory === "late_delivery") {
+                        return "SUCCESS: Flat-fee refund of $5.00 processed for order FD-0000-000001 due to confirmed late delivery.";
+                    }
+                    return "REJECTED: Unable to process refund for the specified issue category.";
+                default:
+                    return `REJECTED: Refund for order ${data.orderId ?? "unknown"} could not be processed.`;
+            }
+        }
+
+        return "REJECTED: Unknown action.";
+    },
+};
+
+// ---------------------------------------------------------------------------
+// SERVICE WIRING
+// ---------------------------------------------------------------------------
+
+const moderationService = new ModerationService();
+const privacyService = new PrivacyService();
+const semanticRouterService = new SemanticRouterService();
+
+const mcpToolRegistry = new McpToolRegistryService(
+    mockAgentsClientService as any,
+    mockKnowledgeClientService as any,
+    mockMemoryService as any,
+);
+// OnModuleInit is called automatically by NestJS DI — call it manually here
+mcpToolRegistry.onModuleInit();
+
+const specializedAgentsService = new SpecializedAgentsService(
+    mcpToolRegistry,
+    mockKnowledgeClientService as any,
+);
+
+const orchestratorService = new OrchestratorAgentService(
+    mockMemoryService as any,
+    moderationService,
+    privacyService,
+    mcpToolRegistry,
+    semanticRouterService,
+    specializedAgentsService,
+);
 
 /**
  * Experiment Scenarios based on OneDelivery SOPs and Guardrails
@@ -317,31 +517,24 @@ Does the AI Response adequately address the User Question and contain the Expect
 };
 
 /**
- * Mock target function that simulates calling your Orchestrator endpoint.
- * Replace this with an actual HTTP call to your running NestJS API if desired.
+ * Target function: calls the real OrchestratorAgentService in-process.
+ * No HTTP server required.
  */
 async function predictOrchestrator(inputs: {
     question: string;
 }): Promise<{ output: string }> {
-    // Example: HTTP POST to http://localhost:3000/orchestrator-agent
-    // For now, this returns a dummy response to satisfy the script structure.
-    // You should integrate this with your `processChat` service or API endpoint.
-    const response = await fetch("http://localhost:3010/orchestrator-agent", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-            userId: "83593ca4-b975-4fef-a521-4a2a8d72dd81",
-            sessionId: uuidv4(),
-            message: inputs.question,
-        }),
-    });
-
-    if (!response.ok) {
-        return { output: "Error calling agent" };
+    try {
+        const reply = await orchestratorService.processChat(
+            "83593ca4-b975-4fef-a521-4a2a8d72dd81",
+            uuidv4(), // fresh session per test case to avoid state bleed
+            inputs.question,
+        );
+        return { output: reply };
+    } catch (error) {
+        return {
+            output: `Error: ${error instanceof Error ? error.message : String(error)}`,
+        };
     }
-
-    const data = await response.json();
-    return { output: data.reply };
 }
 
 async function main() {
