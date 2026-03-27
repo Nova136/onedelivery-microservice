@@ -33,6 +33,7 @@ resource "aws_iam_role" "ecs_task" {
     }]
   })
 }
+# execute-api:ManageConnections is granted in lambda.tf when enable_websocket = true
 
 resource "aws_security_group" "ecs_tasks" {
   name_prefix = "${local.name}-ecs-"
@@ -98,20 +99,25 @@ resource "aws_ecs_task_definition" "service" {
       hostPort      = local.service_ports[each.key]
       protocol      = "tcp"
     }]
-    environment = [
-      { name = "NODE_ENV", value = "production" },
-      { name = "DATABASE_URL", value = "postgresql://${var.db_username}:${var.db_password}@${aws_db_instance.postgres.address}:${aws_db_instance.postgres.port}/${var.db_name}" },
-      { name = "JWT_SECRET", value = "ffa32c3d40342bec6c1bcfba7b4f8197" },
-      { name = "RABBITMQ_URL", value = "amqps://grdulrnl:FLkurItpuAPeOM-VfalX5iGxQkRxuYVi@armadillo.rmq.cloudamqp.com:5671/grdulrnl" },
-      { name = "CORS_ORIGIN", value = "*" },
-      { name = "DB_HOST", value = "postgres" },
-      { name = "DB_PORT", value = "5432" },
-      { name = "DB_NAME", value = "onedelivery" },
-      { name = "DB_USER", value = "postgres" },
-      { name = "DB_PASSWORD", value = "postgres" },
-
-
-    ]
+    environment = concat(
+      [
+        { name = "NODE_ENV",      value = "production" },
+        { name = "DATABASE_URL",  value = "postgresql://${var.db_username}:${var.db_password}@${aws_db_instance.postgres.address}:${aws_db_instance.postgres.port}/${var.db_name}" },
+        { name = "JWT_SECRET",    value = "ffa32c3d40342bec6c1bcfba7b4f8197" },
+        { name = "RABBITMQ_URL",  value = "amqps://grdulrnl:FLkurItpuAPeOM-VfalX5iGxQkRxuYVi@armadillo.rmq.cloudamqp.com:5671/grdulrnl" },
+        { name = "CORS_ORIGIN",   value = "*" },
+        { name = "DB_HOST",       value = "postgres" },
+        { name = "DB_PORT",       value = "5432" },
+        { name = "DB_NAME",       value = "onedelivery" },
+        { name = "DB_USER",       value = "postgres" },
+        { name = "DB_PASSWORD",   value = "postgres" },
+      ],
+      # WebSocket Management API endpoint – injected only into orchestrator-agent
+      each.key == "orchestrator-agent" && var.enable_websocket ? [
+        { name = "WEBSOCKET_API_ENDPOINT", value = "https://${aws_apigatewayv2_api.websocket[0].id}.execute-api.${var.aws_region}.amazonaws.com/prod" },
+        { name = "AWS_REGION",             value = var.aws_region },
+      ] : []
+    )
     logConfiguration = {
       logDriver = "awslogs"
       options = {

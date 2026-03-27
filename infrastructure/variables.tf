@@ -107,6 +107,18 @@ variable "enable_alb" {
   default     = false
 }
 
+variable "enable_websocket" {
+  description = "Create WebSocket API Gateway + Lambda Authorizer + DynamoDB tables for async chat (requires enable_alb = true for the HTTP side)"
+  type        = bool
+  default     = false
+}
+
+variable "ws_rate_limit_per_minute" {
+  description = "Maximum WebSocket messages a single user may send per minute (enforced by Lambda Authorizer via DynamoDB)"
+  type        = number
+  default     = 20
+}
+
 variable "vpc_cidr" {
   description = "CIDR block for the VPC. When reusing an existing VPC, this must match its actual CIDR (for example 172.16.94.0/24)."
   type        = string

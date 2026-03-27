@@ -59,6 +59,16 @@ output "api_gateway_id" {
   value       = var.enable_alb ? aws_apigatewayv2_api.main[0].id : null
 }
 
+output "websocket_url" {
+  description = "WebSocket API Gateway URL (wss://); null if enable_websocket = false. Connect with ?token=<JWT>"
+  value       = var.enable_websocket ? "${aws_apigatewayv2_api.websocket[0].api_endpoint}/prod" : null
+}
+
+output "websocket_management_endpoint" {
+  description = "WebSocket Management API endpoint used by orchestrator-agent to push replies; null if enable_websocket = false"
+  value       = var.enable_websocket ? "https://${aws_apigatewayv2_api.websocket[0].id}.execute-api.${var.aws_region}.amazonaws.com/prod" : null
+}
+
 output "routing_note" {
   description = "How traffic is routed (when enable_alb = true)"
   value       = var.enable_alb ? "API Gateway -> ALB:80 -> path-based to ECS (/order, /logistics, /payment, /audit, /user, /incident, /knowledge, /orchestrator-agent, /guardian-agent, /logistics-agent, /resolution-agent, /qa-agent). Set DATABASE_URL and ensure apps expose HTTP on port 80 and GET /health for ALB." : "ALB and API Gateway disabled (enable_alb = false). No external HTTP entry to ECS."
