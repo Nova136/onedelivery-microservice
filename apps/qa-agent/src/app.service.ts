@@ -64,12 +64,21 @@ export class AppService {
 
     const systemPrompt = `You are the QA Agent for OneDelivery. You serve three roles:
 
-        ## ROLE 1: INCIDENT LOGGING 
+        ## ROLE 1: INCIDENT LOGGING (IF APPLICABLE)
         When you receive a message starting with "Please review this chat session.", you are analyzing the chat history between ochestrator agent and human for potential incidents.
-        - Check if the chat indicates an incident(s) or not (e.g. late delivery, missing items, wrong order, damaged packaging, payment failure, etc.)
+        - Check if the chat indicates an incident(s) that considered a SERVICE FAILURE. A SERVICE FAILURE.
+        - A SERVICE FAILURE includes: Late delivery, missing items, wrong order, damaged packaging, or technical payment/app errors.
+        - DO NOT call log_incident tool for "General Inquiries," "FAQ Questions," or "Policy Explanations."
+        - Asking FAQ questions or providing general information is NOT considered an incident. Only log when there is a clear customer issue indicated in the chat history.
+        - Asking unrelated questions that are not about the order or delivery (e.g. "What are your working hours?") is NOT considered an incident.
+        - SERVICE FAILURE (LOG THESE): The company made a mistake (late, wrong food, broken item, app crashed).
+        - POLICY/FAQ (DO NOT LOG): The user asks how the app works or wants to do something the policy forbids (e.g., "Change address after order", "How do I refund?").
+        - If the user is just asking questions, even if they are unhappy with the answer, it is NOT an incident.
+        - For example, if a user asks a question about a policy (e.g., "Can I change my address?") and the answer is "No," this is a POLICY INQUIRY, NOT an incident. Do NOT log it.
         - Incident Types MUST be one of: [LATE_DELIVERY, MISSING_ITEMS, WRONG_ORDER, DAMAGED_PACKAGING, PAYMENT_FAILURE, OTHER]
         - If an incident is detected, you MUST use the log_incident tool to record the incident with the appropriate type and summary. The summary should be a concise description of the issue.
         - Always include the user ID and order ID (if mentioned) when logging an incident.
+        - If the chat history does not provide enough information to determine the incident type, but it clearly indicates a customer issue, you can use "OTHER" as the incident type and provide the details in the summary.
 
         ## ROLE 2: Sentiment Analysis
         After reviewing a session, you MUST ALWAYS call the save_sentiment tool to save the overall sentiment score for this session.
@@ -84,20 +93,24 @@ export class AppService {
           - totalByThisMonth (number)
           - mostCommon (the incident type with highest count)
           - percentage (percentage of this incident type among all incidents)
-          - trend ("up", "down", "stable", "NA" compared to last month. Give "NA" if last month's data is not available for comparison)
+          - trend ("up", "down", "stable", "NA" compared to last month. Give "NA" if last month's data is not available for comparison. In the current implementation, you only receive this month's data, so trend must be "NA".)
           - peakTime (the time range that occurred most frequently, e.g. "18:00-20:00")
           - issues (based on the summaries of the incidents, give up to 3 item of array of the most common issues or patterns you find, e.g. ["late deliveries due to traffic", "payment failures on mobile app", "missing items from a specific restaurant"])
         - avoid making up patterns that are not supported by the data, if the data does not show any clear pattern, just say "No clear patterns identified from the data."
         - Issues should be based on the summaries of the incidents, look for common keywords or themes in the summaries to identify issues. Do not make up issues that are not supported by the data.
         - if the data is insufficient to give "issues" insights in the JSON, just give empty array for issues.
         - if the data is insufficient to determine trend compared to last month, set trend to "NA".
+        - because this flow only fetches the current month's incidents, do not infer month-over-month direction from intra-month timestamps. Set trend to "NA".
         - if you cannot determine peakTime from the data, set peakTime to "NA".
         - Must ALWAYS return the analysis in a JSON format as described above, do not return in any other format.
         - Return only the JSON, do not include any additional text or explanation outside of the JSON. The JSON should be the direct response to the user's request for trend analysis.
 
         ## RULES
+        - Be highly skeptical. Only log an incident if the user is complaining about a mistake made by OneDelivery.
+        - Policy clarifications and "How-to" questions are never incidents.
         - Be concise and use the shared chat history for context.
-        - When reviewing a session, focus on identifying any customer issues and accurately assessing the sentiment. Do not make assumptions or guess about details not present in the chat history. If information is missing, it's better to log an incident with the available details than to guess.
+        - When reviewing a session, focus on identifying any customer issues and accurately assessing the sentiment. 
+        - DO NOT make assumptions or guess about details not present in the chat history. If the conversation only contains FAQ questions, general inquiries, or informational exchanges with no clear customer complaint or issue, do NOT log an incident.
         `;
 
     //     const systemPrompt = `You are the QA Agent for OneDelivery Application. A food delivery platform support assistant. You handle incidents logging and sentiment tracking.
@@ -294,12 +307,20 @@ export class AppService {
       return new HumanMessage(msg.content);
     });
 
-    this.logger.log(`chatHistory for session ${sessionId}: ${JSON.stringify(chatHistory)}`);
+    this.logger.log(
+      `chatHistory for session ${sessionId}: ${JSON.stringify(chatHistory)}`,
+    );
 
     // Format prompt for review, passing sessionId as context so LLM can call save_sentiment
     const formattedReview = await this.prompt.formatMessages({
       chat_history: chatHistory,
-      input: `Please review this chat session. Session ID: ${sessionId}. User ID: ${userId}. Extract the order ID from the conversation if mentioned. Log any incidents using log_incident if applicable. Then call save_sentiment with the overall sentiment score for this session.`,
+      input: `Please review this chat session. (ID: ${sessionId}, User: ${userId}). 
+        
+        CRITICAL CHECK: Is the user reporting a mistake we made, or just asking a question?
+        - If they are asking a question (FAQ/Policy): CALL save_sentiment ONLY.
+        - If they are reporting a failure (Late/Wrong/Broken): CALL log_incident AND save_sentiment.
+        
+        Do not log incidents for address change requests or general inquiries.`,
     });
 
     // Invoke LLM
@@ -353,9 +374,13 @@ export class AppService {
 
     this.logger.log(`Marked session ${sessionId} as reviewed.`);
 
-    return incidentLogged
-      ? "Incident logged for the session."
-      : "No incident detected.";
+    return JSON.stringify({
+      status: incidentLogged ? "INCIDENT_LOGGED" : "NO_INCIDENT",
+      sentiment_captured: true,
+      message: incidentLogged
+        ? "Logged service failure."
+        : "Session reviewed, no failure found.",
+    });
   }
 
   /**
@@ -373,7 +398,7 @@ export class AppService {
 
     this.logger.log(`Analyzing trends from ${startDate} to ${endDate}`);
 
-    const userPrompt = `Please analyze trends in the month's incident data from ${startDate} to ${endDate}.`;
+    const userPrompt = `Please analyze trends in the month's incident data from ${startDate} to ${endDate}. Only current-month incident data is available in this flow, so if previous-month comparison data is unavailable, trend must be NA.`;
 
     const formatted = await this.prompt.formatMessages({
       chat_history: [],
@@ -424,7 +449,7 @@ export class AppService {
       );
       if (jsonMatch) {
         try {
-          return JSON.parse(jsonMatch[1] ?? jsonMatch[2]);
+          return this.normalizeTrendAnalysis(JSON.parse(jsonMatch[1] ?? jsonMatch[2]));
         } catch (_) {}
       }
       return { analysis: content };
@@ -435,5 +460,16 @@ export class AppService {
         ? firstResponse.content
         : JSON.stringify(firstResponse.content);
     return { analysis: content };
+  }
+
+  private normalizeTrendAnalysis(result: any): any {
+    if (!result || typeof result !== "object" || Array.isArray(result)) {
+      return result;
+    }
+
+    return {
+      ...result,
+      trend: "NA",
+    };
   }
 }
