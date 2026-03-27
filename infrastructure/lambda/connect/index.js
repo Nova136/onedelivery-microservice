@@ -1,38 +1,36 @@
 /**
  * WebSocket $connect handler
  *
- * Stores the connection ID → {userId, sessionId} mapping in DynamoDB
- * so the orchestrator-agent can push replies back to the right client.
- *
- * userId comes from the Lambda Authorizer context (set on $connect).
- * sessionId may be provided as a query param; a new one is generated if absent.
+ * Stores connectionId → {userId, sessionId} in ws.connections (PostgreSQL).
+ * userId comes from the Lambda Authorizer context.
  */
 
 'use strict';
 
-const { DynamoDBClient, PutItemCommand } = require('@aws-sdk/client-dynamodb');
+const crypto = require('crypto');
+const { Client } = require('pg');
 
-const dynamo = new DynamoDBClient({ region: process.env.AWS_REGION });
-const CONNECTIONS_TABLE = process.env.CONNECTIONS_TABLE;
-const TTL_SECONDS = 86400; // 24 hours
+const DATABASE_URL  = process.env.DATABASE_URL;
 
 exports.handler = async (event) => {
   const connectionId = event.requestContext.connectionId;
-  const userId = event.requestContext.authorizer?.userId;
-  const sessionId =
-    event.queryStringParameters?.sessionId ?? `ws-${Date.now()}-${connectionId.slice(-6)}`;
-  const ttl = Math.floor(Date.now() / 1000) + TTL_SECONDS;
+  const userId       = event.requestContext.authorizer?.userId;
+  const sessionId    =
+    event.queryStringParameters?.sessionId ?? crypto.randomUUID();
 
-  await dynamo.send(new PutItemCommand({
-    TableName: CONNECTIONS_TABLE,
-    Item: {
-      connectionId: { S: connectionId },
-      userId:       { S: userId },
-      sessionId:    { S: sessionId },
-      connectedAt:  { N: String(Math.floor(Date.now() / 1000)) },
-      ttl:          { N: String(ttl) },
-    },
-  }));
+  const client = new Client({ connectionString: DATABASE_URL, ssl: { rejectUnauthorized: false } });
+  await client.connect();
+  try {
+    await client.query(
+      `INSERT INTO ws.connections (connection_id, user_id, session_id, expires_at)
+       VALUES ($1, $2, $3, NOW() + INTERVAL '24 hours')
+       ON CONFLICT (connection_id) DO UPDATE
+         SET user_id = $2, session_id = $3, expires_at = NOW() + INTERVAL '24 hours'`,
+      [connectionId, userId, sessionId],
+    );
+  } finally {
+    await client.end();
+  }
 
   console.log(`Connected: connectionId=${connectionId} userId=${userId} sessionId=${sessionId}`);
   return { statusCode: 200 };

@@ -1,24 +1,28 @@
 /**
  * WebSocket $disconnect handler
  *
- * Removes the connection record from DynamoDB on client disconnect.
- * DynamoDB TTL handles any records that were not cleaned up (e.g. forced disconnect).
+ * Removes the connection record from ws.connections (PostgreSQL).
  */
 
 'use strict';
 
-const { DynamoDBClient, DeleteItemCommand } = require('@aws-sdk/client-dynamodb');
+const { Client } = require('pg');
 
-const dynamo = new DynamoDBClient({ region: process.env.AWS_REGION });
-const CONNECTIONS_TABLE = process.env.CONNECTIONS_TABLE;
+const DATABASE_URL = process.env.DATABASE_URL;
 
 exports.handler = async (event) => {
   const connectionId = event.requestContext.connectionId;
 
-  await dynamo.send(new DeleteItemCommand({
-    TableName: CONNECTIONS_TABLE,
-    Key: { connectionId: { S: connectionId } },
-  }));
+  const client = new Client({ connectionString: DATABASE_URL, ssl: { rejectUnauthorized: false } });
+  await client.connect();
+  try {
+    await client.query(
+      'DELETE FROM ws.connections WHERE connection_id = $1',
+      [connectionId],
+    );
+  } finally {
+    await client.end();
+  }
 
   console.log(`Disconnected: connectionId=${connectionId}`);
   return { statusCode: 200 };

@@ -16,35 +16,18 @@ resource "aws_iam_role" "lambda_ws" {
   })
 }
 
+# Basic execution (CloudWatch Logs)
 resource "aws_iam_role_policy_attachment" "lambda_ws_logs" {
   count      = var.enable_websocket ? 1 : 0
   role       = aws_iam_role.lambda_ws[0].name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
-resource "aws_iam_role_policy" "lambda_ws_dynamodb" {
-  count = var.enable_websocket ? 1 : 0
-  name  = "${local.name}-lambda-ws-dynamodb"
-  role  = aws_iam_role.lambda_ws[0].id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "dynamodb:PutItem",
-          "dynamodb:GetItem",
-          "dynamodb:DeleteItem",
-          "dynamodb:UpdateItem",
-        ]
-        Resource = [
-          aws_dynamodb_table.ws_connections[0].arn,
-          aws_dynamodb_table.ws_rate_limit[0].arn,
-        ]
-      }
-    ]
-  })
+# VPC access — required to reach RDS in the private subnets
+resource "aws_iam_role_policy_attachment" "lambda_ws_vpc" {
+  count      = var.enable_websocket ? 1 : 0
+  role       = aws_iam_role.lambda_ws[0].name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
 }
 
 # Allow the ECS task role to push messages back to WebSocket clients
@@ -64,71 +47,60 @@ resource "aws_iam_role_policy" "ecs_task_ws_callback" {
 }
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Lambda zip packages
+# Lambda zip packages (npm install runs before zipping)
 # ──────────────────────────────────────────────────────────────────────────────
 
-# authorizer, connect, disconnect – single-file (no external deps; AWS SDK v3 is built-in)
-data "archive_file" "authorizer" {
-  count       = var.enable_websocket ? 1 : 0
-  type        = "zip"
-  source_file = "${path.module}/lambda/authorizer/index.js"
-  output_path = "${path.module}/lambda/authorizer.zip"
+locals {
+  lambda_dirs = ["authorizer", "connect", "disconnect", "send-message"]
 }
 
-data "archive_file" "connect" {
-  count       = var.enable_websocket ? 1 : 0
-  type        = "zip"
-  source_file = "${path.module}/lambda/connect/index.js"
-  output_path = "${path.module}/lambda/connect.zip"
-}
-
-data "archive_file" "disconnect" {
-  count       = var.enable_websocket ? 1 : 0
-  type        = "zip"
-  source_file = "${path.module}/lambda/disconnect/index.js"
-  output_path = "${path.module}/lambda/disconnect.zip"
-}
-
-# send-message – requires amqplib; npm install runs before the zip is created
-resource "null_resource" "send_message_install" {
-  count = var.enable_websocket ? 1 : 0
+resource "null_resource" "lambda_install" {
+  for_each = var.enable_websocket ? toset(local.lambda_dirs) : toset([])
 
   triggers = {
-    package_json = filemd5("${path.module}/lambda/send-message/package.json")
-    index_js     = filemd5("${path.module}/lambda/send-message/index.js")
+    package_json = filemd5("${path.module}/lambda/${each.key}/package.json")
+    index_js     = filemd5("${path.module}/lambda/${each.key}/index.js")
   }
 
   provisioner "local-exec" {
     command     = "npm install --production --no-fund --no-audit"
-    working_dir = "${path.module}/lambda/send-message"
+    working_dir = "${path.module}/lambda/${each.key}"
   }
 }
 
-data "archive_file" "send_message" {
-  count       = var.enable_websocket ? 1 : 0
+data "archive_file" "lambda" {
+  for_each    = var.enable_websocket ? toset(local.lambda_dirs) : toset([])
   type        = "zip"
-  source_dir  = "${path.module}/lambda/send-message"
-  output_path = "${path.module}/lambda/send-message.zip"
-  depends_on  = [null_resource.send_message_install]
+  source_dir  = "${path.module}/lambda/${each.key}"
+  output_path = "${path.module}/lambda/${each.key}.zip"
+  depends_on  = [null_resource.lambda_install]
 }
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Lambda functions
+# Shared Lambda environment (PostgreSQL + RabbitMQ)
 # ──────────────────────────────────────────────────────────────────────────────
 
 locals {
   lambda_runtime = "nodejs20.x"
   lambda_env = var.enable_websocket ? {
-    CONNECTIONS_TABLE      = aws_dynamodb_table.ws_connections[0].name
-    RATE_LIMIT_TABLE       = aws_dynamodb_table.ws_rate_limit[0].name
+    DATABASE_URL           = "postgresql://${var.db_username}:${var.db_password}@${aws_db_instance.postgres.address}:${aws_db_instance.postgres.port}/${var.db_name}"
     RATE_LIMIT_PER_MINUTE  = tostring(var.ws_rate_limit_per_minute)
     JWT_SECRET             = "ffa32c3d40342bec6c1bcfba7b4f8197"
-    ALLOWED_ROLES          = "customer,admin"
+    ALLOWED_ROLES          = "User,Admin"
     RABBITMQ_URL           = "amqps://grdulrnl:FLkurItpuAPeOM-VfalX5iGxQkRxuYVi@armadillo.rmq.cloudamqp.com:5671/grdulrnl"
     ORCHESTRATOR_QUEUE     = "orchestrator_agent_queue"
-    AWS_REGION_NAME        = var.aws_region
   } : {}
+
+  # Lambdas run in the same VPC subnets as ECS so they can reach RDS (private subnets)
+  lambda_vpc_config = var.enable_websocket ? {
+    subnet_ids         = [aws_subnet.public_a.id, aws_subnet.public_b.id, aws_subnet.public_c.id]
+    security_group_ids = [aws_security_group.ecs_tasks.id]
+  } : null
 }
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Lambda functions
+# ──────────────────────────────────────────────────────────────────────────────
 
 resource "aws_lambda_function" "ws_authorizer" {
   count         = var.enable_websocket ? 1 : 0
@@ -138,12 +110,15 @@ resource "aws_lambda_function" "ws_authorizer" {
   handler       = "index.handler"
   timeout       = 10
 
-  filename         = data.archive_file.authorizer[0].output_path
-  source_code_hash = data.archive_file.authorizer[0].output_base64sha256
+  filename         = data.archive_file.lambda["authorizer"].output_path
+  source_code_hash = data.archive_file.lambda["authorizer"].output_base64sha256
 
-  environment {
-    variables = local.lambda_env
+  vpc_config {
+    subnet_ids         = local.lambda_vpc_config.subnet_ids
+    security_group_ids = local.lambda_vpc_config.security_group_ids
   }
+
+  environment { variables = local.lambda_env }
 }
 
 resource "aws_lambda_function" "ws_connect" {
@@ -154,12 +129,15 @@ resource "aws_lambda_function" "ws_connect" {
   handler       = "index.handler"
   timeout       = 10
 
-  filename         = data.archive_file.connect[0].output_path
-  source_code_hash = data.archive_file.connect[0].output_base64sha256
+  filename         = data.archive_file.lambda["connect"].output_path
+  source_code_hash = data.archive_file.lambda["connect"].output_base64sha256
 
-  environment {
-    variables = local.lambda_env
+  vpc_config {
+    subnet_ids         = local.lambda_vpc_config.subnet_ids
+    security_group_ids = local.lambda_vpc_config.security_group_ids
   }
+
+  environment { variables = local.lambda_env }
 }
 
 resource "aws_lambda_function" "ws_disconnect" {
@@ -170,12 +148,15 @@ resource "aws_lambda_function" "ws_disconnect" {
   handler       = "index.handler"
   timeout       = 10
 
-  filename         = data.archive_file.disconnect[0].output_path
-  source_code_hash = data.archive_file.disconnect[0].output_base64sha256
+  filename         = data.archive_file.lambda["disconnect"].output_path
+  source_code_hash = data.archive_file.lambda["disconnect"].output_base64sha256
 
-  environment {
-    variables = local.lambda_env
+  vpc_config {
+    subnet_ids         = local.lambda_vpc_config.subnet_ids
+    security_group_ids = local.lambda_vpc_config.security_group_ids
   }
+
+  environment { variables = local.lambda_env }
 }
 
 resource "aws_lambda_function" "ws_send_message" {
@@ -186,12 +167,15 @@ resource "aws_lambda_function" "ws_send_message" {
   handler       = "index.handler"
   timeout       = 15
 
-  filename         = data.archive_file.send_message[0].output_path
-  source_code_hash = data.archive_file.send_message[0].output_base64sha256
+  filename         = data.archive_file.lambda["send-message"].output_path
+  source_code_hash = data.archive_file.lambda["send-message"].output_base64sha256
 
-  environment {
-    variables = local.lambda_env
+  vpc_config {
+    subnet_ids         = local.lambda_vpc_config.subnet_ids
+    security_group_ids = local.lambda_vpc_config.security_group_ids
   }
+
+  environment { variables = local.lambda_env }
 }
 
 # ──────────────────────────────────────────────────────────────────────────────
