@@ -28,7 +28,6 @@
         "run-user": "nest start user --watch --debug 0.0.0.0:3005",
         "run-incident": "nest start incident --watch --debug 0.0.0.0:3006",
         "run-knowledge": "nest start knowledge --watch --debug 0.0.0.0:3007",
-        "run-orchestrator-agent": "nest start orchestrator-agent --watch --debug 0.0.0.0:3010",
         "run-logistics-agent": "nest start logistics-agent --watch --debug 0.0.0.0:3011",
         "run-resolution-agent": "nest start resolution-agent --watch --debug 0.0.0.0:3012",
         "run-guardian-agent": "nest start guardian-agent --watch --debug 0.0.0.0:3013",
@@ -96,6 +95,7 @@
         "pg-mem": "^3.0.5",
         "pgvector": "^0.2.1",
         "reflect-metadata": "^0.1.13",
+        "tsx": "^4.21.0",
         "zod": "^3.0.0"
     },
     "devDependencies": {

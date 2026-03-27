@@ -1,11 +1,9 @@
-import { Module, Global } from "@nestjs/common";
-import { ConfigModule } from "@nestjs/config";
-import { PrivacyService } from "./privacy.service";
+import { Module } from '@nestjs/common';
+import { PrivacyService, TokenService } from './privacy.service';
+import { RedisService } from 'nestjs-redis';
 
-@Global()
 @Module({
-    imports: [ConfigModule],
-    providers: [PrivacyService],
-    exports: [PrivacyService],
+  providers: [PrivacyService, TokenService, RedisService],
+  exports: [PrivacyService],
 })
 export class PrivacyModule {}

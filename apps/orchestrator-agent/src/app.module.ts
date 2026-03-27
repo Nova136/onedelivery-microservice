@@ -4,6 +4,7 @@ import { HttpModule } from "@nestjs/axios";
 import { OrchestratorAgentController } from "./orchestrator-agent.controller";
 import { OrchestratorAgentService } from "./orchestrator-agent.service";
 import { MemoryModule } from "./modules/memory/memory.module";
+import { RedisModule as NestJsRedisModule } from 'nestjs-redis';
 
 import { ModerationModule } from "./modules/moderation/moderation.module";
 import { PrivacyModule } from "./modules/privacy/privacy.module";
@@ -13,6 +14,9 @@ import { SpecializedAgentsModule } from "./modules/specialized-agents/specialize
 
 @Module({
     imports: [
+        NestJsRedisModule.forRoot({
+            url: process.env.REDIS_URL || 'redis://localhost:6379',
+        }),
         MemoryModule,
         ModerationModule,
         PrivacyModule,

@@ -1,29 +1,103 @@
 // src/modules/privacy/privacy.service.ts
 import { Injectable, Logger } from "@nestjs/common";
 import nlp from "compromise";
+import { RedisService } from 'nestjs-redis';
+import { randomUUID } from 'crypto';
+
+@Injectable()
+export class TokenService {
+  private readonly logger = new Logger(TokenService.name);
+  private localCache = new Map<string, string>();
+  private redisClient;
+
+  constructor(private readonly redisService: RedisService) {
+    try {
+      this.redisClient = this.redisService.getClient();
+    } catch (error) {
+      this.logger.error('Failed to connect to Redis, using in-memory cache as fallback', error);
+      this.redisClient = null;
+    }
+  }
+
+  async saveToken(token: string): Promise<string> {
+    const tokenId = randomUUID();
+    if (this.redisClient) {
+      try {
+        await this.redisClient.set(tokenId, token, 'EX', 3600); // 1 hour TTL
+        return tokenId;
+      } catch (error) {
+        this.logger.error('Failed to save token to Redis, falling back to in-memory cache', error);
+      }
+    }
+    
+    this.localCache.set(tokenId, token);
+    setTimeout(() => this.localCache.delete(tokenId), 3600 * 1000);
+    return tokenId;
+  }
+
+  async getToken(tokenId: string): Promise<string | null> {
+    if (this.redisClient) {
+      try {
+        const token = await this.redisClient.get(tokenId);
+        if (token) {
+          return token;
+        }
+      } catch (error) {
+        this.logger.error('Failed to retrieve token from Redis, falling back to in-memory cache', error);
+      }
+    }
+
+    return this.localCache.get(tokenId) || null;
+  }
+}
 
 @Injectable()
 export class PrivacyService {
     private readonly logger = new Logger(PrivacyService.name);
 
+    constructor(private readonly tokenService: TokenService) {}
+
     /**
      * Redacts both structured PII (Regex) and unstructured entities (NLP).
+     * Returns a redacted version of the text and a token to retrieve the original PII.
      */
-    redactPii(text: string): string {
-        if (!text) return text;
+    async redactPii(text: string): Promise<{ redactedText: string; token: string }> {
+        if (!text) return { redactedText: text, token: '' };
 
-        let redactedText = text;
+        const piiMap: { [key: string]: string } = {};
 
         // 1. First Pass: Fast Regex for strictly formatted data
-        redactedText = this.redactStructuredData(redactedText);
+        let redactedText = this.redactStructuredData(text, piiMap);
 
         // 2. Second Pass: NLP for unstructured entities (Names, Places, Orgs)
-        redactedText = this.redactUnstructuredEntities(redactedText);
+        redactedText = this.redactUnstructuredEntities(redactedText, piiMap);
 
-        return redactedText;
+        const token = await this.tokenService.saveToken(JSON.stringify(piiMap));
+
+        return { redactedText, token };
     }
 
-    private redactStructuredData(text: string): string {
+    /**
+     * Deanonymizes a text by replacing the tokens with the original PII.
+     */
+    async deanonymizePii(text: string, token: string): Promise<string> {
+        if (!text || !token) return text;
+
+        const piiMapString = await this.tokenService.getToken(token);
+        if (!piiMapString) return text;
+
+        const piiMap: { [key: string]: string } = JSON.parse(piiMapString);
+        let deanonymizedText = text;
+
+        for (const placeholder in piiMap) {
+            const originalText = piiMap[placeholder];
+            deanonymizedText = deanonymizedText.replace(placeholder, originalText);
+        }
+
+        return deanonymizedText;
+    }
+
+    private redactStructuredData(text: string, piiMap: { [key: string]: string }): string {
         let scrubbed = text;
 
         // Standard Regex patterns
@@ -32,14 +106,26 @@ export class PrivacyService {
             /\b(?:\+?(\d{1,3}))?[-. (]*(\d{3})[-. )]*(\d{3})[-. ]*(\d{4})(?: *x(\d+))?\b/g;
         const creditCardRegex = /\b(?:\d[ -]*?){13,16}\b/g;
 
-        scrubbed = scrubbed.replace(emailRegex, "[EMAIL_REDACTED]");
-        scrubbed = scrubbed.replace(phoneRegex, "[PHONE_REDACTED]");
-        scrubbed = scrubbed.replace(creditCardRegex, "[CARD_REDACTED]");
+        scrubbed = scrubbed.replace(emailRegex, (match) => {
+            const placeholder = `[EMAIL_REDACTED_${Object.keys(piiMap).length}]`;
+            piiMap[placeholder] = match;
+            return placeholder;
+        });
+        scrubbed = scrubbed.replace(phoneRegex, (match) => {
+            const placeholder = `[PHONE_REDACTED_${Object.keys(piiMap).length}]`;
+            piiMap[placeholder] = match;
+            return placeholder;
+        });
+        scrubbed = scrubbed.replace(creditCardRegex, (match) => {
+            const placeholder = `[CARD_REDACTED_${Object.keys(piiMap).length}]`;
+            piiMap[placeholder] = match;
+            return placeholder;
+        });
 
         return scrubbed;
     }
 
-    private redactUnstructuredEntities(text: string): string {
+    private redactUnstructuredEntities(text: string, piiMap: { [key: string]: string }): string {
         // Parse the text using the NLP engine
         const doc = nlp(text);
 
@@ -62,13 +148,17 @@ export class PrivacyService {
                         `\\b${this.escapeRegExp(entity)}\\b`,
                         "gi",
                     );
-                    scrubbed = scrubbed.replace(regex, tag);
+                    scrubbed = scrubbed.replace(regex, (match) => {
+                        const placeholder = `[${tag}_REDACTED_${Object.keys(piiMap).length}]`;
+                        piiMap[placeholder] = match;
+                        return placeholder;
+                    });
                 });
         };
 
-        replaceEntities(people, "[NAME_REDACTED]");
-        replaceEntities(places, "[LOCATION_REDACTED]");
-        replaceEntities(organizations, "[ORG_REDACTED]");
+        replaceEntities(people, "NAME");
+        replaceEntities(places, "LOCATION");
+        replaceEntities(organizations, "ORG");
 
         return scrubbed;
     }
