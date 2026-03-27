@@ -5,6 +5,7 @@
     "typeorm-migration-run:incident": "npm run typeorm-migration -- -d apps/incident/typeorm-config.ts migration:run",
     "typeorm-migration-revert:incident": "npm run typeorm-migration -- -d apps/incident/typeorm-config.ts migration:revert",
     "test:unit": "jest --testMatch \"**/+(*.)+(spec).+(ts)\" ",
+    "test:coverage": "jest --config jest.unit.config.js --coverage",
     "test:e2e:watch": "jest --watchAll",
     "test:e2e": "jest --testMatch \"**/+(*.)+(e2e-spec).+(ts)\"",
     "test:e2e:coverage": "jest --coverage",

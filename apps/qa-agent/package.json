@@ -8,7 +8,8 @@
     "test:e2e:watch": "jest --watchAll",
     "test:e2e": "jest --testMatch \"**/+(*.)+(e2e-spec).+(ts)\"",
     "test:e2e:coverage": "jest --coverage",
-    "seed:run": "ts-node -r tsconfig-paths/register seed"
+    "seed:run": "ts-node -r tsconfig-paths/register seed",
+    "test:coverage": "jest --config jest.unit.config.js --coverage"
   },
   "dependencies": {
     "@nestjs/schedule": "^6.1.1"
