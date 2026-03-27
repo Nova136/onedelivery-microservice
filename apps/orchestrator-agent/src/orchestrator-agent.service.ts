@@ -483,17 +483,17 @@ export class OrchestratorAgentService {
         activeOrderId: string = "None",
     ): Promise<string> {
         // 1. PII Redaction
-        const scrubbedMessage = this.privacyService.redactPii(message);
+        const { redactedText, token } = await this.privacyService.redactPii(message);
 
         // 2. Validate Input (Guardrails)
-        const isSafe = await this.validateInput(userId, scrubbedMessage);
+        const isSafe = await this.validateInput(userId, redactedText);
         if (!isSafe) {
             return "I am sorry, but I cannot process that request as it violates our usage guidelines. Please rephrase your query.";
         }
 
         // 3. Prepare Context and Save User Message
         const { contextWindow, humanMessageSequence } =
-            await this.prepareContext(userId, sessionId, scrubbedMessage);
+            await this.prepareContext(userId, sessionId, redactedText);
 
         let finalAiMessage: BaseMessage | undefined = undefined;
         let scratchpad: BaseMessage[] = [];
@@ -504,7 +504,7 @@ export class OrchestratorAgentService {
             const result = await this.executeReasoningLoop(
                 userId,
                 sessionId,
-                scrubbedMessage,
+                redactedText,
                 activeOrderId,
                 contextWindow,
             );
@@ -560,6 +560,7 @@ export class OrchestratorAgentService {
         // Check if the agent signalled that the SOP is complete
         const rawContent = finalAiMessage?.content
             ? String(finalAiMessage.content)
+            .
             : "";
         const isSopCompleted = rawContent.includes("<sop_complete/>");
 
@@ -588,6 +589,7 @@ export class OrchestratorAgentService {
             currentSequence,
             finalAiMessage,
             finalResponseString,
+            token,
         );
 
         return finalResponseString;
@@ -736,10 +738,11 @@ export class OrchestratorAgentService {
         currentSequence: number,
         finalAiMessage: BaseMessage | undefined,
         finalResponseString: string,
+        token: string,
     ): Promise<void> {
         if (finalAiMessage) {
             // Overwrite content with the cleaned string so the DB doesn't store the raw <thinking> tags
-            finalAiMessage.content = finalResponseString;
+            finalAiMessage.content = await this.privacyService.deanonymizePii(finalResponseString, token);
             const aiMessageSequence = currentSequence + 1;
 
             await this.memoryService.saveHistory(

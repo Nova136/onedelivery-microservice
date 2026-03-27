@@ -55,6 +55,15 @@ services:
     networks:
       - backend
 
+  redis:
+    image: redis:alpine
+    restart: unless-stopped
+    hostname: redis
+    ports:
+      - '6379:6379'
+    networks:
+      - backend
+
   rabbitmq:
     image: rabbitmq:3.13-management-alpine
     container_name: onedelivery-rabbitmq
