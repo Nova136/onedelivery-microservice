@@ -59,20 +59,42 @@ resource "aws_security_group" "ecs_tasks" {
 # Task definition and service per microservice
 locals {
   services = toset(["order", "logistics", "payment", "audit", "user", "incident", "knowledge", "orchestrator-agent", "guardian-agent", "logistics-agent", "resolution-agent", "qa-agent"])
-  # Container port 80 so ALB path-based routing works when apps expose HTTP
+
+  # resolution-agent is RabbitMQ-only (no HTTP server, no /health endpoint).
+  # Only HTTP services get ALB target groups and load_balancer blocks.
+  http_services = toset(["order", "logistics", "payment", "audit", "user", "incident", "knowledge", "orchestrator-agent", "guardian-agent", "logistics-agent", "qa-agent"])
+
+  # Actual container ports each service listens on (set via ENV var in the container).
   service_ports = {
-    order              = 80
-    logistics          = 80
-    payment            = 80
-    audit              = 80
-    user               = 80
-    incident           = 80
-    knowledge          = 80
-    orchestrator-agent = 80
-    guardian-agent     = 80
-    logistics-agent    = 80
-    resolution-agent   = 80
-    qa-agent           = 80
+    order              = 9003
+    logistics          = 9002
+    payment            = 9004
+    audit              = 9001
+    user               = 9005
+    incident           = 9006
+    knowledge          = 9007
+    orchestrator-agent = 9010
+    guardian-agent     = 9013
+    logistics-agent    = 9011
+    resolution-agent   = 9012 # RMQ-only, no HTTP — port listed for portMappings completeness
+    qa-agent           = 9014
+  }
+
+  # The NestJS env var each service reads to determine its HTTP listen port.
+  # Must match the env var name in each app's main.ts configService.get() call.
+  service_port_envvars = {
+    order              = "ORDER_PORT"
+    logistics          = "LOGISTICS_PORT"
+    payment            = "PAYMENT_PORT"
+    audit              = "AUDIT_PORT"
+    user               = "USER_PORT"
+    incident           = "INCIDENT_PORT"
+    knowledge          = "KNOWLEDGE_PORT"
+    orchestrator-agent = "ORCHESTRATOR_AGENT_PORT"
+    guardian-agent     = "GUARDIAN_AGENT_PORT"
+    logistics-agent    = "LOGISTICS_AGENT_PORT"
+    resolution-agent   = "RESOLUTION_AGENT_PORT"
+    qa-agent           = "QA_AGENT_PORT"
   }
 }
 
@@ -101,21 +123,23 @@ resource "aws_ecs_task_definition" "service" {
     }]
     environment = concat(
       [
-        { name = "NODE_ENV",      value = "production" },
-        { name = "DATABASE_URL",  value = "postgresql://${var.db_username}:${var.db_password}@${aws_db_instance.postgres.address}:${aws_db_instance.postgres.port}/${var.db_name}" },
-        { name = "JWT_SECRET",    value = "ffa32c3d40342bec6c1bcfba7b4f8197" },
-        { name = "RABBITMQ_URL",  value = "amqps://grdulrnl:FLkurItpuAPeOM-VfalX5iGxQkRxuYVi@armadillo.rmq.cloudamqp.com:5671/grdulrnl" },
-        { name = "CORS_ORIGIN",   value = "*" },
-        { name = "DB_HOST",       value = "postgres" },
-        { name = "DB_PORT",       value = "5432" },
-        { name = "DB_NAME",       value = "onedelivery" },
-        { name = "DB_USER",       value = "postgres" },
-        { name = "DB_PASSWORD",   value = "postgres" },
+        { name = "NODE_ENV", value = "production" },
+        { name = "DATABASE_URL", value = "postgresql://${var.db_username}:${var.db_password}@${aws_db_instance.postgres.address}:${aws_db_instance.postgres.port}/${var.db_name}" },
+        { name = "JWT_SECRET", value = "ffa32c3d40342bec6c1bcfba7b4f8197" },
+        { name = "RABBITMQ_URL", value = "amqps://grdulrnl:FLkurItpuAPeOM-VfalX5iGxQkRxuYVi@armadillo.rmq.cloudamqp.com:5671/grdulrnl" },
+        { name = "CORS_ORIGIN", value = "*" },
+        { name = "DB_HOST", value = aws_db_instance.postgres.address },
+        { name = "DB_PORT", value = tostring(aws_db_instance.postgres.port) },
+        { name = "DB_NAME", value = var.db_name },
+        { name = "DB_USER", value = var.db_username },
+        { name = "DB_PASSWORD", value = var.db_password },
+        # Inject the service-specific port env var so each NestJS app listens on the right port
+        { name = local.service_port_envvars[each.key], value = tostring(local.service_ports[each.key]) },
       ],
       # WebSocket Management API endpoint – injected only into orchestrator-agent
       each.key == "orchestrator-agent" && var.enable_websocket ? [
         { name = "WEBSOCKET_API_ENDPOINT", value = "https://${aws_apigatewayv2_api.websocket[0].id}.execute-api.${var.aws_region}.amazonaws.com/prod" },
-        { name = "AWS_REGION",             value = var.aws_region },
+        { name = "AWS_REGION", value = var.aws_region },
       ] : []
     )
     logConfiguration = {
@@ -157,12 +181,15 @@ resource "aws_ecs_service" "service" {
     assign_public_ip = true
   }
 
+  # Only attach HTTP-capable services to the ALB; resolution-agent is RMQ-only.
   dynamic "load_balancer" {
-    for_each = var.enable_alb ? [1] : []
+    for_each = var.enable_alb && contains(tolist(local.http_services), each.key) ? [1] : []
     content {
       target_group_arn = aws_lb_target_group.service[each.key].arn
       container_name   = each.key
       container_port   = local.service_ports[each.key]
     }
   }
+
+  depends_on = [aws_lb_listener.http]
 }

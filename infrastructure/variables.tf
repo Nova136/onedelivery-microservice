@@ -102,7 +102,7 @@ variable "postgres_backup_retention_period" {
 }
 
 variable "enable_alb" {
-  description = "Create ALB and API Gateway (set to false to save ~$32/month when not needed; ECS will have no external HTTP entry)"
+  description = "Create ALB and API Gateway (set to false to save ~$45/month when not needed; ECS will have no external HTTP entry)"
   type        = bool
   default     = false
 }

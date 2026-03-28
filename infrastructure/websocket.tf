@@ -19,10 +19,10 @@ resource "aws_apigatewayv2_api" "websocket" {
 # ── Lambda Authorizer ──────────────────────────────────────────────────────────
 
 resource "aws_apigatewayv2_authorizer" "ws" {
-  count            = var.enable_websocket ? 1 : 0
-  api_id           = aws_apigatewayv2_api.websocket[0].id
-  authorizer_type  = "REQUEST"
-  authorizer_uri   = aws_lambda_function.ws_authorizer[0].invoke_arn
+  count           = var.enable_websocket ? 1 : 0
+  api_id          = aws_apigatewayv2_api.websocket[0].id
+  authorizer_type = "REQUEST"
+  authorizer_uri  = aws_lambda_function.ws_authorizer[0].invoke_arn
   # Token arrives as ?token=<JWT> on the WebSocket upgrade request
   identity_sources = ["route.request.querystring.token"]
   name             = "${local.name}-ws-authorizer"

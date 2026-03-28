@@ -71,5 +71,5 @@ output "websocket_management_endpoint" {
 
 output "routing_note" {
   description = "How traffic is routed (when enable_alb = true)"
-  value       = var.enable_alb ? "API Gateway -> ALB:80 -> path-based to ECS (/order, /logistics, /payment, /audit, /user, /incident, /knowledge, /orchestrator-agent, /guardian-agent, /logistics-agent, /resolution-agent, /qa-agent). Set DATABASE_URL and ensure apps expose HTTP on port 80 and GET /health for ALB." : "ALB and API Gateway disabled (enable_alb = false). No external HTTP entry to ECS."
+  value       = var.enable_alb ? "API Gateway -> ALB:80 -> path-based to ECS (/order, /logistics, /payment, /audit, /user, /incident, /knowledge, /orchestrator-agent, /guardian-agent, /logistics-agent, /qa-agent). Use api_gateway_invoke_url as the API base URL." : "ALB and API Gateway disabled (enable_alb = false). No external HTTP entry to ECS."
 }

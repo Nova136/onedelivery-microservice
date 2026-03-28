@@ -83,19 +83,21 @@ data "archive_file" "lambda" {
 locals {
   lambda_runtime = "nodejs20.x"
   lambda_env = var.enable_websocket ? {
-    DATABASE_URL           = "postgresql://${var.db_username}:${var.db_password}@${aws_db_instance.postgres.address}:${aws_db_instance.postgres.port}/${var.db_name}"
-    RATE_LIMIT_PER_MINUTE  = tostring(var.ws_rate_limit_per_minute)
-    JWT_SECRET             = "ffa32c3d40342bec6c1bcfba7b4f8197"
-    ALLOWED_ROLES          = "User,Admin"
-    RABBITMQ_URL           = "amqps://grdulrnl:FLkurItpuAPeOM-VfalX5iGxQkRxuYVi@armadillo.rmq.cloudamqp.com:5671/grdulrnl"
-    ORCHESTRATOR_QUEUE     = "orchestrator_agent_queue"
+    DATABASE_URL          = "postgresql://${var.db_username}:${var.db_password}@${aws_db_instance.postgres.address}:${aws_db_instance.postgres.port}/${var.db_name}"
+    RATE_LIMIT_PER_MINUTE = tostring(var.ws_rate_limit_per_minute)
+    JWT_SECRET            = "ffa32c3d40342bec6c1bcfba7b4f8197"
+    ALLOWED_ROLES         = "User,Admin"
+    RABBITMQ_URL          = "amqps://grdulrnl:FLkurItpuAPeOM-VfalX5iGxQkRxuYVi@armadillo.rmq.cloudamqp.com:5671/grdulrnl"
+    ORCHESTRATOR_QUEUE    = "orchestrator_agent_queue"
   } : {}
 
-  # Lambdas run in the same VPC subnets as ECS so they can reach RDS (private subnets)
-  lambda_vpc_config = var.enable_websocket ? {
+  # Lambdas run in the VPC public subnets so they can reach RDS via VPC-local routing.
+  # Stored as a list so dynamic "vpc_config" blocks can iterate over it safely
+  # (empty list when enable_websocket = false avoids null attribute-access errors).
+  lambda_vpc_config = var.enable_websocket ? [{
     subnet_ids         = [aws_subnet.public_a.id, aws_subnet.public_b.id, aws_subnet.public_c.id]
     security_group_ids = [aws_security_group.ecs_tasks.id]
-  } : null
+  }] : []
 }
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -113,9 +115,12 @@ resource "aws_lambda_function" "ws_authorizer" {
   filename         = data.archive_file.lambda["authorizer"].output_path
   source_code_hash = data.archive_file.lambda["authorizer"].output_base64sha256
 
-  vpc_config {
-    subnet_ids         = local.lambda_vpc_config.subnet_ids
-    security_group_ids = local.lambda_vpc_config.security_group_ids
+  dynamic "vpc_config" {
+    for_each = local.lambda_vpc_config
+    content {
+      subnet_ids         = vpc_config.value.subnet_ids
+      security_group_ids = vpc_config.value.security_group_ids
+    }
   }
 
   environment { variables = local.lambda_env }
@@ -132,9 +137,12 @@ resource "aws_lambda_function" "ws_connect" {
   filename         = data.archive_file.lambda["connect"].output_path
   source_code_hash = data.archive_file.lambda["connect"].output_base64sha256
 
-  vpc_config {
-    subnet_ids         = local.lambda_vpc_config.subnet_ids
-    security_group_ids = local.lambda_vpc_config.security_group_ids
+  dynamic "vpc_config" {
+    for_each = local.lambda_vpc_config
+    content {
+      subnet_ids         = vpc_config.value.subnet_ids
+      security_group_ids = vpc_config.value.security_group_ids
+    }
   }
 
   environment { variables = local.lambda_env }
@@ -151,9 +159,12 @@ resource "aws_lambda_function" "ws_disconnect" {
   filename         = data.archive_file.lambda["disconnect"].output_path
   source_code_hash = data.archive_file.lambda["disconnect"].output_base64sha256
 
-  vpc_config {
-    subnet_ids         = local.lambda_vpc_config.subnet_ids
-    security_group_ids = local.lambda_vpc_config.security_group_ids
+  dynamic "vpc_config" {
+    for_each = local.lambda_vpc_config
+    content {
+      subnet_ids         = vpc_config.value.subnet_ids
+      security_group_ids = vpc_config.value.security_group_ids
+    }
   }
 
   environment { variables = local.lambda_env }
@@ -170,9 +181,12 @@ resource "aws_lambda_function" "ws_send_message" {
   filename         = data.archive_file.lambda["send-message"].output_path
   source_code_hash = data.archive_file.lambda["send-message"].output_base64sha256
 
-  vpc_config {
-    subnet_ids         = local.lambda_vpc_config.subnet_ids
-    security_group_ids = local.lambda_vpc_config.security_group_ids
+  dynamic "vpc_config" {
+    for_each = local.lambda_vpc_config
+    content {
+      subnet_ids         = vpc_config.value.subnet_ids
+      security_group_ids = vpc_config.value.security_group_ids
+    }
   }
 
   environment { variables = local.lambda_env }
