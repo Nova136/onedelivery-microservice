@@ -1,57 +1,128 @@
-import { Injectable, Logger } from "@nestjs/common";
 import { ChatOpenAI } from "@langchain/openai";
-import { ChatPromptTemplate } from "@langchain/core/prompts";
+import { Logger, Injectable } from "@nestjs/common";
 import { SEMANTIC_ROUTER_PROMPT } from "./prompts/semantic-router.prompt";
+import { getSlidingWindowMessages } from "../../orchestrator-agent/utils/message-window";
+import { formatOrders } from "../../orchestrator-agent/utils/format-orders";
 
 @Injectable()
 export class SemanticRouterService {
     private readonly logger = new Logger(SemanticRouterService.name);
-    private llm: ChatOpenAI;
+    private model: ChatOpenAI;
 
     constructor() {
-        this.llm = new ChatOpenAI({
+        this.model = new ChatOpenAI({
             modelName: "gpt-4o-mini",
+            openAIApiKey: process.env.OPENAI_API_KEY,
             temperature: 0,
+            metadata: {
+                environment: "production",
+                component: "semantic-router",
+            },
+            tags: ["production", "routing"],
         });
     }
 
-    async classifyIntent(
-        userId: string,
-        userMessage: string,
-        lastAiMessage: string,
-    ): Promise<{ intent: string; activeToolNames: string[] }> {
-        this.logger.log(`[${userId}] Semantic Routing Intent...`);
+    async classifyCategory(
+        messages: any[],
+        summary: string,
+        userOrders: any[] = [],
+    ): Promise<{
+        categories: string[];
+        decomposed: Array<{ category: string; query: string }>;
+    }> {
+        this.logger.log("Classifying user intent category...");
+        // Use sliding window to ensure we have full turns for context
+        const contextMessages = getSlidingWindowMessages(messages, 2);
 
-        const routerPrompt = ChatPromptTemplate.fromMessages([
-            ["system", SEMANTIC_ROUTER_PROMPT],
-            ["human", "{userMessage}"],
+        const userOrdersContext =
+            userOrders.length > 0
+                ? `<user_orders>\n${formatOrders(userOrders)}\n</user_orders>`
+                : "No recent orders found.";
+
+        const summaryContext = summary
+            ? `<summary>\n${summary}\n</summary>`
+            : "No previous conversation summary.";
+
+        const prompt = SEMANTIC_ROUTER_PROMPT.replace(
+            "{{summary}}",
+            summaryContext,
+        ).replace("{{user_orders}}", userOrdersContext);
+
+        const response = await this.model.invoke([
+            {
+                role: "system",
+                content: prompt,
+            },
+            {
+                role: "user",
+                content: `Conversation History:\n${contextMessages.map((m) => `${m.constructor.name === "HumanMessage" ? "user" : "assistant"}: ${m.content}`).join("\n")}`,
+            },
         ]);
 
-        const response = await this.llm.invoke(
-            await routerPrompt.formatMessages({
-                userMessage: userMessage,
-                lastAiMessage: lastAiMessage,
-            }),
-        );
-        const intentRaw = String(response.content).trim();
-        this.logger.log(`[${userId}] Intent Classified: ${intentRaw}`);
+        const content = response.content.toString().trim();
+        this.logger.debug(`Router Classification Result: ${content}`);
 
-        let primaryIntent = "UNKNOWN"; // Default fallback
-        if (intentRaw.includes("ESCALATE")) primaryIntent = "ESCALATE";
-        else if (intentRaw.includes("END_SESSION"))
-            primaryIntent = "END_SESSION";
-        else if (intentRaw.includes("ACTION")) primaryIntent = "ACTION";
-        else if (intentRaw.includes("FAQ")) primaryIntent = "FAQ";
+        try {
+            const decomposed: Array<{ category: string; query: string }> =
+                JSON.parse(content);
+            const validCategories = [
+                "logistics",
+                "resolution",
+                "faq",
+                "general",
+                "escalate",
+                "end_session",
+            ];
+            const categories = Array.from(
+                new Set(
+                    decomposed
+                        .map((d) => d.category)
+                        .filter((cat) => validCategories.includes(cat)),
+                ),
+            );
 
-        const initialTools: string[] = [];
-        if (primaryIntent === "FAQ") initialTools.push("Search_FAQ");
-        if (primaryIntent === "ACTION")
-            initialTools.push("Search_Internal_SOP");
-        if (primaryIntent === "END_SESSION")
-            initialTools.push("End_Chat_Session");
-        if (primaryIntent === "ESCALATE")
-            initialTools.push("Escalate_To_Human");
+            if (categories.length === 0) {
+                this.logger.warn(
+                    "No valid category identified, defaulting to 'general'",
+                );
+                return {
+                    categories: ["general"],
+                    decomposed: [
+                        {
+                            category: "general",
+                            query: messages[messages.length - 1].content,
+                        },
+                    ],
+                };
+            }
 
-        return { intent: primaryIntent, activeToolNames: initialTools };
+            this.logger.log(`Identified Categories: ${categories.join(", ")}`);
+            return { categories, decomposed };
+        } catch (e) {
+            this.logger.error(
+                `Failed to parse router output as JSON: ${content}`,
+            );
+            // Fallback to simple parsing if JSON fails
+            const validCategories = [
+                "logistics",
+                "resolution",
+                "faq",
+                "general",
+                "escalate",
+                "end_session",
+            ];
+            const categories = validCategories.filter((cat) =>
+                content.toLowerCase().includes(cat),
+            );
+            const finalCategories =
+                categories.length > 0 ? categories : ["general"];
+            return {
+                categories: finalCategories,
+                decomposed: finalCategories.map((cat) => ({
+                    category: cat,
+                    query: messages[messages.length - 1].content,
+                })),
+            };
+        }
     }
 }

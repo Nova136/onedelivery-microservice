@@ -1,0 +1,94 @@
+import { Annotation, MessagesAnnotation } from "@langchain/langgraph";
+import { BaseMessage } from "@langchain/core/messages";
+
+/**
+ * The graph state MUST include the following properties:
+ * - messages: An array of recent conversation turns.
+ * - summary: A rolling summary of the older conversation context.
+ * - current_category: The current routing category (sticky session).
+ * - order_states: A dictionary (key-value map) where the key is the orderId.
+ */
+export const OrchestratorState = Annotation.Root({
+    ...MessagesAnnotation.spec,
+    summary: Annotation<string>({
+        reducer: (x, y) => (y === undefined ? x : y),
+        default: () => "",
+    }),
+    current_category: Annotation<string | null>({
+        reducer: (x, y) => (y === undefined ? x : y),
+        default: () => null,
+    }),
+    current_intent: Annotation<string | null>({
+        reducer: (x, y) => (y === undefined ? x : y),
+        default: () => null,
+    }),
+    current_sop: Annotation<any | null>({
+        reducer: (x, y) => (y === undefined ? x : y),
+        default: () => null,
+    }),
+    intent_queue: Annotation<string[]>({
+        reducer: (x, y) => {
+            if (y === null) return [];
+            return Array.from(new Set([...x, ...y]));
+        },
+        default: () => [],
+    }),
+    last_evaluation: Annotation<{
+        isSafe: boolean;
+        isHallucination: boolean;
+        isLeakage: boolean;
+        issues?: string[];
+    } | null>({
+        reducer: (x, y) => y ?? x,
+        default: () => null,
+    }),
+    retry_count: Annotation<number>({
+        reducer: (x, y) => (y === 0 ? 0 : x + y),
+        default: () => 0,
+    }),
+    order_states: Annotation<Record<string, any>>({
+        reducer: (x, y) => ({ ...x, ...y }),
+        default: () => ({}),
+    }),
+    user_orders: Annotation<any[]>({
+        reducer: (x, y) => y ?? x,
+        default: () => [],
+    }),
+    decomposed_intents: Annotation<Array<{ category: string; query: string }>>({
+        reducer: (x, y) => y ?? x,
+        default: () => [],
+    }),
+    multi_intent_acknowledged: Annotation<boolean>({
+        reducer: (x, y) => y ?? x,
+        default: () => false,
+    }),
+    is_awaiting_confirmation: Annotation<boolean>({
+        reducer: (x, y) => y ?? x,
+        default: () => false,
+    }),
+    is_input_valid: Annotation<boolean>({
+        reducer: (x, y) => y ?? x,
+        default: () => true,
+    }),
+    user_id: Annotation<string>({
+        reducer: (x, y) => y ?? x,
+        default: () => "",
+    }),
+    session_id: Annotation<string>({
+        reducer: (x, y) => y ?? x,
+        default: () => "",
+    }),
+    // Internal tracking for the UI to show layer progress
+    layers: Annotation<
+        Array<{
+            name: string;
+            status: "pending" | "completed" | "failed";
+            data: any;
+        }>
+    >({
+        reducer: (x, y) => [...x, ...y],
+        default: () => [],
+    }),
+});
+
+export type OrchestratorStateType = typeof OrchestratorState.State;
