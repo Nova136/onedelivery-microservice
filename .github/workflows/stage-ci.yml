@@ -6,6 +6,7 @@ on:
 permissions:
   contents: read
   pull-requests: read
+  security-events: write
 
 jobs:
   run-tests:
@@ -71,6 +72,31 @@ jobs:
           LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: npm run ${{ matrix.evaluation }}
+
+  owasp-dependency-check:
+    name: OWASP Dependency Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run OWASP Dependency Check
+        uses: dependency-check/Dependency-Check_Action@main
+        with:
+          project: onedelivery
+          path: .
+          format: HTML
+          out: owasp-report
+          args: >-
+            --enableRetired
+            --nvdApiKey ${{ secrets.NVD_API_KEY }}
+
+      - name: Upload OWASP report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: owasp-dependency-check-report
+          path: owasp-report/
 
   # One analysis per module; each uses its own sonar-project.properties via projectBaseDir.
   # https://github.com/SonarSource/sonarqube-scan-action#projectbasedir
