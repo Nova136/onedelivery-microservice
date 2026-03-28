@@ -10,6 +10,7 @@ import { PrivacyModule } from "./modules/privacy/privacy.module";
 import { McpToolRegistryModule } from "./modules/mcp/mcp-tool-registry.module";
 import { SemanticRouterModule } from "./modules/semantic-router/semantic-router.module";
 import { SpecializedAgentsModule } from "./modules/specialized-agents/specialized-agents.module";
+import { WebsocketCallbackModule } from "./modules/websocket/websocket-callback.module";
 
 @Module({
     imports: [
@@ -19,6 +20,7 @@ import { SpecializedAgentsModule } from "./modules/specialized-agents/specialize
         McpToolRegistryModule,
         SemanticRouterModule,
         SpecializedAgentsModule,
+        WebsocketCallbackModule,
     ],
     controllers: [OrchestratorAgentController],
     providers: [OrchestratorAgentService],

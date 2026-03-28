@@ -40,7 +40,8 @@ resource "aws_lb" "main" {
 }
 
 resource "aws_lb_target_group" "service" {
-  for_each    = var.enable_alb ? local.services : toset([])
+  # resolution-agent has no HTTP server — excluded from ALB target groups
+  for_each    = var.enable_alb ? local.http_services : toset([])
   name        = "${local.name}-${each.key}"
   port        = local.service_ports[each.key]
   protocol    = "HTTP"
@@ -206,18 +207,7 @@ resource "aws_lb_listener_rule" "logistic_agent" {
   }
 }
 
-resource "aws_lb_listener_rule" "resolution_agent" {
-  count        = var.enable_alb ? 1 : 0
-  listener_arn = aws_lb_listener.http[0].arn
-  priority     = 190
-  action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.service["resolution-agent"].arn
-  }
-  condition {
-    path_pattern { values = ["/resolution-agent", "/resolution-agent/*"] }
-  }
-}
+# resolution-agent is RabbitMQ-only (no HTTP server) — no listener rule or target group.
 
 resource "aws_lb_listener_rule" "qa_agent" {
   count        = var.enable_alb ? 1 : 0

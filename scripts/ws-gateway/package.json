@@ -1,0 +1,11 @@
+{
+  "name": "ws-gateway",
+  "version": "1.0.0",
+  "description": "Local WebSocket gateway — simulates Lambda + API Gateway WebSocket for dev",
+  "main": "server.js",
+  "dependencies": {
+    "amqplib": "^0.10.4",
+    "pg": "^8.13.3",
+    "ws": "^8.18.0"
+  }
+}
