@@ -6,14 +6,15 @@ from diagrams.onprem.client import User
 from diagrams.onprem.queue import RabbitMQ
 
 graph_attr = {
-    "fontsize": "18",
+    "fontsize": "15",
     "bgcolor": "white",
-    "pad": "1.0",
-    "splines": "curved",
-    "nodesep": "1.0",
-    "ranksep": "1.5",
+    "pad": "2.0",
+    "splines": "ortho",
+    "nodesep": "1.8",
+    "ranksep": "2.5",
     "fontname": "Helvetica",
-    "rankdir": "TB",
+    "compound": "true",
+    "labelfloat": "false",
 }
 
 node_attr = {
@@ -32,19 +33,21 @@ with Diagram(
 ):
     client = User("Client\nBrowser / Mobile")
 
-    # ── Top: API Gateway layer ──────────────────────────────────────
-    with Cluster("API Gateway  (AWS Managed Service)"):
+    with Cluster("API Gateway  (AWS Managed)"):
         http_api = APIGateway("HTTP API\nCORS *  ·  ANY /{proxy+}")
         ws_api   = APIGateway("WebSocket API\n$connect · sendMessage · $disconnect")
 
     with Cluster("AWS  ap-southeast-1"):
+
+        ecr = ECR("Amazon ECR\n12 repositories")
+
         with Cluster("VPC  10.0.0.0/16"):
 
-            with Cluster("Public Subnets  ×3 AZ  (10.0.0/20, 10.0.16/20, 10.0.32/20)"):
+            with Cluster("Public Subnets  ×3 AZ"):
 
-                igw      = InternetGateway("Internet Gateway")
-                vpc_link = VPCRouter("VPC Link\nHTTP API → ALB")
-                alb      = ALB("Application Load Balancer\nport 80  ·  internet-facing\npath-based routing")
+                igw      = InternetGateway("Internet\nGateway")
+                vpc_link = VPCRouter("VPC Link")
+                alb      = ALB("ALB  port 80\ninternet-facing\npath-based routing")
 
                 with Cluster("Lambda Functions  (nodejs20.x)"):
                     lam_auth = Lambda("ws-authorizer\nJWT · RBAC · rate-limit")
@@ -53,60 +56,60 @@ with Diagram(
                     lam_send = Lambda("ws-send-message\npublish to RabbitMQ")
 
                 with Cluster("ECS Fargate Cluster"):
-                    orch = ECS("orchestrator-agent  :9010\nHTTP  +  RMQ consumer\nWS push-back callback")
-
-                    with Cluster("HTTP Services  (11 services)"):
+                    with Cluster("HTTP Services  (11)"):
                         svcs = ECS(
-                            "order :9003   logistics :9002   payment :9004\n"
-                            "audit :9001   user :9005         incident :9006\n"
-                            "knowledge :9007   guardian-agent :9013\n"
-                            "logistics-agent :9011   qa-agent :9014"
+                            "order :9003    logistics :9002\n"
+                            "payment :9004  audit :9001\n"
+                            "user :9005     incident :9006\n"
+                            "knowledge :9007\n"
+                            "guardian-agent :9013\n"
+                            "logistics-agent :9011\n"
+                            "qa-agent :9014"
                         )
+                    orch = ECS("orchestrator-agent :9010\nHTTP + RMQ consumer\nWS Management API push")
+                    res  = ECS("resolution-agent\nRabbitMQ-only")
 
-                    res = ECS("resolution-agent\nRabbitMQ-only  (no HTTP)")
+            with Cluster("Private Subnets  ×3 AZ"):
+                rds = RDS("RDS PostgreSQL 17\nper-service schemas\nws.connections · ws.rate_limit")
 
-            with Cluster("Private Subnets  ×3 AZ  (10.0.64/20, 10.0.80/20, 10.0.96/20)"):
-                rds = RDS("RDS PostgreSQL 17\nper-service schemas\nws.connections  ·  ws.rate_limit")
+    with Cluster("External"):
+        rmq = RabbitMQ("CloudAMQP  RabbitMQ\nfree tier")
 
-    with Cluster("External Services"):
-        rmq = RabbitMQ("CloudAMQP  RabbitMQ\narmadillo.rmq.cloudamqp.com\nfree tier")
-        ecr = ECR("Amazon ECR\n12 repositories")
+    # ── HTTP flow  (blue) ──────────────────────────────────────────────────────
+    client   >> Edge(label="① HTTP / HTTPS",           color="#0055AA", style="bold",   fontsize="11", penwidth="5") >> http_api
+    http_api >> Edge(label="② HTTP_PROXY",             color="#0055AA",                 fontsize="11", penwidth="5") >> vpc_link
+    vpc_link >> Edge(label="③",                        color="#0055AA",                 fontsize="11", penwidth="5") >> alb
+    alb      >> Edge(label="④ /orchestrator-agent/*",  color="#0055AA",                 fontsize="11", penwidth="5") >> orch
+    alb      >> Edge(label="④ /order/* /logistics/*",  color="#0055AA",                 fontsize="11", penwidth="5") >> svcs
 
-    # ── HTTP flow ──────────────────────────────────────────────────
-    client >> Edge(label="① HTTP/HTTPS", color="#0055AA", style="bold", fontsize="11") >> http_api
-    http_api >> Edge(label="② HTTP_PROXY", color="#0055AA", fontsize="11") >> vpc_link
-    vpc_link >> Edge(label="③", color="#0055AA", fontsize="11") >> alb
-    alb >> Edge(label="④ /orchestrator-agent/*", color="#0055AA", fontsize="11") >> orch
-    alb >> Edge(label="④ /order/* /logistics/* ...", color="#0055AA", fontsize="11") >> svcs
+    # ── WebSocket connect  (purple) ────────────────────────────────────────────
+    client   >> Edge(label="① WSS ?token=JWT",         color="#7700AA", style="bold",   fontsize="11", penwidth="5") >> ws_api
+    ws_api   >> Edge(label="② CUSTOM auth",            color="#7700AA",                 fontsize="11", penwidth="5") >> lam_auth
+    lam_auth >> Edge(label="③ Allow/Deny + userId",    color="#7700AA",                 fontsize="11", penwidth="5") >> ws_api
+    ws_api   >> Edge(label="④ $connect",               color="#7700AA",                 fontsize="11", penwidth="5") >> lam_conn
+    ws_api   >> Edge(label="④ $disconnect",            color="#7700AA",                 fontsize="11", penwidth="5") >> lam_disc
+    ws_api   >> Edge(label="④ sendMessage",            color="#7700AA",                 fontsize="11", penwidth="5") >> lam_send
 
-    # ── WebSocket connect ──────────────────────────────────────────
-    client >> Edge(label="① WSS  ?token=JWT", color="#7700AA", style="bold", fontsize="11") >> ws_api
-    ws_api >> Edge(label="② CUSTOM auth", color="#7700AA", fontsize="11") >> lam_auth
-    lam_auth >> Edge(label="③ Allow/Deny  +  userId", color="#7700AA", fontsize="11") >> ws_api
-    ws_api >> Edge(label="④ $connect", color="#7700AA", fontsize="11") >> lam_conn
-    ws_api >> Edge(label="④ $disconnect", color="#7700AA", fontsize="11") >> lam_disc
-    ws_api >> Edge(label="④ sendMessage", color="#7700AA", fontsize="11") >> lam_send
+    # ── Async reply loop  (orange) ─────────────────────────────────────────────
+    lam_send >> Edge(label="⑤",  color="#AA5500", style="bold", fontsize="11", penwidth="5") >> rmq
+    rmq      >> Edge(label="⑥",  color="#AA5500", style="bold", fontsize="11", penwidth="5") >> orch
+    orch     >> Edge(label="⑦",  color="#AA5500", style="bold", fontsize="11", penwidth="5") >> ws_api
+    ws_api   >> Edge(label="⑧",  color="#AA5500", style="bold", fontsize="11", penwidth="5") >> client
 
-    # ── Async WS reply loop ────────────────────────────────────────
-    lam_send >> Edge(label="⑤ publish  ws.chat", color="#AA5500", style="bold", fontsize="11") >> rmq
-    rmq      >> Edge(label="⑥ consume  ws.chat", color="#AA5500", style="bold", fontsize="11") >> orch
-    orch     >> Edge(label="⑦ WS Management API\nPOST @connections/:id", color="#AA5500", style="bold", fontsize="11") >> ws_api
-    ws_api   >> Edge(label="⑧ push  reply + sessionId", color="#AA5500", style="bold", fontsize="11") >> client
+    # ── Lambda → RDS  (dashed blue) ───────────────────────────────────────────
+    lam_auth >> Edge(label="rate_limit upsert",     color="#336699", style="dashed", fontsize="10", penwidth="5") >> rds
+    lam_conn >> Edge(label="INSERT ws.connections", color="#336699", style="dashed", fontsize="10", penwidth="5") >> rds
+    lam_disc >> Edge(label="DELETE ws.connections", color="#336699", style="dashed", fontsize="10", penwidth="5") >> rds
+    lam_send >> Edge(label="SELECT userId",         color="#336699", style="dashed", fontsize="10", penwidth="5") >> rds
 
-    # ── Lambda ↔ RDS ───────────────────────────────────────────────
-    lam_auth >> Edge(label="rate_limit upsert",    color="#336699", style="dashed", fontsize="10") >> rds
-    lam_conn >> Edge(label="INSERT ws.connections", color="#336699", style="dashed", fontsize="10") >> rds
-    lam_disc >> Edge(label="DELETE ws.connections", color="#336699", style="dashed", fontsize="10") >> rds
-    lam_send >> Edge(label="SELECT userId",          color="#336699", style="dashed", fontsize="10") >> rds
+    # ── ECS → RDS  (dashed blue) ──────────────────────────────────────────────
+    orch >> Edge(label="TypeORM", color="#336699", style="dashed", fontsize="10", penwidth="5") >> rds
+    svcs >> Edge(label="TypeORM", color="#336699", style="dashed", fontsize="10", penwidth="5") >> rds
 
-    # ── ECS ↔ RDS ──────────────────────────────────────────────────
-    orch >> Edge(label="TypeORM", color="#336699", style="dashed", fontsize="10") >> rds
-    svcs >> Edge(label="TypeORM", color="#336699", style="dashed", fontsize="10") >> rds
+    # ── ECS / Lambda → RabbitMQ  (dashed brown) ───────────────────────────────
+    svcs >> Edge(label="service events", color="#996600", style="dashed", fontsize="10", penwidth="5") >> rmq
+    res  >> Edge(label="consume queue",  color="#996600", style="dashed", fontsize="10", penwidth="5") >> rmq
 
-    # ── ECS ↔ RabbitMQ ─────────────────────────────────────────────
-    svcs >> Edge(label="service events", color="#996600", style="dashed", fontsize="10") >> rmq
-    res  >> Edge(label="consume queue",  color="#996600", style="dashed", fontsize="10") >> rmq
-
-    # ── Internet egress via IGW ─────────────────────────────────────
-    igw >> Edge(label="ECR image pulls",   color="#999999", style="dotted", fontsize="10") >> ecr
-    igw >> Edge(label="RabbitMQ egress",   color="#999999", style="dotted", fontsize="10") >> rmq
+    # ── Internet egress via IGW  (dotted grey) ────────────────────────────────
+    igw >> Edge(color="#999999", style="dotted", penwidth="5") >> ecr
+    igw >> Edge(color="#999999", style="dotted", penwidth="5") >> rmq
