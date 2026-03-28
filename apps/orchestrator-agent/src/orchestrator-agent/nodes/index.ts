@@ -1,6 +1,7 @@
 export * from "./preprocessing.node";
 export * from "./routing.node";
 export * from "./faq-handler.node";
+export * from "./general-handler.node";
 export * from "./sop-retrieval.node";
 export * from "./dialogue.node";
 export * from "./end-session.node";
@@ -8,4 +9,5 @@ export * from "./output-validation.node";
 export * from "./self-correction.node";
 export * from "./summarization.node";
 export * from "./escalation.node";
-export * from "./general-handler.node";
+export * from "./intent-iterator.node";
+export * from "./aggregator.node";

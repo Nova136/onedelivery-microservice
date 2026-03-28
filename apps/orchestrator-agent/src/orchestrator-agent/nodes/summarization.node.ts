@@ -3,6 +3,9 @@ import { SummarizerService } from "../../modules/summarizer/summarizer.service";
 
 export const createSummarizationNode = (summarizer: SummarizerService) => {
     return async (state: OrchestratorStateType) => {
+        console.log(
+            `SummarizationNode: processing state for session ${state.session_id}`,
+        );
         const messages = state.messages;
         if (messages.length <= 6) return {};
 

@@ -28,7 +28,7 @@ export class SemanticRouterService {
         userOrders: any[] = [],
     ): Promise<{
         categories: string[];
-        decomposed: Array<{ category: string; query: string }>;
+        decomposed: Array<{ category: string; intent: string; query: string }>;
     }> {
         this.logger.log("Classifying user intent category...");
         // Use sliding window to ensure we have full turns for context
@@ -63,11 +63,14 @@ export class SemanticRouterService {
         this.logger.debug(`Router Classification Result: ${content}`);
 
         try {
-            const decomposed: Array<{ category: string; query: string }> =
-                JSON.parse(content);
+            const decomposed: Array<{
+                category: string;
+                intent: string;
+                query: string;
+            }> = JSON.parse(content);
             const validCategories = [
-                "logistics",
-                "resolution",
+                "cancel_order",
+                "request_refund",
                 "faq",
                 "general",
                 "escalate",
@@ -90,6 +93,7 @@ export class SemanticRouterService {
                     decomposed: [
                         {
                             category: "general",
+                            intent: "GENERAL_QUERY",
                             query: messages[messages.length - 1].content,
                         },
                     ],
@@ -104,8 +108,8 @@ export class SemanticRouterService {
             );
             // Fallback to simple parsing if JSON fails
             const validCategories = [
-                "logistics",
-                "resolution",
+                "cancel_order",
+                "request_refund",
                 "faq",
                 "general",
                 "escalate",
@@ -120,6 +124,7 @@ export class SemanticRouterService {
                 categories: finalCategories,
                 decomposed: finalCategories.map((cat) => ({
                     category: cat,
+                    intent: "GENERAL_QUERY",
                     query: messages[messages.length - 1].content,
                 })),
             };

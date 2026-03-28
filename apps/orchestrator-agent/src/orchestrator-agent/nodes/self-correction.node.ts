@@ -6,6 +6,9 @@ import { formatOrders } from "../utils/format-orders";
 
 export const createSelfCorrectionNode = (strongModel: ChatOpenAI) => {
     return async (state: OrchestratorStateType) => {
+        console.log(
+            `SelfCorrectionNode: processing state for session ${state.session_id}`,
+        );
         const evaluation = state.last_evaluation;
         if (!evaluation || evaluation.isSafe) return {};
 

@@ -1,9 +1,11 @@
-import { AIMessage } from "@langchain/core/messages";
 import { OrchestratorStateType } from "../state";
 import { StructuredTool } from "@langchain/core/tools";
 
 export const createEndSessionNode = (tools: StructuredTool[]) => {
     return async (state: OrchestratorStateType) => {
+        console.log(
+            `EndSessionNode: processing state for session ${state.session_id}`,
+        );
         const endChatTool = tools.find((t) => t.name === "End_Chat_Session");
 
         if (endChatTool) {
@@ -18,10 +20,8 @@ export const createEndSessionNode = (tools: StructuredTool[]) => {
         }
 
         return {
-            messages: [
-                new AIMessage(
-                    "Thank you for contacting OneDelivery today! Your session has been closed. If you need further assistance in the future, don't hesitate to reach out. Have a wonderful day!",
-                ),
+            partial_responses: [
+                "Thank you for contacting OneDelivery today! Your session has been closed. If you need further assistance in the future, don't hesitate to reach out. Have a wonderful day!",
             ],
             current_category: null,
             current_intent: null,

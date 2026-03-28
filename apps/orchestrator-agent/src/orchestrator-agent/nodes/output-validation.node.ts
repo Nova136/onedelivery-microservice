@@ -7,6 +7,9 @@ export const createOutputValidationNode = (
     outputEvaluator: OutputEvaluatorService,
 ) => {
     return async (state: OrchestratorStateType) => {
+        console.log(
+            `OutputValidationNode: processing state for session ${state.session_id}`,
+        );
         const lastAIMessage = state.messages[state.messages.length - 1];
         if (!(lastAIMessage instanceof AIMessage)) return {};
 

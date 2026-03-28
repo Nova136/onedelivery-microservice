@@ -3,6 +3,9 @@ import { OrchestratorStateType } from "../state";
 
 export const createEscalationNode = () => {
     return async (state: OrchestratorStateType) => {
+        console.log(
+            `EscalationNode: processing state for session ${state.session_id}`,
+        );
         const reason =
             state.retry_count >= 2
                 ? "Max retries reached"
@@ -14,6 +17,8 @@ export const createEscalationNode = () => {
 
         return {
             messages: [new AIMessage(message)],
+            partial_responses: null, // Clear any existing partials to avoid double messaging
+            intent_queue: [], // Stop processing any remaining intents
             current_category: null,
             retry_count: 0, // Reset for next interaction if any
             layers: [{ name: "Escalation", status: "completed", data: reason }],

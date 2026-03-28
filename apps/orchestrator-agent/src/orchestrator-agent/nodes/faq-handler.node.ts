@@ -12,19 +12,21 @@ export interface FaqHandlerDependencies {
 
 export const createFaqHandlerNode = (deps: FaqHandlerDependencies) => {
     return async (state: OrchestratorStateType) => {
+        console.log(
+            `FaqHandlerNode: processing state for session ${state.session_id}`,
+        );
         const { lightModel, tools } = deps;
 
         // Use sliding window for context
         const contextMessages = getSlidingWindowMessages(state.messages, 3);
         const lastMessage = state.messages[state.messages.length - 1];
 
-        // Find the specific query for FAQ in decomposed_intents
-        const faqIntent = state.decomposed_intents.find(
-            (d) => d.category === "faq",
-        );
-        const query = faqIntent
-            ? faqIntent.query
-            : (lastMessage.content as string);
+        // Find the specific query for FAQ in decomposed_intents using the current index
+        const faqIntent = state.decomposed_intents[state.current_intent_index];
+        const query =
+            faqIntent && faqIntent.category === "faq"
+                ? faqIntent.query
+                : (lastMessage.content as string);
 
         const faqTool = tools.find((t) => t.name === "Search_FAQ");
         if (!faqTool) {
@@ -65,11 +67,10 @@ export const createFaqHandlerNode = (deps: FaqHandlerDependencies) => {
         ]);
 
         return {
-            messages: [new AIMessage(finalResponse.content as string)],
-            current_category: null, // Reset category after handling
+            partial_responses: [finalResponse.content as string],
+            current_category: null, // Reset current category to allow next one to be picked
             current_intent: null,
             current_sop: null,
-            intent_queue: [], // Clear queue as the summarizer is instructed to handle multiple questions
             layers: [
                 {
                     name: "FAQ Handler",
