@@ -2,9 +2,7 @@ import { OrchestratorStateType } from "../state";
 import { SemanticRouterService } from "../../modules/semantic-router/semantic-router.service";
 import { KnowledgeClientService } from "../../modules/clients/knowledge-client/knowledge-client.service";
 import { ChatOpenAI } from "@langchain/openai";
-import { SOP_INTENT_CLASSIFIER_PROMPT } from "../prompts/sop-intent-classifier.prompt";
 import { getSlidingWindowMessages } from "../utils/message-window";
-import { formatOrders } from "../utils/format-orders";
 
 export interface RoutingDependencies {
     semanticRouter: SemanticRouterService;
@@ -14,6 +12,9 @@ export interface RoutingDependencies {
 
 export const createRoutingNode = (deps: RoutingDependencies) => {
     return async (state: OrchestratorStateType) => {
+        console.log(
+            `RoutingNode: processing state for session ${state.session_id}`,
+        );
         const { semanticRouter, knowledgeClient, lightModel } = deps;
 
         // Use sliding window for context
@@ -23,10 +24,64 @@ export const createRoutingNode = (deps: RoutingDependencies) => {
         // Only be sticky for SOP categories (resolution, logistics) to allow topic switching for general/faq
         if (
             state.current_category &&
-            (state.current_category === "resolution" ||
-                state.current_category === "logistics")
+            (state.current_category === "cancel_order" ||
+                state.current_category === "request_refund")
         ) {
             return {};
+        }
+
+        const lastMessage = state.messages[state.messages.length - 1];
+        const content = lastMessage.content as string;
+
+        // 1b. Handle Continuation if we were awaiting confirmation
+        if (
+            state.is_awaiting_confirmation &&
+            state.remaining_intents.length > 0
+        ) {
+            // Use LLM to check if the user said "yes" to proceed
+            const checkPrompt = `The user was asked if they want to proceed with their remaining questions.
+User message: "${content}"
+Does the user want to proceed? Answer ONLY "YES" or "NO".`;
+
+            const checkResponse = await lightModel.invoke([
+                { role: "system", content: checkPrompt },
+            ]);
+
+            const wantsToProceed =
+                checkResponse.content.toString().trim().toUpperCase() === "YES";
+
+            if (wantsToProceed) {
+                const nextBatch = state.remaining_intents.slice(0, 3);
+                const furtherRemaining = state.remaining_intents.slice(3);
+                const hasTruncated = furtherRemaining.length > 0;
+
+                const category = nextBatch[0]?.category || "general";
+                const intentCode = nextBatch[0]?.intent || "GENERAL_QUERY";
+                const intentQueue = nextBatch.slice(1);
+
+                return {
+                    current_category: category,
+                    current_intent: intentCode,
+                    current_intent_index: 0,
+                    intent_queue: intentQueue,
+                    decomposed_intents: nextBatch,
+                    remaining_intents: furtherRemaining,
+                    has_truncated_intents: hasTruncated,
+                    is_awaiting_confirmation: false,
+                    layers: [
+                        {
+                            name: "Routing",
+                            status: "completed",
+                            data: `Continued with ${nextBatch.length} remaining intents`,
+                        },
+                    ],
+                };
+            } else {
+                // User said no or something else, reset the confirmation flag and remaining intents
+                // but continue to normal classification below
+                state.is_awaiting_confirmation = false;
+                state.remaining_intents = [];
+            }
         }
 
         const { categories, decomposed } =
@@ -36,59 +91,41 @@ export const createRoutingNode = (deps: RoutingDependencies) => {
                 state.user_orders,
             );
 
-        // Prioritize FAQ if it's in the list, as it has a specialized handler
-        let category = categories[0] || "general";
-        let intentQueue = categories.slice(1);
+        // 2. Prioritization and Queueing Logic
+        const priorityOrder = [
+            "escalate",
+            "cancel_order",
+            "request_refund",
+            "faq",
+            "general",
+            "end_session",
+        ];
 
-        if (categories.includes("faq") && category !== "faq") {
-            category = "faq";
-            intentQueue = categories.filter((c) => c !== "faq");
-        }
+        // Sort decomposed intents based on priority
+        const sortedDecomposed = [...decomposed].sort((a, b) => {
+            const indexA = priorityOrder.indexOf(a.category);
+            const indexB = priorityOrder.indexOf(b.category);
+            return (
+                (indexA === -1 ? 99 : indexA) - (indexB === -1 ? 99 : indexB)
+            );
+        });
 
-        // 2. Intent Classification (if applicable)
-        let intentCode = "GENERAL_QUERY";
-        const lastMessage = state.messages[state.messages.length - 1];
-        const content = lastMessage.content as string;
+        const hasTruncated = sortedDecomposed.length > 3;
+        const limitedDecomposed = sortedDecomposed.slice(0, 3);
+        const remainingIntents = sortedDecomposed.slice(3);
 
-        if (category === "resolution" || category === "logistics") {
-            const categoryIntents =
-                knowledgeClient.getIntentsByCategory(category);
-            const intentsList =
-                categoryIntents.length > 0
-                    ? categoryIntents
-                          .map((s) => `- ${s.id}: ${s.description}`)
-                          .join("\n")
-                    : "- GENERAL_QUERY: General customer service query.";
-
-            const userContext =
-                state.user_orders.length > 0
-                    ? `<user_orders>\n${formatOrders(state.user_orders)}\n</user_orders>`
-                    : "No recent orders found.";
-            const summaryContext = state.summary
-                ? `<summary>\n${state.summary}\n</summary>`
-                : "No previous conversation summary.";
-
-            const intentPrompt = SOP_INTENT_CLASSIFIER_PROMPT.replace(
-                "{{category}}",
-                category,
-            )
-                .replace("{{available_intents}}", intentsList)
-                .replace("{{user_context}}", userContext)
-                .replace("{{summary}}", summaryContext);
-
-            const intentResponse = await lightModel.invoke([
-                { role: "system", content: intentPrompt },
-                ...contextMessages,
-            ]);
-
-            intentCode = intentResponse.content.toString().trim().toUpperCase();
-        }
+        const category = limitedDecomposed[0]?.category || "general";
+        const intentCode = limitedDecomposed[0]?.intent || "GENERAL_QUERY";
+        const intentQueue = limitedDecomposed.slice(1);
 
         return {
             current_category: category,
             current_intent: intentCode,
+            current_intent_index: 0,
             intent_queue: intentQueue,
-            decomposed_intents: decomposed,
+            decomposed_intents: limitedDecomposed,
+            remaining_intents: remainingIntents,
+            has_truncated_intents: hasTruncated,
             multi_intent_acknowledged: false,
             is_awaiting_confirmation: false,
             layers: [

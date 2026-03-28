@@ -1,4 +1,3 @@
-import { AIMessage } from "@langchain/core/messages";
 import { OrchestratorStateType } from "../state";
 import { ChatOpenAI } from "@langchain/openai";
 import { StructuredTool } from "@langchain/core/tools";
@@ -10,12 +9,16 @@ import { formatOrders } from "../utils/format-orders";
 
 export interface DialogueDependencies {
     strongModel: ChatOpenAI;
+    lightModel: ChatOpenAI;
     tools: StructuredTool[];
 }
 
 export const createDialogueNode = (deps: DialogueDependencies) => {
     return async (state: OrchestratorStateType) => {
-        const { strongModel, tools } = deps;
+        console.log(
+            `DialogueNode: processing state for session ${state.session_id}`,
+        );
+        const { strongModel, lightModel, tools } = deps;
         const category = state.current_category;
         const intent = state.current_intent;
         const sop = state.current_sop;
@@ -32,7 +35,8 @@ export const createDialogueNode = (deps: DialogueDependencies) => {
             state.intent_queue.length >= 2 &&
             !state.multi_intent_acknowledged
         ) {
-            const allCategories = [category, ...state.intent_queue];
+            const otherCategories = state.intent_queue.map((i) => i.category);
+            const allCategories = [category, ...otherCategories];
             multiIntentGuidance =
                 DIALOGUE_PROMPTS.MULTI_INTENT_GUIDANCE.replace(
                     "{{categories}}",
@@ -97,10 +101,11 @@ export const createDialogueNode = (deps: DialogueDependencies) => {
                 ).length === 0
             ) {
                 return {
-                    messages: [
-                        new AIMessage(DIALOGUE_PROMPTS.REJECTION_RESPONSE),
-                    ],
+                    partial_responses: [DIALOGUE_PROMPTS.REJECTION_RESPONSE],
                     is_awaiting_confirmation: false,
+                    current_category: null, // Finished (rejected)
+                    current_intent: null,
+                    current_sop: null,
                     layers: [
                         {
                             name: "Dialogue",
@@ -122,10 +127,11 @@ export const createDialogueNode = (deps: DialogueDependencies) => {
                     intent?.replace("_", " ").toLowerCase() || "",
                 ).replace("{{missingField}}", missingData[0]);
                 return {
-                    messages: [new AIMessage(multiIntentGuidance + prompt)],
+                    partial_responses: [multiIntentGuidance + prompt],
                     order_states: updatedOrderStates,
                     multi_intent_acknowledged: updatedMultiIntentAcknowledged,
                     is_awaiting_confirmation: false,
+                    current_category: category, // Keep category (blocking)
                     layers: [
                         {
                             name: "Dialogue",
@@ -150,12 +156,13 @@ export const createDialogueNode = (deps: DialogueDependencies) => {
                     ).replace("{{summaryList}}", summaryList);
 
                 return {
-                    messages: [
-                        new AIMessage(multiIntentGuidance + confirmationPrompt),
+                    partial_responses: [
+                        multiIntentGuidance + confirmationPrompt,
                     ],
                     order_states: updatedOrderStates,
                     is_awaiting_confirmation: true,
                     multi_intent_acknowledged: updatedMultiIntentAcknowledged,
+                    current_category: category, // Keep category (blocking)
                     layers: [
                         {
                             name: "Dialogue",
@@ -180,7 +187,7 @@ export const createDialogueNode = (deps: DialogueDependencies) => {
 
             // Perform actual handoff if tool exists
             try {
-                if (sop.agentOwner === "logistic") {
+                if (sop.agentOwner === "cancel_order") {
                     const tool = tools.find(
                         (t) => t.name === "Route_To_Logistics",
                     );
@@ -209,7 +216,7 @@ export const createDialogueNode = (deps: DialogueDependencies) => {
                             agentReply = toolResult;
                         }
                     }
-                } else if (sop.agentOwner === "resolution") {
+                } else if (sop.agentOwner === "request_refund") {
                     const tool = tools.find(
                         (t) => t.name === "Route_To_Resolution",
                     );
@@ -260,25 +267,11 @@ export const createDialogueNode = (deps: DialogueDependencies) => {
                 ).replace("{{identifier}}", identifier);
             }
 
-            // Check if there's another intent in the queue
-            const nextCategory =
-                state.intent_queue.length > 0 ? state.intent_queue[0] : null;
-            const nextQueue = state.intent_queue.slice(1);
-
-            let finalReply = agentReply;
-            if (nextCategory) {
-                finalReply += DIALOGUE_PROMPTS.NEXT_INTENT_TRANSITION.replace(
-                    "{{nextCategory}}",
-                    nextCategory,
-                );
-            }
-
             return {
-                messages: [new AIMessage(multiIntentGuidance + finalReply)],
-                current_category: nextCategory,
+                partial_responses: [multiIntentGuidance + agentReply],
+                current_category: null,
                 current_intent: null,
                 current_sop: null,
-                intent_queue: nextQueue,
                 order_states: updatedOrderStates, // Keep the states for the next intent
                 is_awaiting_confirmation: false,
                 multi_intent_acknowledged: updatedMultiIntentAcknowledged,
@@ -294,7 +287,7 @@ export const createDialogueNode = (deps: DialogueDependencies) => {
 
         // Default fallback if no SOP is active (should be handled by general_handler, but safety first)
         return {
-            messages: [new AIMessage(DIALOGUE_PROMPTS.FALLBACK_RESPONSE)],
+            partial_responses: [DIALOGUE_PROMPTS.FALLBACK_RESPONSE],
             current_category: null,
             current_intent: null,
             current_sop: null,

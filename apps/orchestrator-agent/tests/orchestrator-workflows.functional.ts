@@ -3,6 +3,7 @@ import { createFaqHandlerNode } from "../src/orchestrator-agent/nodes/faq-handle
 import { createGeneralHandlerNode } from "../src/orchestrator-agent/nodes/general-handler.node";
 import { createEndSessionNode } from "../src/orchestrator-agent/nodes/end-session.node";
 import { createEscalationNode } from "../src/orchestrator-agent/nodes/escalation.node";
+import { KnowledgeClientService } from "../src/modules/clients/knowledge-client/knowledge-client.service";
 import { ChatOpenAI } from "@langchain/openai";
 import { HumanMessage, AIMessage } from "@langchain/core/messages";
 import { StructuredTool } from "@langchain/core/tools";
@@ -17,6 +18,7 @@ async function runTests() {
         temperature: 0,
     });
 
+    const knowledgeClient = new KnowledgeClientService(null);
     const router = new SemanticRouterService();
 
     // Mock FAQ Tool
@@ -85,6 +87,13 @@ async function runTests() {
                 res.toLowerCase().includes("human") ||
                 res.toLowerCase().includes("support"),
         },
+        {
+            name: "Workflow: Multi-Intent (FAQ + General)",
+            input: "What is your delivery fee? Also, how do I treat a fever?",
+            expectedCategory: "faq",
+            testNode: faqNode, // Test FAQ first
+            validateResponse: (res: string) => res.includes("$5.99"),
+        },
     ];
 
     console.log("--- STARTING ORCHESTRATOR WORKFLOW FUNCTIONAL TESTS ---\n");
@@ -120,10 +129,14 @@ async function runTests() {
                 layers: [],
             };
 
-            const result = await test.testNode(state);
-            const response = result.messages[0].content as string;
+            const result: any = await test.testNode(state);
+            const response = result.partial_responses
+                ? result.partial_responses[0]
+                : result.messages
+                  ? result.messages[0].content
+                  : "";
 
-            if (test.validateResponse(response)) {
+            if (test.validateResponse(response as string)) {
                 console.log("✅ PASSED");
                 passed++;
             } else {

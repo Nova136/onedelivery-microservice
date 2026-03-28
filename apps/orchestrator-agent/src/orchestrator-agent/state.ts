@@ -22,15 +22,18 @@ export const OrchestratorState = Annotation.Root({
         reducer: (x, y) => (y === undefined ? x : y),
         default: () => null,
     }),
+    current_intent_index: Annotation<number>({
+        reducer: (x, y) => (y === undefined ? x : y),
+        default: () => 0,
+    }),
     current_sop: Annotation<any | null>({
         reducer: (x, y) => (y === undefined ? x : y),
         default: () => null,
     }),
-    intent_queue: Annotation<string[]>({
-        reducer: (x, y) => {
-            if (y === null) return [];
-            return Array.from(new Set([...x, ...y]));
-        },
+    intent_queue: Annotation<
+        Array<{ category: string; intent: string; query: string }>
+    >({
+        reducer: (x, y) => y ?? x,
         default: () => [],
     }),
     last_evaluation: Annotation<{
@@ -54,7 +57,17 @@ export const OrchestratorState = Annotation.Root({
         reducer: (x, y) => y ?? x,
         default: () => [],
     }),
-    decomposed_intents: Annotation<Array<{ category: string; query: string }>>({
+    partial_responses: Annotation<string[]>({
+        reducer: (x, y) => {
+            if (y === null) return [];
+            if (!y) return x;
+            return [...x, ...y];
+        },
+        default: () => [],
+    }),
+    decomposed_intents: Annotation<
+        Array<{ category: string; intent: string; query: string }>
+    >({
         reducer: (x, y) => y ?? x,
         default: () => [],
     }),
@@ -69,6 +82,16 @@ export const OrchestratorState = Annotation.Root({
     is_input_valid: Annotation<boolean>({
         reducer: (x, y) => y ?? x,
         default: () => true,
+    }),
+    has_truncated_intents: Annotation<boolean>({
+        reducer: (x, y) => y ?? x,
+        default: () => false,
+    }),
+    remaining_intents: Annotation<
+        Array<{ category: string; intent: string; query: string }>
+    >({
+        reducer: (x, y) => y ?? x,
+        default: () => [],
     }),
     user_id: Annotation<string>({
         reducer: (x, y) => y ?? x,

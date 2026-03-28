@@ -68,6 +68,7 @@ export function createOrchestratorGraph(
      */
     function routeByCategory(state: OrchestratorStateType) {
         const category = state.current_category;
+        if (!category) return "aggregator";
         if (category === "faq") return "faq_handler";
         if (category === "escalate") return "escalation";
         if (category === "end_session") return "end_session";
@@ -118,6 +119,7 @@ export function createOrchestratorGraph(
             "dialogue",
             nodes.createDialogueNode({
                 strongModel: services.strongModel,
+                lightModel: services.lightModel,
                 tools: services.tools,
             }),
         )
@@ -134,24 +136,38 @@ export function createOrchestratorGraph(
             "summarization",
             nodes.createSummarizationNode(services.summarizer),
         )
+        .addNode(
+            "intent_iterator",
+            nodes.createIntentIteratorNode({
+                knowledgeClient: services.knowledgeClient,
+                lightModel: services.lightModel,
+            }),
+        )
+        .addNode(
+            "aggregator",
+            nodes.createAggregatorNode({ lightModel: services.lightModel }),
+        )
         .addEdge(START, "preprocessing")
         .addConditionalEdges("preprocessing", routeAfterPreprocessing, {
             routing: "routing",
             summarization: "summarization",
         })
-        .addConditionalEdges("routing", routeByCategory, {
+        .addEdge("routing", "intent_iterator")
+        .addConditionalEdges("intent_iterator", routeByCategory, {
             faq_handler: "faq_handler",
             general_handler: "general_handler",
             sop_retrieval: "sop_retrieval",
             dialogue: "dialogue",
             escalation: "escalation",
             end_session: "end_session",
+            aggregator: "aggregator",
         })
         .addEdge("sop_retrieval", "dialogue")
-        .addEdge("faq_handler", "output_validation")
-        .addEdge("general_handler", "output_validation")
-        .addEdge("end_session", "output_validation")
-        .addEdge("dialogue", "output_validation")
+        .addEdge("faq_handler", "intent_iterator")
+        .addEdge("general_handler", "intent_iterator")
+        .addEdge("end_session", "intent_iterator")
+        .addEdge("dialogue", "intent_iterator")
+        .addEdge("aggregator", "output_validation")
         .addConditionalEdges("output_validation", routeAfterValidation, {
             self_correction: "self_correction",
             escalation: "escalation",

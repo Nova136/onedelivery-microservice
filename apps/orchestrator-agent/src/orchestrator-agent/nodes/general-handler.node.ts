@@ -1,4 +1,3 @@
-import { AIMessage } from "@langchain/core/messages";
 import { OrchestratorStateType } from "../state";
 import { ChatOpenAI } from "@langchain/openai";
 import { StructuredTool } from "@langchain/core/tools";
@@ -13,6 +12,9 @@ export interface GeneralHandlerDependencies {
 
 export const createGeneralHandlerNode = (deps: GeneralHandlerDependencies) => {
     return async (state: OrchestratorStateType) => {
+        console.log(
+            `GeneralHandlerNode: processing state for session ${state.session_id}`,
+        );
         const { lightModel, tools } = deps;
 
         // Use sliding window for context
@@ -35,13 +37,22 @@ export const createGeneralHandlerNode = (deps: GeneralHandlerDependencies) => {
             .replace("{{summaryContext}}", summaryContext)
             .replace("{{sessionContext}}", sessionContext);
 
+        // Find the specific query for General in decomposed_intents using the current index
+        const generalIntent =
+            state.decomposed_intents[state.current_intent_index];
+        const lastMessage = state.messages[state.messages.length - 1];
+        const query =
+            generalIntent && generalIntent.category === "general"
+                ? generalIntent.query
+                : (lastMessage.content as string);
+
         const response = await lightModel.invoke([
             { role: "system", content: systemPrompt },
-            ...contextMessages,
+            { role: "user", content: query },
         ]);
 
         return {
-            messages: [new AIMessage(response.content as string)],
+            partial_responses: [response.content as string],
             current_category: null, // Reset category after handling
             current_intent: null,
             current_sop: null,

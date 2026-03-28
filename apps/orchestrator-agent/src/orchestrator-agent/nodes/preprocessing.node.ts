@@ -12,6 +12,9 @@ export interface PreprocessingDependencies {
 
 export const createPreprocessingNode = (deps: PreprocessingDependencies) => {
     return async (state: OrchestratorStateType) => {
+        console.log(
+            `PreprocessingNode: processing state for session ${state.session_id}`,
+        );
         const { inputValidator, orderService } = deps;
         const lastMessage = state.messages[state.messages.length - 1];
 
