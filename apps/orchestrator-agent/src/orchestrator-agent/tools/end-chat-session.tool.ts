@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { StructuredTool, tool } from "@langchain/core/tools";
+// Assuming AgentsClientService handles TCP routing to your microservices
 import { AgentsClientService } from "../../modules/clients/agents-client/agents-client.service";
+import { MemoryClientService } from "../../modules/clients/memory-client/memory-client.service";
 
 interface EndChatSessionPayload {
     userId: string;
@@ -18,10 +20,17 @@ const EndChatSessionSchema = z
 
 export function createEndChatSessionTool(
     agentsClient: AgentsClientService,
+    memoryService: MemoryClientService,
 ): StructuredTool {
     return tool(
         async (payload: EndChatSessionPayload) => {
             try {
+                // First, we end the chat session and retrieve the full chat history
+                await memoryService.endChatSession(
+                    payload.userId,
+                    payload.sessionId,
+                );
+
                 // Forward the payload to the QA Agent via TCP/Microservice call without waiting (fire-and-forget)
                 agentsClient
                     .send("qa", {
