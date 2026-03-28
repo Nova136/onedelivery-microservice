@@ -5,7 +5,7 @@ import {
     MessagesPlaceholder,
 } from "@langchain/core/prompts";
 import { StructuredTool } from "@langchain/core/tools";
-import { ToolMessage, BaseMessage } from "@langchain/core/messages";
+import { ToolMessage, BaseMessage, SystemMessage } from "@langchain/core/messages";
 import {
     ExecuteLogisticsTaskDto,
     LogisticsAction,
@@ -14,10 +14,10 @@ import { KnowledgeClientService } from "./agents/knowledge-client.service";
 import { AgentsClientService } from "./agents/agents-client.service";
 
 import { createGetOrderDetailsTool } from "./tools/get-order-details.tool";
-import { createRouteToGuardianTool } from "./tools/route-to-guardian.tool";
 import { createExecuteCancellationTool } from "./tools/execute-cancellation.tool";
 import { OrderClientService } from "./agents/order-client.service";
 import { LOGISTICS_AGENT_PROMPT } from "./prompt/logistics-agent.prompt";
+import { GUARDIAN_VERIFY_PREFIX, GUARDIAN_GATE_PREFIX } from "@libs/modules/generic/enum/agent-chat.pattern";
 import { traceable } from "langsmith/traceable";
 
 @Injectable()
@@ -41,7 +41,6 @@ export class LogisticsAgentService {
         // 2. Bind the specific backend tools this agent is allowed to use
         this.tools = {
             Get_Order_Details: createGetOrderDetailsTool(this.orderClient),
-            Route_To_Guardian: createRouteToGuardianTool(this.agentsClient),
             Execute_Cancellation_And_Refund: createExecuteCancellationTool(
                 this.orderClient,
             ),
@@ -132,6 +131,27 @@ export class LogisticsAgentService {
                     const selectedTool = this.tools[toolCall.name];
 
                     if (selectedTool) {
+                        // Pre-execution gate: Guardian approves Execute_Cancellation_And_Refund before it fires.
+                        if (toolCall.name === "Execute_Cancellation_And_Refund") {
+                            const gateMessage = `${GUARDIAN_GATE_PREFIX} action: Tool=Execute_Cancellation_And_Refund, orderId="${toolCall.args.orderId}". Confirm this cancellation and refund action is SOP-compliant before execution.`;
+                            const gateReply = await this.agentsClient.send("guardian", {
+                                userId: payload.userId,
+                                sessionId: `${payload.sessionId}-gate`,
+                                message: gateMessage,
+                            });
+                            if (typeof gateReply === "string" && gateReply.startsWith("BLOCKED:")) {
+                                this.logger.warn(`[${payload.userId}] Guardian blocked Execute_Cancellation_And_Refund: ${gateReply}`);
+                                scratchpad.push(
+                                    new ToolMessage({
+                                        content: `REJECTED: Guardian blocked this cancellation — ${gateReply.replace("BLOCKED: ", "")}`,
+                                        tool_call_id: toolCall.id,
+                                    }),
+                                );
+                                continue;
+                            }
+                            this.logger.log(`[${payload.userId}] Guardian approved Execute_Cancellation_And_Refund.`);
+                        }
+
                         this.logger.log(
                             `[${payload.userId}] Calling Tool "${toolCall.name}"`,
                         );
@@ -184,10 +204,107 @@ export class LogisticsAgentService {
         }
 
         this.logger.log(
+            `[${payload.userId}] Final Logistics Output (pre-guardian): "${finalResponseString}"`,
+        );
+
+        // 7. SOP Verification via Guardian (mirrors resolution-agent pattern).
+        //    Skip for system-level fallbacks that aren't real LLM decisions.
+        if (!this.shouldSkipGuardianVerification(finalResponseString)) {
+            const verificationMessage = `${GUARDIAN_VERIFY_PREFIX} logistics response against SOP before it is returned to the system. Original request: "${JSON.stringify(payload)}". Proposed response: "${finalResponseString}". Confirm it is accurate and follows policy.`;
+
+            const guardianReply = await this.agentsClient.send("guardian", {
+                userId: payload.userId,
+                sessionId: `${payload.sessionId}-verify`,
+                message: verificationMessage,
+            });
+
+            if (guardianReply.startsWith("FEEDBACK: ")) {
+                const feedback = guardianReply.replace("FEEDBACK: ", "").trim();
+                this.logger.log(
+                    `[${payload.userId}] Guardian feedback received: "${feedback}". Retrying...`,
+                );
+
+                scratchpad.push(
+                    new SystemMessage(
+                        `Guardian Agent rejected your previous response. You MUST correct and retry.\nFeedback: ${feedback}`,
+                    ),
+                );
+
+                let retryMessage: BaseMessage | undefined;
+                for (let i = 0; i < 3; i++) {
+                    this.logger.log(
+                        `[${payload.userId}] Guardian Retry Loop ${i + 1}: Thinking...`,
+                    );
+
+                    const formattedPrompt = await prompt.formatMessages({
+                        input: JSON.stringify(payload),
+                        agent_scratchpad: scratchpad,
+                        sopContext,
+                        currentSystemTime: new Date().toISOString(),
+                    });
+
+                    const response =
+                        await this.logisticsWithTools.invoke(formattedPrompt);
+
+                    if (
+                        !response.tool_calls ||
+                        response.tool_calls.length === 0
+                    ) {
+                        retryMessage = response;
+                        break;
+                    }
+
+                    scratchpad.push(response);
+                    for (const toolCall of response.tool_calls) {
+                        const t = this.tools[toolCall.name];
+                        if (!t) {
+                            scratchpad.push(new ToolMessage({ content: "Error: Tool not found", tool_call_id: toolCall.id }));
+                            continue;
+                        }
+                        if (toolCall.name === "Execute_Cancellation_And_Refund") {
+                            const gateMessage = `${GUARDIAN_GATE_PREFIX} action: Tool=Execute_Cancellation_And_Refund, orderId="${toolCall.args.orderId}". Confirm this cancellation and refund action is SOP-compliant before execution.`;
+                            const gateReply = await this.agentsClient.send("guardian", {
+                                userId: payload.userId,
+                                sessionId: `${payload.sessionId}-gate`,
+                                message: gateMessage,
+                            });
+                            if (typeof gateReply === "string" && gateReply.startsWith("BLOCKED:")) {
+                                scratchpad.push(new ToolMessage({ content: `REJECTED: Guardian blocked this cancellation — ${gateReply.replace("BLOCKED: ", "")}`, tool_call_id: toolCall.id }));
+                                continue;
+                            }
+                        }
+                        const toolOutput = await t.invoke(toolCall.args);
+                        scratchpad.push(new ToolMessage({ content: String(toolOutput), tool_call_id: toolCall.id }));
+                    }
+                }
+
+                finalResponseString = (retryMessage?.content as string)
+                    ?.replace(/<thinking>[\s\S]*?<\/thinking>/g, "")
+                    .trim() ||
+                    "REJECTED: Agent failed to correct response after Guardian feedback.";
+
+                this.logger.log(
+                    `[${payload.userId}] Guardian Retry Result: "${finalResponseString}"`,
+                );
+            } else {
+                this.logger.log(`[${payload.userId}] Guardian verified result.`);
+            }
+        }
+
+        this.logger.log(
             `[${payload.userId}] Final Logistics Output: "${finalResponseString}"`,
         );
 
-        // 7. Return the string straight back to the Orchestrator. No saving to DB!
+        // 8. Return the string straight back to the Orchestrator. No saving to DB!
         return finalResponseString;
+    }
+
+    /** Skip Guardian verification for system-level fallbacks that are not real LLM decisions. */
+    private shouldSkipGuardianVerification(result: string): boolean {
+        if (!result.startsWith("REJECTED:")) return false;
+        return (
+            result.includes("timed out") ||
+            result.includes("failed to provide a valid response")
+        );
     }
 }

@@ -3,8 +3,8 @@ import { ConfigModule } from "@nestjs/config";
 import { HttpModule } from "@nestjs/axios";
 import { AppController } from "./app.controller";
 import { AppService } from "./app.service";
-import { MemoryModule } from "./memory/memory.module";
 import { KnowledgeModule } from "./knowledge/knowledge.module";
+import { AuditModule } from "./audit/audit.module";
 
 @Module({
   imports: [
@@ -12,8 +12,8 @@ import { KnowledgeModule } from "./knowledge/knowledge.module";
       isGlobal: true,
     }),
     HttpModule,
-    MemoryModule,
     KnowledgeModule,
+    AuditModule,
   ],
   controllers: [AppController],
   providers: [AppService],

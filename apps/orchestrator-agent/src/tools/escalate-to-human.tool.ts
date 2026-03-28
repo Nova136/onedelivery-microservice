@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { tool, StructuredTool } from "@langchain/core/tools";
-import type { AgentsClientService } from "../modules/agents-client/agents-client.service";
 
 const escalateSchema = z.object({
     userId: z
@@ -20,22 +19,16 @@ const escalateSchema = z.object({
         ),
 });
 
-export function createEscalateToHumanTool(
-    agentsClient: AgentsClientService,
-): StructuredTool {
+export function createEscalateToHumanTool(): StructuredTool {
     return tool(
-        async (payload: {
+        async (_payload: {
             userId: string;
             sessionId: string;
             message: string;
         }) => {
-            try {
-                // TODO: Implement actual communication with Escalation Service. For now, we return a placeholder response.
-                return "Success: Escalation requested.";
-            } catch (err) {
-                const msg = err instanceof Error ? err.message : String(err);
-                return `System Error: Escalation service unreachable. ${msg}`;
-            }
+            // TODO: Implement actual routing to human agent queue (e.g. ticketing system,
+            // live chat handoff, or CRM escalation). This is a planned future feature.
+            return "I understand this situation needs personal attention. I'm escalating your case to our support team now — a human agent will review your conversation and follow up with you shortly.";
         },
         {
             name: "Escalate_To_Human",
