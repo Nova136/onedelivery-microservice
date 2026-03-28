@@ -97,9 +97,7 @@ export class OrchestratorAgentService {
             if (lastMessage instanceof ToolMessage) {
                 return {
                     scratchpad: [
-                        new AIMessage(
-                            "I am transferring you to a human support agent now. They will review your chat history and be with you shortly.",
-                        ),
+                        new AIMessage(String(lastMessage.content)),
                     ],
                 };
             }
@@ -428,9 +426,10 @@ export class OrchestratorAgentService {
                 tools: "tools",
                 evaluator: "evaluator",
             })
-            .addConditionalEdges("faqAgent", checkFastTrackToolCalls, {
+            .addConditionalEdges("faqAgent", checkToolCalls, {
+                router: "router",
                 tools: "tools",
-                fastTrackFinalizer: "fastTrackFinalizer",
+                evaluator: "evaluator",
             })
             .addConditionalEdges("escalation", checkFastTrackToolCalls, {
                 tools: "tools",

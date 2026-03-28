@@ -38,7 +38,7 @@ export class McpToolRegistryService implements OnModuleInit {
             createSearchInternalSopTool(this.knowledgeClientService),
         );
         this.registerTool(createSearchFaqTool(this.knowledgeClientService));
-        this.registerTool(createEscalateToHumanTool(this.agentsClientService));
+        this.registerTool(createEscalateToHumanTool());
         this.registerTool(
             createGetUserRecentOrdersTool(this.agentsClientService),
         );
