@@ -1,4 +1,5 @@
 import { Controller, Post, Body, Logger, UseGuards } from "@nestjs/common";
+import { EventPattern, Payload } from "@nestjs/microservices";
 import {
     ApiTags,
     ApiOperation,
@@ -18,6 +19,7 @@ import {
     GetChatHistoryResponse,
 } from "./modules/memory/interface";
 import { HandleEndChatSessionDto } from "@libs/modules/generic/dto/handle-end-chat-session.dto";
+import { WebsocketCallbackService } from "./modules/websocket/websocket-callback.service";
 
 @ApiTags("Orchestrator")
 @Controller("orchestrator-agent")
@@ -27,7 +29,42 @@ export class OrchestratorAgentController {
     constructor(
         private readonly orchestratorService: OrchestratorAgentService,
         private readonly memoryService: MemoryService,
+        private readonly websocketCallback: WebsocketCallbackService,
     ) {}
+
+    /**
+     * Async WebSocket chat handler.
+     *
+     * Consumed from RabbitMQ (pattern: ws.chat) — published by the
+     * send-message Lambda when a client sends a message over WebSocket.
+     * The reply is pushed back to the client via the API Gateway Management API
+     * instead of returning a value on the queue.
+     */
+    @EventPattern("ws.chat")
+    async handleWebSocketChat(
+        @Payload()
+        data: {
+            connectionId: string;
+            userId: string;
+            sessionId: string;
+            message: string;
+        },
+    ): Promise<void> {
+        this.logger.log(
+            `[WS] user=${data.userId} session=${data.sessionId} conn=${data.connectionId}`,
+        );
+
+        const reply = await this.orchestratorService.processChat(
+            data.userId,
+            data.sessionId,
+            data.message,
+        );
+
+        await this.websocketCallback.pushToConnection(data.connectionId, {
+            reply,
+            sessionId: data.sessionId,
+        });
+    }
 
     @Post()
     @ApiOperation({ summary: "Process a user chat message" })

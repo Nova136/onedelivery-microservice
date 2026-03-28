@@ -1,5 +1,6 @@
 #!/bin/bash
 # Runs inside LocalStack when ready. Creates default S3 bucket and SNS topic.
+# WebSocket state (ws.connections, ws.rate_limit) lives in PostgreSQL — no LocalStack resources needed.
 set -e
 echo "Creating S3 bucket and SNS topic in LocalStack..."
 awslocal s3 mb s3://onedelivery-bucket --region us-east-1 || true
