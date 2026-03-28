@@ -116,9 +116,6 @@ export class OrderController {
             items: order.items,
             createdAt: order.createdAt.toISOString(),
             updatedAt: order.updatedAt.toISOString(),
-            totalOrderValue: order.totalOrderValue,
-            totalRefundValue: order.totalRefundValue,
-            refundStatus: order.refundStatus,
         };
     }
 
@@ -185,11 +182,8 @@ export class OrderController {
     }
 
     @MessagePattern({ cmd: "order.getRecent" })
-    async getRecentOrders(@Payload() data: { customerId?: string }) {
-        const orders = await this.orderService.listRecent(
-            data.customerId ?? "",
-        );
-        console.log(orders);
+    async getRecentOrders(@Payload() data: { customerId: string }) {
+        const orders = await this.orderService.listRecent(data.customerId);
         return {
             orders: orders.map((o) => ({
                 orderId: o.id,
