@@ -15,9 +15,8 @@ import { KnowledgeClientService } from "./agents/knowledge-client.service";
 import { AgentChatPayload } from "@libs/modules/generic/interface/agent-chat-payload.interface";
 import { createGetOrderDetailsTool } from "./tools/get-order-details.tool";
 import { createExecuteRefundTool } from "./tools/execute-refund.tool";
-import { createRouteToGuardianTool } from "./tools/route-to-guardian.tool";
 import { resolutionPromptBase } from "./core/prompt/resolution.prompt";
-import { AGENT_CHAT_PATTERN } from "@libs/modules/generic/enum/agent-chat.pattern";
+import { AGENT_CHAT_PATTERN, GUARDIAN_VERIFY_PREFIX, GUARDIAN_GATE_PREFIX } from "@libs/modules/generic/enum/agent-chat.pattern";
 
 /** Refunds above this USD amount are rejected without Guardian or Execute_Refund. */
 const AUTO_APPROVAL_LIMIT_USD = 20;
@@ -36,7 +35,6 @@ export class ResolutionService {
         this.tools = {
             Get_Order_Details: createGetOrderDetailsTool(this.agentsClient),
             Execute_Refund: createExecuteRefundTool(this.agentsClient),
-            Route_To_Guardian: createRouteToGuardianTool(this.agentsClient),
         } as Record<string, StructuredTool>;
 
         this.llm = new ChatOpenAI({
@@ -123,6 +121,28 @@ Before you use a tool or return your final answer, you MUST enclose your interna
             for (const toolCall of response.tool_calls) {
                 const tool = this.tools[toolCall.name];
                 if (tool) {
+                    // Pre-execution gate: Guardian approves Execute_Refund before it fires.
+                    if (toolCall.name === "Execute_Refund") {
+                        const gateMessage = `${GUARDIAN_GATE_PREFIX} action: Tool=Execute_Refund, orderId="${toolCall.args.orderId}", items=${JSON.stringify(toolCall.args.items)}, reason="${toolCall.args.reason}". Confirm this refund action is SOP-compliant before execution.`;
+                        const gateResult = await this.agentsClient.send(
+                            "guardian",
+                            AGENT_CHAT_PATTERN,
+                            { userId, sessionId: `${sessionId}-gate`, message: gateMessage },
+                        );
+                        const gateReply: string = gateResult?.reply ?? "";
+                        if (gateReply.startsWith("BLOCKED:")) {
+                            this.logger.warn(`[${userId}] Guardian blocked Execute_Refund: ${gateReply}`);
+                            scratchpad.push(
+                                new ToolMessage({
+                                    content: `REJECTED: Guardian blocked this refund — ${gateReply.replace("BLOCKED: ", "")}`,
+                                    tool_call_id: toolCall.id,
+                                }),
+                            );
+                            continue;
+                        }
+                        this.logger.log(`[${userId}] Guardian approved Execute_Refund.`);
+                    }
+
                     this.logger.log(
                         `[${userId}] Calling Tool "${toolCall.name}" with args: ${JSON.stringify(toolCall.args)}`,
                     );
@@ -162,7 +182,7 @@ Before you use a tool or return your final answer, you MUST enclose your interna
             return result;
         }
 
-        const verificationMessage = `Verify this resolution response against SOP before it is returned to the system. Original request: "${message}". Proposed resolution: "${result}". Confirm it is accurate and follows policy.`;
+        const verificationMessage = `${GUARDIAN_VERIFY_PREFIX} resolution response against SOP before it is returned to the system. Original request: "${message}". Proposed resolution: "${result}". Confirm it is accurate and follows policy.`;
         const guardianVerified = await this.agentsClient.send(
             "guardian",
             AGENT_CHAT_PATTERN,
@@ -173,13 +193,64 @@ Before you use a tool or return your final answer, you MUST enclose your interna
             },
         );
         const guardianReply = guardianVerified?.reply || "";
-        const finalResult = guardianReply.startsWith("CORRECTED: ")
-            ? guardianReply
-                  .replace("CORRECTED: ", "")
-                  .replace(/\[.*?\]$/, "")
-                  .trim()
-            : result;
-        this.logger.log(`[${userId}] Guardian Verified Result: "${finalResult}"`);
+
+        if (!guardianReply.startsWith("FEEDBACK: ")) {
+            this.logger.log(`[${userId}] Guardian verified result.`);
+            return result;
+        }
+
+        // Guardian found issues — inject feedback and let the agent correct itself
+        const feedback = guardianReply.replace("FEEDBACK: ", "").trim();
+        this.logger.log(`[${userId}] Guardian feedback received: "${feedback}". Retrying...`);
+
+        scratchpad.push(
+            new SystemMessage(
+                `Guardian Agent rejected your previous response. You MUST correct and retry.\nFeedback: ${feedback}`,
+            ),
+        );
+
+        let retryMessage: BaseMessage | undefined;
+        for (let i = 0; i < 3; i++) {
+            this.logger.log(`[${userId}] Guardian Retry Loop ${i + 1}: Thinking...`);
+
+            const formattedPrompt = await prompt.formatMessages({
+                input: message,
+                agent_scratchpad: scratchpad,
+            });
+
+            const response = await this.agentWithTools.invoke(formattedPrompt);
+
+            if (!response.tool_calls || response.tool_calls.length === 0) {
+                retryMessage = response;
+                break;
+            }
+
+            scratchpad.push(response);
+            for (const toolCall of response.tool_calls) {
+                const t = this.tools[toolCall.name];
+                if (!t) {
+                    scratchpad.push(new ToolMessage({ content: "Error: Tool not found", tool_call_id: toolCall.id }));
+                    continue;
+                }
+                if (toolCall.name === "Execute_Refund") {
+                    const gateMessage = `${GUARDIAN_GATE_PREFIX} action: Tool=Execute_Refund, orderId="${toolCall.args.orderId}", items=${JSON.stringify(toolCall.args.items)}, reason="${toolCall.args.reason}". Confirm this refund action is SOP-compliant before execution.`;
+                    const gateResult = await this.agentsClient.send("guardian", AGENT_CHAT_PATTERN, { userId, sessionId: `${sessionId}-gate`, message: gateMessage });
+                    const gateReply: string = gateResult?.reply ?? "";
+                    if (gateReply.startsWith("BLOCKED:")) {
+                        scratchpad.push(new ToolMessage({ content: `REJECTED: Guardian blocked this refund — ${gateReply.replace("BLOCKED: ", "")}`, tool_call_id: toolCall.id }));
+                        continue;
+                    }
+                }
+                const toolOutput = await t.invoke(toolCall.args);
+                scratchpad.push(new ToolMessage({ content: String(toolOutput), tool_call_id: toolCall.id }));
+            }
+        }
+
+        const finalResult = (retryMessage?.content as string)
+            ?.replace(/<thinking>[\s\S]*?<\/thinking>/g, "")
+            .trim() || "REJECTED: Agent failed to correct response after Guardian feedback.";
+
+        this.logger.log(`[${userId}] Guardian Retry Result: "${finalResult}"`);
         return finalResult;
     }
 
