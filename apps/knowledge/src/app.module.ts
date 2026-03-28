@@ -26,7 +26,7 @@ import { SnakeNamingStrategy } from "typeorm-naming-strategies";
             url:
                 process.env.DATABASE_URL ??
                 "postgresql://postgres:postgres@localhost:5432/onedelivery",
-            schema: "logistics",
+            schema: "knowledge",
             entities: [Faq, Sop],
             synchronize: process.env.NODE_ENV !== "production",
             namingStrategy: new SnakeNamingStrategy(),
