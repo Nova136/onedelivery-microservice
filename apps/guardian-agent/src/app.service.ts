@@ -31,12 +31,14 @@ const verificationSchema = z.object({
     feedbackType: z
         .enum(FEEDBACK_TYPES)
         .optional()
+        .nullable()
         .describe(
             "Required when verdict is FEEDBACK. Category of the violation.",
         ),
     reason: z
         .string()
         .optional()
+        .nullable()
         .describe(
             "Required when verdict is FEEDBACK. Describe what is wrong and what the agent must fix. Do NOT provide the corrected answer.",
         ),
@@ -51,12 +53,14 @@ const gateSchema = z.object({
     feedbackType: z
         .enum(FEEDBACK_TYPES)
         .optional()
+        .nullable()
         .describe(
             "Required when verdict is BLOCKED. Category of the violation.",
         ),
     reason: z
         .string()
         .optional()
+        .nullable()
         .describe(
             "Required when verdict is BLOCKED. Describe why the action is not allowed.",
         ),
@@ -71,6 +75,7 @@ const injectionScanSchema = z.object({
     pattern: z
         .string()
         .optional()
+        .nullable()
         .describe("The suspicious phrase or pattern found, if any."),
 });
 
