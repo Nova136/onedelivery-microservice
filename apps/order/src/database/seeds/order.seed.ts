@@ -52,7 +52,7 @@ export default class OrderSeeder implements Seeder {
                 totalOrderValue: 6.5,
                 createdAt: new Date(),
                 updatedAt: new Date(),
-                priorityOption: PriorityOption.FAST,
+                priorityOption: PriorityOption.EXPRESS,
             },
             // Scenario 4: Order in delivery for late-cancellation testing
             {
@@ -111,7 +111,7 @@ export default class OrderSeeder implements Seeder {
                 totalOrderValue: 15.0,
                 createdAt: new Date(),
                 updatedAt: new Date(),
-                priorityOption: PriorityOption.FAST,
+                priorityOption: PriorityOption.EXPRESS,
             },
             // Scenario 9: High value order for $20+ refund limit test
             {
