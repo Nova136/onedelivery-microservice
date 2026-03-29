@@ -45,7 +45,7 @@ export function createOrchestratorGraph(
      */
     function routeAfterPreProcessing(state: OrchestratorStateType) {
         if (!state.is_input_valid) {
-            return "post_processing";
+            return "summarization";
         }
         return "routing";
     }
@@ -67,7 +67,7 @@ export function createOrchestratorGraph(
             !state.decomposed_intents ||
             state.decomposed_intents.length === 0
         ) {
-            return "post_processing";
+            return "summarization";
         }
 
         const sends = state.decomposed_intents.map((intentObj, index) => {
@@ -133,6 +133,12 @@ export function createOrchestratorGraph(
             }),
         )
         .addNode(
+            "aggregation",
+            nodes.createAggregationNode({
+                llm: services.aggregationModel,
+            }),
+        )
+        .addNode(
             "output_evaluation",
             nodes.createOutputEvaluationNode({
                 outputEvaluator: services.outputEvaluator,
@@ -145,17 +151,16 @@ export function createOrchestratorGraph(
             }),
         )
         .addNode(
-            "post_processing",
-            nodes.createPostProcessingNode({
+            "summarization",
+            nodes.createSummarizationNode({
                 summarizer: services.summarizer,
-                llm: services.aggregationModel,
             }),
         )
         .addNode("escalation", nodes.createEscalationNode())
         .addEdge(START, "pre_processing")
         .addConditionalEdges("pre_processing", routeAfterPreProcessing, {
             routing: "routing",
-            post_processing: "post_processing",
+            aggregation: "aggregation",
         })
         .addConditionalEdges("routing", routeByIntent, [
             "informational_handler",
@@ -163,14 +168,13 @@ export function createOrchestratorGraph(
             "escalation",
             "end_session",
             "reset_handler",
-            "post_processing",
         ])
-        .addEdge("informational_handler", "post_processing")
-        .addEdge("end_session", "post_processing")
-        .addEdge("reset_handler", "post_processing")
-        .addEdge("sop_handler", "post_processing")
-        .addEdge("escalation", "post_processing")
-        .addEdge("post_processing", "output_evaluation")
+        .addEdge("informational_handler", "aggregation")
+        .addEdge("end_session", "aggregation")
+        .addEdge("reset_handler", "aggregation")
+        .addEdge("sop_handler", "aggregation")
+        .addEdge("escalation", "aggregation")
+        .addEdge("aggregation", "output_evaluation")
         .addConditionalEdges(
             "output_evaluation",
             (state: OrchestratorStateType) => {
@@ -181,14 +185,15 @@ export function createOrchestratorGraph(
                 ) {
                     return "self_correction";
                 }
-                return "end";
+                return "summarization";
             },
             {
                 self_correction: "self_correction",
-                end: END,
+                summarization: "summarization",
             },
         )
-        .addEdge("self_correction", "output_evaluation");
+        .addEdge("self_correction", "output_evaluation")
+        .addEdge("summarization", END);
 
     return workflow.compile({
         checkpointer,

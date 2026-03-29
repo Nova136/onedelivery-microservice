@@ -1,23 +1,21 @@
 import { AIMessage, HumanMessage } from "@langchain/core/messages";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { Logger } from "@nestjs/common";
-import { SummarizerService } from "../../modules/summarizer/summarizer.service";
 import { OrchestratorStateType } from "../state";
 
 const AGGREGATOR_PROMPT = `
-You are an AI response aggregator. Your task is to combine multiple partial responses into a single, coherent, and natural-sounding reply to the user.
+You are OneDelivery's AI customer support representative. 
+Your task is to process internal system instructions and/or partial responses, and formulate a single, coherent, natural-sounding, and professional reply to the user.
 
 ### Guidelines:
-1. **Coherence:** Ensure the final response flows logically.
-2. **Conciseness:** Avoid redundant phrases or repeated greetings.
-3. **Tone:** Maintain a professional, helpful, and friendly tone.
-4. **Completeness:** Do not omit any important information from the partial responses.
-5. **Formatting:** If there are multiple intents, format the response as follows:
-   Request: {input}
-   Response: {output}
-   Otherwise, use clear formatting (like bullet points or numbered lists) if it helps readability.
+1. **Professional & Empathetic Tone:** Maintain a helpful and friendly tone suitable for customer support.
+2. **Translate Internal Terms:** DO NOT expose internal system terms or JSON. 
+   - Translate intent codes (like 'REQUEST_REFUND', 'CANCEL_ORDER') into natural language (e.g., "your refund request", "cancelling your order").
+   - Translate internal field names (like 'issueCategory', 'orderId', 'items') into conversational requests (e.g., "the reason for the issue", "your order number", "which items").
+3. **Coherence:** If there are multiple instructions, combine them logically.
+4. **Formatting:** Use clear formatting (like bullet points) if confirming multiple gathered details to make it easy to read.
 
-### Partial Responses to Aggregate:
+### System Instructions / Partial Responses:
 {{partial_responses}}
 
 ### User Query:
@@ -26,23 +24,21 @@ You are an AI response aggregator. Your task is to combine multiple partial resp
 Please provide the final aggregated response below:
 `;
 
-export interface PostProcessingDependencies {
-    summarizer: SummarizerService;
+export interface AggregationDependencies {
     llm: BaseChatModel;
 }
 
-const logger = new Logger("PostProcessingNode");
+const logger = new Logger("AggregationNode");
 
-export const createPostProcessingNode = (deps: PostProcessingDependencies) => {
+export const createAggregationNode = (deps: AggregationDependencies) => {
     return async (state: OrchestratorStateType) => {
-        logger.log(`Processing state for session ${state.session_id}`);
-        const { summarizer, llm } = deps;
+        logger.log(`Aggregating responses for session ${state.session_id}`);
+        const { llm } = deps;
 
         let updatedMessages = [...state.messages];
         let isAwaitingConfirmation = state.is_awaiting_confirmation;
         let partialResponses = state.partial_responses;
 
-        // --- 1. Aggregation ---
         const partials = state.partial_responses || [];
         if (partials.length === 0) {
             const lastMessage = updatedMessages[updatedMessages.length - 1];
@@ -53,15 +49,6 @@ export const createPostProcessingNode = (deps: PostProcessingDependencies) => {
                     ),
                 );
             }
-            partialResponses = null;
-        } else if (partials.length === 1) {
-            let finalResponse = partials[0];
-            if (state.has_truncated_intents && !state.current_intent) {
-                finalResponse +=
-                    "\n\nI apologize, but I noticed you have several requests. I've addressed the first one above. Would you like to proceed with your remaining questions?";
-                isAwaitingConfirmation = true;
-            }
-            updatedMessages.push(new AIMessage(finalResponse));
             partialResponses = null;
         } else {
             // Aggregate multiple partials using LLM
@@ -86,11 +73,8 @@ export const createPostProcessingNode = (deps: PostProcessingDependencies) => {
                 ]);
                 finalResponse = response.content.toString().trim();
             } catch (e) {
-                logger.error(
-                    "All models failed for PostProcessing aggregation:",
-                    e,
-                );
-                // Fallback to simple concatenation if both fail
+                logger.error("Aggregation failed:", e);
+                // Fallback to simple concatenation
                 finalResponse = partials.join("\n\n");
             }
 
@@ -103,23 +87,8 @@ export const createPostProcessingNode = (deps: PostProcessingDependencies) => {
             partialResponses = null;
         }
 
-        // --- 2. Summarization ---
-        let newSummary = state.summary;
-        if (updatedMessages.length > 6) {
-            try {
-                newSummary = await summarizer.summarize(
-                    updatedMessages.slice(0, -4),
-                    state.summary,
-                );
-                updatedMessages = updatedMessages.slice(-4);
-            } catch (e) {
-                logger.error("Summarization Error:", e);
-            }
-        }
-
         return {
             messages: updatedMessages,
-            summary: newSummary,
             partial_responses: partialResponses,
             is_awaiting_confirmation: isAwaitingConfirmation,
             decomposed_intents: [],

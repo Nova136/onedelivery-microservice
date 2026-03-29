@@ -67,6 +67,7 @@ function getMissingData(
         if (
             value === undefined ||
             value === null ||
+            (typeof value === "string" && value.trim() === "") ||
             (Array.isArray(value) && value.length === 0)
         ) {
             missing.push(item.name);
@@ -118,15 +119,15 @@ Is Awaiting Confirmation: {{is_awaiting_confirmation}}
 
 const DIALOGUE_PROMPTS = {
     MULTI_INTENT_GUIDANCE:
-        "I've noted your requests about {{intents}}. To ensure we handle everything correctly, let's address them one by one, starting with {{currentIntent}}.\n\n",
+        "[SYSTEM INSTRUCTION: Acknowledge that the user has multiple requests ({{intents}}). Tell them we will handle them one by one, starting with {{currentIntent}}.]\n\n",
     FALLBACK_RESPONSE:
-        "I'm sorry, I'm not quite sure how to handle that specific request. Could you please provide a bit more detail or clarify what you need?",
+        "[SYSTEM INSTRUCTION: Politely inform the user that you are not sure how to handle their specific request and ask for clarification.]",
     MISSING_DATA_PROMPT:
-        "To proceed with your request for {{intent}}, I'll need a bit more information. Could you please provide the following: {{missing_fields}}?",
+        "[SYSTEM INSTRUCTION: Ask the user to provide the following missing information to proceed with {{intent}}: {{missing_fields}}.]",
     CONFIRMATION_PROMPT:
-        "Great, I have all the details. Just to confirm, here's what I've got:\n\n{{gathered_data}}\n\nIs this correct?",
+        "[SYSTEM INSTRUCTION: Ask the user to confirm if the following gathered details are correct before proceeding:\n{{gathered_data}}]",
     EXECUTION_PROMPT:
-        "Thank you for confirming. I'm now processing your request for {{intent}}.",
+        "[SYSTEM INSTRUCTION: Thank the user for confirming and inform them that the request for {{intent}} has been submitted and is currently being processed.]",
 };
 
 export interface SopHandlerDependencies {
@@ -325,7 +326,7 @@ export const createSopHandlerNode = (deps: SopHandlerDependencies) => {
             if (agentOutput.is_complete && agentOutput.is_confirmed) {
                 finalResponse = DIALOGUE_PROMPTS.EXECUTION_PROMPT.replace(
                     "{{intent}}",
-                    intent,
+                    intent || "this request",
                 );
             } else if (
                 updatedMissingData.length === 0 &&
@@ -347,7 +348,7 @@ export const createSopHandlerNode = (deps: SopHandlerDependencies) => {
             } else if (updatedMissingData.length > 0) {
                 finalResponse = DIALOGUE_PROMPTS.MISSING_DATA_PROMPT.replace(
                     "{{intent}}",
-                    intent,
+                    intent || "this request",
                 ).replace("{{missing_fields}}", updatedMissingData.join(", "));
             } else {
                 finalResponse = DIALOGUE_PROMPTS.FALLBACK_RESPONSE;
