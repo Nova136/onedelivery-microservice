@@ -28,12 +28,6 @@ export default class SopSeeder implements Seeder {
                             "Categorize the problem: 'missing_item', 'wrong_item', 'quality_issue', or 'late_delivery'.",
                     },
                     {
-                        name: "description",
-                        type: "string",
-                        description:
-                            "The user's description of the issue in their own words.",
-                    },
-                    {
                         name: "items",
                         type: "array",
                         description:

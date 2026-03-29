@@ -41,17 +41,11 @@ const resolutionSchema = z.object({
         .string()
         .optional()
         .describe("The order ID. REQUIRED if action is 'request_refund'."),
-    issueIntent: z
+    issueCategory: z
         .enum(["missing_item", "wrong_item", "quality_issue", "late_delivery"])
         .optional()
         .describe(
             "Categorize the problem. REQUIRED if action is 'request_refund'.",
-        ),
-    description: z
-        .string()
-        .optional()
-        .describe(
-            "The user's description of the issue in their own words. REQUIRED if action is 'request_refund'.",
         ),
     items: z
         .array(

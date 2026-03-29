@@ -13,7 +13,7 @@ Your task is to process internal system instructions and/or partial responses, a
    - Translate intent codes (like 'REQUEST_REFUND', 'CANCEL_ORDER') into natural language (e.g., "your refund request", "cancelling your order").
    - Translate internal field names (like 'issueCategory', 'orderId', 'items') into conversational requests (e.g., "the reason for the issue", "your order number", "which items").
 3. **Coherence:** If there are multiple instructions, combine them logically.
-4. **Formatting:** Use clear formatting (like bullet points) if confirming multiple gathered details to make it easy to read.
+4. **Formatting:** Use clear formatting (like standard text bullet points) if confirming multiple gathered details to make it easy to read. DO NOT use markdown formatting like asterisks (**) for bolding or italics. Output strictly in plain text.
 
 ### System Instructions / Partial Responses:
 {{partial_responses}}
