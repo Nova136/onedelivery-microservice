@@ -17,7 +17,6 @@ import { AgentsClientService } from "./agents/agents-client.service";
 import { createGetOrderDetailsTool } from "./tools/get-order-details.tool";
 import { createExecuteCancellationTool } from "./tools/execute-cancellation.tool";
 import { OrderClientService } from "./agents/order-client.service";
-import { ResolutionClientService } from "./agents/resolution-client.service";
 import { LOGISTICS_AGENT_PROMPT } from "./prompt/logistics-agent.prompt";
 import { GUARDIAN_VERIFY_PREFIX, GUARDIAN_GATE_PREFIX } from "@libs/modules/generic/enum/agent-chat.pattern";
 import { traceable } from "langsmith/traceable";
@@ -34,7 +33,6 @@ export class LogisticsAgentService {
         private agentsClient: AgentsClientService,
         private orderClient: OrderClientService,
         private configService: ConfigService,
-        private resolutionClient: ResolutionClientService,
     ) {
         // 1. Initialize the LLM (Temperature 0 is crucial for backend math agents!)
         this.llm = new ChatOpenAI({
@@ -44,7 +42,7 @@ export class LogisticsAgentService {
 
         // 2. Bind the specific backend tools this agent is allowed to use
         this.tools = {
-            Get_Order_Details: createGetOrderDetailsTool(this.orderClient, this.resolutionClient),
+            Get_Order_Details: createGetOrderDetailsTool(this.orderClient),
             Execute_Cancellation_And_Refund: createExecuteCancellationTool(
                 this.orderClient,
             ),

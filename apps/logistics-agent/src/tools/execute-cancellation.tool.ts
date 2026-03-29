@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { StructuredTool, tool } from "@langchain/core/tools";
 import { OrderClientService } from "../agents/order-client.service";
-import { ResolutionClientService } from "../agents/resolution-client.service";
 
 const executeCancellationSchema = z
     .object({
@@ -22,7 +21,6 @@ export function createExecuteCancellationTool(
             // TODO: Implement the actual cancellation logic. For now, we return a placeholder response.
             try {
                 const result = await orderClient.executeCancellation(orderId);
-                const refundResult = await resolutionClient.refundCancelOrder(orderId);
             } catch (err) {
                 const msg = err instanceof Error ? err.message : String(err);
                 return `System Error: Unable to execute cancellation. ${msg}.`;
