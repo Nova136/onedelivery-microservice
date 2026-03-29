@@ -1,10 +1,10 @@
 import { AIMessage } from "@langchain/core/messages";
-import { OrchestratorStateType } from "../state";
-import { ChatOpenAI } from "@langchain/openai";
+import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { StructuredTool } from "@langchain/core/tools";
-import { getSlidingWindowMessages } from "../utils/message-window";
-import { formatOrders } from "../utils/format-orders";
 import { Logger } from "@nestjs/common";
+import { OrchestratorStateType } from "../state";
+import { formatOrders } from "../utils/format-orders";
+import { getSlidingWindowMessages } from "../utils/message-window";
 
 const FAQ_SUMMARIZER_PROMPT = `
 <role>
@@ -64,7 +64,7 @@ You are OneDelivery's helpful and professional customer service assistant.
 `;
 
 export interface InformationalHandlerDependencies {
-  lightModel: ChatOpenAI;
+  lightModel: BaseChatModel;
   tools: StructuredTool[];
 }
 
@@ -79,15 +79,14 @@ export const createInformationalHandlerNode = (deps: InformationalHandlerDepende
     const lastMessage = state.messages[state.messages.length - 1];
     
     const currentIntent = state.decomposed_intents[state.current_intent_index];
-    const category = currentIntent?.category || "general";
+    const intentCode = currentIntent?.intent || "general";
     const query = currentIntent?.query || lastMessage.content as string;
 
-    if (category === "faq") {
+    if (intentCode === "faq") {
       const faqTool = tools.find(t => t.name === "Search_FAQ");
       if (!faqTool) {
         return {
           messages: [new AIMessage("I'm sorry, I'm having trouble accessing our FAQ system right now. How else can I help you?")],
-          layers: [{ name: "Informational Handler", status: "failed", data: "FAQ tool not found" }]
         };
       }
 
@@ -99,15 +98,21 @@ export const createInformationalHandlerNode = (deps: InformationalHandlerDepende
         toolResult = "Error searching FAQ.";
       }
 
-      const finalResponse = await lightModel.invoke([
-        { role: "system", content: FAQ_SUMMARIZER_PROMPT },
-        ...contextMessages,
-        { role: "user", content: `FAQ Search Results for "${query}":\n${JSON.stringify(toolResult)}` }
-      ]);
+      let finalResponseContent: string;
+      try {
+        const finalResponse = await lightModel.invoke([
+          { role: "system", content: FAQ_SUMMARIZER_PROMPT },
+          ...contextMessages,
+          { role: "user", content: `FAQ Search Results for "${query}":\n${JSON.stringify(toolResult)}` }
+        ]);
+        finalResponseContent = finalResponse.content as string;
+      } catch (e) {
+        logger.error("All models failed for FAQ:", e);
+        finalResponseContent = "I'm sorry, I'm having trouble processing your request right now.";
+      }
 
       return {
-        partial_responses: [finalResponse.content as string],
-        layers: [{ name: "Informational Handler", status: "completed", data: "Answered via direct FAQ search" }]
+        partial_responses: [finalResponseContent],
       };
     } else {
       // General Handler logic
@@ -125,14 +130,20 @@ export const createInformationalHandlerNode = (deps: InformationalHandlerDepende
         .replace("{{summaryContext}}", summaryContext)
         .replace("{{sessionContext}}", sessionContext);
 
-      const response = await lightModel.invoke([
-        { role: "system", content: systemPrompt },
-        { role: "user", content: query }
-      ]);
+      let responseContent: string;
+      try {
+        const response = await lightModel.invoke([
+          { role: "system", content: systemPrompt },
+          { role: "user", content: query }
+        ]);
+        responseContent = response.content as string;
+      } catch (e) {
+        logger.error("All models failed for General Handler:", e);
+        responseContent = "I'm sorry, I'm having trouble processing your request right now.";
+      }
 
       return {
-        partial_responses: [response.content as string],
-        layers: [{ name: "Informational Handler", status: "completed", data: "Handled general inquiry" }]
+        partial_responses: [responseContent],
       };
     }
   };

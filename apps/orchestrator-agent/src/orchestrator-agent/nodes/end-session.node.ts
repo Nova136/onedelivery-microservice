@@ -19,7 +19,6 @@ export const createEndSessionNode = (tools: StructuredTool[]) => {
 
     return {
       partial_responses: ["Thank you for contacting OneDelivery today! Your session has been closed. If you need further assistance in the future, don't hesitate to reach out. Have a wonderful day!"],
-      layers: [{ name: "End Session", status: "completed", data: "Session terminated successfully" }]
     };
   };
 };

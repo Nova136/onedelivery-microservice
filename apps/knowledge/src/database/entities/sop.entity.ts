@@ -1,5 +1,13 @@
 import { BaseEntity } from "@libs/utils/base.entity";
-import { Column, Entity, Index } from "typeorm";
+import { Column, Entity } from "typeorm";
+
+interface SopRequiredData {
+    name: string;
+    type: "string" | "number" | "boolean" | "array" | "object";
+    description?: string;
+    itemsSchema?: SopRequiredData[];
+    properties?: SopRequiredData[];
+}
 
 @Entity({ schema: "knowledge", name: "sop" })
 export class Sop extends BaseEntity {
@@ -13,7 +21,7 @@ export class Sop extends BaseEntity {
     title: string;
 
     @Column("jsonb", { name: "required_data", default: [] })
-    requiredData: string[];
+    requiredData: SopRequiredData[];
 
     @Column("jsonb", { name: "workflow_steps", default: [] })
     workflowSteps: string[];

@@ -1,6 +1,22 @@
 import { z } from "zod";
 import { StructuredTool, tool } from "@langchain/core/tools";
-import { KnowledgeClientService } from "../../modules/clients/knowledge-client/knowledge-client.service";
+import { KnowledgeClientService, SopRequiredData } from "../../modules/clients/knowledge-client/knowledge-client.service";
+
+/**
+ * Helper to format recursive SopRequiredData for LLM readability
+ */
+function formatRequiredData(data: SopRequiredData[], indent = ""): string {
+    return data.map(item => {
+        let line = `${indent}- ${item.name} (${item.type}): ${item.description || ""}`;
+        if (item.properties) {
+            line += `\n${formatRequiredData(item.properties, indent + "  ")}`;
+        }
+        if (item.itemsSchema) {
+            line += `\n${indent}  Items:\n${formatRequiredData(item.itemsSchema, indent + "    ")}`;
+        }
+        return line;
+    }).join("\n");
+}
 
 const fetchInternalSOPSchema = z
     .object({
@@ -36,7 +52,7 @@ export function createSearchInternalSopTool(
 ### INTERNAL RULEBOOK: ${sop.title} ###
 
 REQUIRED DATA TO COLLECT FIRST:
-${sop.requiredData && sop.requiredData.length > 0 ? sop.requiredData.map((item: string) => `- ${item}`).join("\n") : "None. You may proceed."}
+${sop.requiredData && sop.requiredData.length > 0 ? formatRequiredData(sop.requiredData) : "None. You may proceed."}
 
 WORKFLOW STEPS (FOLLOW EXACTLY):
 ${sop.workflowSteps ? sop.workflowSteps.join("\n") : "None."}

@@ -1,11 +1,8 @@
+import { BaseChatModel } from "@langchain/core/language_models/chat_models";
+import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { ChatOpenAI } from "@langchain/openai";
-import {
-    BaseMessage,
-    HumanMessage,
-    AIMessage,
-    ToolMessage,
-} from "@langchain/core/messages";
-import { Injectable } from "@nestjs/common";
+import { BaseMessage, HumanMessage, AIMessage, ToolMessage } from "@langchain/core/messages";
+import { Injectable, Optional } from "@nestjs/common";
 
 const SUMMARIZER_PROMPT = `
 <role>Conversation Summarizer.</role>
@@ -30,15 +27,24 @@ const SUMMARIZER_PROMPT = `
 
 @Injectable()
 export class SummarizerService {
-    private readonly model: ChatOpenAI;
+    private readonly model: BaseChatModel;
 
     constructor() {
-        this.model = new ChatOpenAI({
+        const primaryModel = new ChatOpenAI({
             modelName: "gpt-4o-mini",
+            openAIApiKey: process.env.OPENAI_API_KEY,
             temperature: 0,
             metadata: { environment: "production", component: "summarizer" },
-            tags: ["production", "memory"],
+            tags: ["production", "guardrail"]
         });
+
+        const geminiFallback = new ChatGoogleGenerativeAI({
+            model: "gemini-3-flash-preview",
+            apiKey: process.env.GEMINI_API_KEY,
+            temperature: 0,
+        });
+
+        this.model = primaryModel.withFallbacks({ fallbacks: [geminiFallback] }) as unknown as BaseChatModel;
     }
 
     /**
@@ -47,20 +53,15 @@ export class SummarizerService {
      * @param existingSummary The current summary to update.
      * @returns The updated summary.
      */
-    async summarize(
-        messages: BaseMessage[],
-        existingSummary: string = "",
-    ): Promise<string> {
+    async summarize(messages: BaseMessage[], existingSummary: string = ""): Promise<string> {
         if (messages.length === 0) return existingSummary;
 
-        const summarizerPrompt = SUMMARIZER_PROMPT.replace(
-            "{{existing_summary}}",
-            existingSummary || "No existing summary.",
-        );
+        const summarizerPrompt = SUMMARIZER_PROMPT
+            .replace("{{existing_summary}}", existingSummary || "No existing summary.");
 
         const response = await this.model.invoke([
             { role: "system", content: summarizerPrompt },
-            ...messages,
+            ...messages
         ]);
 
         return response.content as string;

@@ -1,4 +1,4 @@
-import { WebSocket } from "ws";
+import "reflect-metadata";
 import { OrchestratorService } from "./orchestrator.service";
 import { Post, Body, UseGuards, Controller, Logger } from "@nestjs/common";
 import {
@@ -8,70 +8,40 @@ import {
     ApiResponse,
     ApiTags,
 } from "@nestjs/swagger";
+import { HandleUserInputMessageDto } from "@libs/modules/generic/dto/handle-user-input-message";
 import { ClientAuthGuard } from "@libs/utils/guards/auth.guard";
 import { CurrentUser } from "@libs/utils/decorators/user.decorator";
-import { HandleUserInputMessageDto } from "@libs/modules/generic/dto/handle-user-input-message";
 import { HandleIncomingMessageDto } from "@libs/modules/generic/dto/handle-incoming-message.dto";
 
 @ApiTags("Orchestrator")
 @Controller("orchestrator-agent")
 export class OrchestratorController {
-    private orchestratorService: OrchestratorService;
-    private logger = new Logger(OrchestratorController.name);
+    private readonly logger = new Logger(OrchestratorController.name);
 
-    constructor(orchestratorService: OrchestratorService) {
-        this.orchestratorService = orchestratorService;
-    }
+    constructor(private readonly orchestratorService: OrchestratorService) {}
 
     /**
-     * Handle incoming WebSocket messages (e.g., chat)
+     * Process a user chat message (HTTP)
+     * Matches the requested format exactly
+     * For testing without Auth
      */
-    async handleWebSocketMessage(ws: WebSocket, sessionId: string, data: any) {
-        try {
-            if (data.type === "CHAT_MESSAGE") {
-                const { message, userId } = data;
-
-                const result = await this.orchestratorService.processChat(
-                    userId,
-                    sessionId,
-                    message,
-                );
-
-                ws.send(
-                    JSON.stringify({
-                        type: "CHAT_RESPONSE",
-                        ...result,
-                    }),
-                );
-            }
-        } catch (error) {
-            this.logger.error(`WebSocket Message Error: ${error}`);
-            ws.send(
-                JSON.stringify({
-                    type: "ERROR",
-                    message: "Failed to process message",
-                }),
-            );
-        }
-    }
-
     @Post()
-    @ApiOperation({ summary: "Process a user chat message" })
-    @ApiResponse({ status: 201, description: "The AI agent's response." })
-    async handleIncomingMessage(@Body() requestData: HandleIncomingMessageDto) {
+    async processChat(@Body() body: HandleIncomingMessageDto) {
         this.logger.log(
-            `Received request for user ${requestData.userId}, session ${requestData.sessionId}, message: "${requestData.message}"`,
+            `Received request for user ${body.userId}, session ${body.sessionId}, message: "${body.message}"`,
         );
 
         // Pass the data to our multi-agent orchestrator
         const result = await this.orchestratorService.processChat(
-            requestData.userId,
-            requestData.sessionId,
-            requestData.message,
+            body.userId,
+            body.sessionId,
+            body.message,
         );
 
-        // Send the final text back to the user
-        return { reply: result.response };
+        return {
+            message: result.response,
+            ...result, // Include extra state for UI compatibility
+        };
     }
 
     /**
@@ -100,7 +70,6 @@ export class OrchestratorController {
             body.message,
         );
 
-        // Send the final text back to the user
         return {
             message: result.response,
             ...result, // Include extra state for UI compatibility

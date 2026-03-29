@@ -39,15 +39,13 @@ export class OrchestratorService {
             session.messages?.length || 0,
             humanMessage,
         );
-
+        
         // Run the graph using the checkpointer (PostgresSaver)
         const result = await this.graph.invoke(
             {
                 messages: [humanMessage],
                 user_id: userId,
                 session_id: session.id,
-                // Reset layers for the new turn
-                layers: [],
             },
             {
                 configurable: { thread_id: session.id },
@@ -77,11 +75,9 @@ export class OrchestratorService {
             sessionId: session.id,
             response: lastAIMessage.content,
             summary: result.summary,
-            current_category: result.current_category,
-            intent_queue: result.intent_queue,
+            current_intent: result.current_intent,
             order_states: result.order_states,
             user_orders: result.user_orders,
-            layers: result.layers,
         };
     }
 
@@ -98,7 +94,7 @@ export class OrchestratorService {
     ) {
         // 1. Redact PII from the agent's result
         const redactedResult = await this.piiService.redact(result);
-
+        
         // Build a more descriptive message to avoid ambiguity for multiple requests
         // We no longer convey the agent name to the end user
         // We prioritize Order ID if available, else use Request ID
@@ -116,13 +112,11 @@ export class OrchestratorService {
         const evaluation = await this.outputEvaluator.evaluateOutput(
             messageContent,
             "Background Agent Callback",
-            `Agent: ${agentType}, Status: ${status}, ID: ${identifier || "N/A"}`,
+            `Agent: ${agentType}, Status: ${status}, ID: ${identifier || "N/A"}`
         );
 
         if (!evaluation.isSafe) {
-            console.warn(
-                `Agent Callback for session ${sessionId} rejected by evaluator: ${evaluation.issues?.join(", ")}`,
-            );
+            console.warn(`Agent Callback for session ${sessionId} rejected by evaluator: ${evaluation.issues?.join(", ")}`);
             // If it's not safe, we still update the graph state but maybe with a redacted/safe version or just log it
             // For now, let's just not send it to the user if it's unsafe
             return { success: false, reason: "Output evaluation failed" };
@@ -144,7 +138,7 @@ export class OrchestratorService {
         await this.memoryService.saveHistory(
             "",
             sessionId,
-            session.messages?.length || 0,
+            (session.messages?.length || 0),
             aiMessage,
         );
 

@@ -1,269 +1,407 @@
-import { OrchestratorStateType } from "../state";
-import { ChatOpenAI } from "@langchain/openai";
+import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { StructuredTool } from "@langchain/core/tools";
-import { getSlidingWindowMessages } from "../utils/message-window";
 import { Logger } from "@nestjs/common";
+import { z } from "zod";
 import { KnowledgeClientService } from "../../modules/clients/knowledge-client/knowledge-client.service";
+import { OrchestratorStateType } from "../state";
 import { formatOrders } from "../utils/format-orders";
+import { getSlidingWindowMessages } from "../utils/message-window";
+import { SopRequiredData } from "../../modules/clients/knowledge-client/interface/search-sop-response.interface";
 
-const ENTITY_EXTRACTOR_PROMPT = `
+/**
+ * Helper to build a dynamic Zod schema from SopRequiredData
+ */
+function buildZodSchema(requiredData: SopRequiredData[]): z.ZodObject<any> {
+    const shape: any = {};
+    requiredData.forEach((item) => {
+        shape[item.name] = getZodType(item).nullable();
+    });
+    return z.object(shape);
+}
+
+function getZodType(item: SopRequiredData): z.ZodTypeAny {
+    let schema: z.ZodTypeAny;
+    switch (item.type) {
+        case "string":
+            schema = z.string();
+            break;
+        case "number":
+            schema = z.number();
+            break;
+        case "boolean":
+            schema = z.boolean();
+            break;
+        case "array":
+            if (item.itemsSchema) {
+                schema = z.array(buildZodSchema(item.itemsSchema));
+            } else {
+                schema = z.array(z.string());
+            }
+            break;
+        case "object":
+            if (item.properties) {
+                schema = buildZodSchema(item.properties);
+            } else {
+                schema = z.record(z.string());
+            }
+            break;
+        default:
+            schema = z.string();
+    }
+    if (item.description) {
+        schema = schema.describe(item.description);
+    }
+    return schema;
+}
+
+/**
+ * Helper to identify missing data based on SopRequiredData
+ */
+function getMissingData(
+    requiredData: SopRequiredData[],
+    gatheredData: any,
+): string[] {
+    const missing: string[] = [];
+    requiredData.forEach((item) => {
+        const value = gatheredData[item.name];
+        if (
+            value === undefined ||
+            value === null ||
+            (Array.isArray(value) && value.length === 0)
+        ) {
+            missing.push(item.name);
+        } else if (item.type === "object" && item.properties) {
+            const nestedMissing = getMissingData(item.properties, value);
+            if (nestedMissing.length > 0) {
+                missing.push(`${item.name} (${nestedMissing.join(", ")})`);
+            }
+        }
+    });
+    return missing;
+}
+
+const SOP_AGENT_PROMPT = `
 <role>
-You are a high-precision Entity Extractor for OneDelivery.
+You are a helpful and empathetic customer support agent for OneDelivery.
 </role>
 
 <task>
-Extract entities for the SOP "{{intentCode}}".
-Required entities: {{requiredData}}.
+Follow the Standard Operating Procedure (SOP) for "{{intentCode}}": "{{title}}".
 </task>
+
+<sop>
+Required Data: {{requiredData}}
+Workflow Steps:
+{{workflowSteps}}
+</sop>
 
 <context>
 {{user_context}}
 {{summary}}
-{{current_order_states}}
+Current Gathered Data: {{gathered_data}}
+Missing Data: {{missing_data}}
+Is Awaiting Confirmation: {{is_awaiting_confirmation}}
 </context>
 
 <instructions>
-1. **Extract**:
-   - Carefully identify and extract each required entity from the conversation and context.
-   - If an entity is missing, set its value to null.
-2. **Confirmation Status**:
-   - Set "is_confirmed" to true if the user explicitly confirms (e.g., "yes", "correct", "proceed").
-   - Set "is_confirmed" to false if the user rejects, changes details, or hasn't confirmed yet.
-3. **Output**:
-   - Return ONLY a valid JSON object containing the extracted entities and "is_confirmed".
-   - Do not include any other text, explanations, or markdown formatting.
+1. **Analyze**: Review the conversation history and context to extract any required entities.
+2. **Update State**: 
+   - Identify what has been gathered. 
+   - Set "is_confirmed" to true ONLY if the user explicitly confirms a summary of the details you've already gathered.
+   - If they are providing new information or changing details, "is_confirmed" should be false.
+3. **Dialogue**: 
+   - If data is missing, ask for it naturally and empathetically. You can ask for multiple missing items at once if it makes sense for a better user experience.
+   - If all data is gathered but not confirmed, present a clear summary of the details and ask for confirmation.
+   - If confirmed, inform the user you are proceeding with their request.
+4. **Tools**: You have access to the following tools: {{tool_descriptions}}. 
+   - If the SOP requires executing a tool and you have all the data and confirmation, specify the tool call in your output.
+   - Use helper tools (like Search_FAQ) if they help you answer the user's questions.
+5. **Output**: You MUST return a JSON object following the required schema.
 </instructions>
-
-<example>
-User: "I want to cancel my order ORD-12345 because it's delayed."
-Required: ["orderId", "reason"]
-Output: { "orderId": "ORD-12345", "reason": "delayed", "is_confirmed": false }
-</example>
 `;
 
 const DIALOGUE_PROMPTS = {
-  MULTI_INTENT_GUIDANCE: "I've noted your requests about {{categories}}. To ensure we handle everything correctly, let's address them one by one, starting with {{currentCategory}}.\n\n",
-  MISSING_DATA: "To help you with your {{intent}}, I just need a bit more information. Could you please provide your {{missingField}}?",
-  CONFIRMATION: "I've gathered the following details for your {{intent}}:\n\n{{summaryList}}\n\nDoes everything look correct? Shall I go ahead and submit this for you?",
-  HANDOFF_SUBMITTING: "Thank you. I've gathered all the necessary details for your {{intent}}. I'm now submitting this request ({{idLabel}}: {{identifier}}) to our specialized team.",
-  HANDOFF_SUCCESS: "Great news! I've successfully submitted your {{intent}} request ({{idLabel}}: {{identifier}}). {{toolResult}}",
-  HANDOFF_ERROR: "I'm sorry, I encountered a slight issue while submitting your request ({{idLabel}}: {{identifier}}). Could you please try again in a moment?",
-  NEXT_INTENT_TRANSITION: "\n\nNow, let's move on to your request regarding {{nextCategory}}.",
-  REJECTION_RESPONSE: "No problem at all. What would you like to change or clarify?",
-  FALLBACK_RESPONSE: "I'm sorry, I'm not quite sure how to handle that specific request. Could you please provide a bit more detail or clarify what you need?"
+    MULTI_INTENT_GUIDANCE:
+        "I've noted your requests about {{intents}}. To ensure we handle everything correctly, let's address them one by one, starting with {{currentIntent}}.\n\n",
+    FALLBACK_RESPONSE:
+        "I'm sorry, I'm not quite sure how to handle that specific request. Could you please provide a bit more detail or clarify what you need?",
 };
 
 export interface SopHandlerDependencies {
-  strongModel: ChatOpenAI;
-  tools: StructuredTool[];
-  knowledgeClient: KnowledgeClientService;
+    strongModel: BaseChatModel;
+    tools: StructuredTool[];
+    knowledgeClient: KnowledgeClientService;
+    utilityTools?: string[];
 }
 
 const logger = new Logger("SopHandlerNode");
 
 export const createSopHandlerNode = (deps: SopHandlerDependencies) => {
-  return async (state: OrchestratorStateType) => {
-    logger.log(`Processing state for session ${state.session_id}`);
-    const { strongModel, tools, knowledgeClient } = deps;
-    const category = state.current_category;
-    const intent = state.current_intent;
-    let sop = state.current_sop;
-    
-    // Fetch SOP if not present and intent is specific
-    if (!sop && intent && intent !== "GENERAL_QUERY") {
-      try {
-        sop = await knowledgeClient.searchInternalSop({
-          intentCode: intent,
-          requestingAgent: "orchestrator",
-        });
-      } catch (e) {
-        logger.error("Failed to fetch SOP:", e);
-      }
-    }
+    return async (state: OrchestratorStateType) => {
+        logger.log(`Processing state for session ${state.session_id}`);
+        const {
+            strongModel,
+            tools,
+            knowledgeClient,
+            utilityTools = ["Search_FAQ", "Search_Internal_SOP"],
+        } = deps;
+        const intent = state.current_intent;
+        let sop = state.current_sop;
 
-    // Use sliding window for context
-    const contextMessages = getSlidingWindowMessages(state.messages, 5);
-    const lastMessage = state.messages[state.messages.length - 1];
-    const content = lastMessage.content as string;
-
-    // Handle Multi-Intent Guidance
-    let multiIntentGuidance = "";
-    let updatedMultiIntentAcknowledged = state.multi_intent_acknowledged;
-    if (state.decomposed_intents.length >= 2 && !state.multi_intent_acknowledged) {
-      const otherCategories = state.decomposed_intents.filter(i => i.category !== category).map(i => i.category);
-      const allCategories = [category, ...otherCategories];
-      multiIntentGuidance = DIALOGUE_PROMPTS.MULTI_INTENT_GUIDANCE
-        .replace("{{categories}}", `${allCategories.slice(0, -1).join(", ")} and ${allCategories.slice(-1)}`)
-        .replace("{{currentCategory}}", category || "");
-      updatedMultiIntentAcknowledged = true;
-    }
-
-    const userContext = state.user_orders.length > 0 
-      ? `<user_orders>\n${formatOrders(state.user_orders)}\n</user_orders>` 
-      : "No recent orders found.";
-    const summaryContext = state.summary 
-      ? `<summary>\n${state.summary}\n</summary>` 
-      : "No previous conversation summary.";
-    
-    if (sop) {
-      let updatedOrderStates = { ...state.order_states };
-
-      // 1. Identify Required Information (Slot Filling) AND Confirmation
-      const extractionPrompt = ENTITY_EXTRACTOR_PROMPT
-        .replace("{{intentCode}}", intent || "GENERAL")
-        .replace("{{requiredData}}", JSON.stringify(sop.requiredData))
-        .replace("{{user_context}}", userContext)
-        .replace("{{summary}}", summaryContext)
-        .replace("{{current_order_states}}", `<current_states>\n${JSON.stringify(state.order_states, null, 2)}\n</current_states>`);
-
-      const extractionResponse = await strongModel.invoke([
-        { role: "system", content: extractionPrompt },
-        ...contextMessages,
-      ]);
-
-      let extractedData: any = {};
-      try {
-        const jsonStr = extractionResponse.content.toString().match(/\{.*\}/s)?.[0] || "{}";
-        extractedData = JSON.parse(jsonStr);
-      } catch (e) {
-        logger.error("Extraction Parse Error:", e);
-      }
-
-      // PERSISTENCE: Merge with existing states
-      updatedOrderStates = { ...state.order_states, ...extractedData };
-      const isConfirmed = state.is_awaiting_confirmation && extractedData.is_confirmed === true;
-      const isRejected = state.is_awaiting_confirmation && extractedData.is_confirmed === false;
-
-      if (isRejected && Object.keys(extractedData).filter(k => k !== 'is_confirmed' && sop.requiredData.includes(k)).length === 0) {
-        return {
-          partial_responses: [DIALOGUE_PROMPTS.REJECTION_RESPONSE],
-          is_awaiting_confirmation: false,
-          current_category: null, // Finished (rejected)
-          current_intent: null,
-          current_sop: null,
-          layers: [{ name: "SOP Handler", status: "completed", data: "Confirmation rejected" }]
-        };
-      }
-      
-      // 2. Follow SOP: Check for missing data
-      const missingData = sop.requiredData.filter((key: string) => !updatedOrderStates[key]);
-
-      if (missingData.length > 0) {
-        const prompt = DIALOGUE_PROMPTS.MISSING_DATA
-          .replace("{{intent}}", intent?.replace("_", " ").toLowerCase() || "")
-          .replace("{{missingField}}", missingData[0]);
-        return {
-          partial_responses: [multiIntentGuidance + prompt],
-          order_states: updatedOrderStates,
-          multi_intent_acknowledged: updatedMultiIntentAcknowledged,
-          is_awaiting_confirmation: false,
-          current_category: category, // Keep category (blocking)
-          current_sop: sop, // Persist SOP
-          layers: [{ name: "SOP Handler", status: "completed", data: `SOP: ${intent} | Missing: ${missingData.join(", ")}` }]
-        };
-      }
-
-      // 3. Confirmation Step: If all data gathered but not yet confirmed
-      if (!isConfirmed) {
-        const summaryList = Object.entries(updatedOrderStates)
-          .filter(([key]) => sop.requiredData.includes(key))
-          .map(([key, value]) => `- ${key}: ${value}`)
-          .join("\n");
-
-        const confirmationPrompt = DIALOGUE_PROMPTS.CONFIRMATION
-          .replace("{{intent}}", intent?.replace("_", " ").toLowerCase() || "")
-          .replace("{{summaryList}}", summaryList);
-        
-        return {
-          partial_responses: [multiIntentGuidance + confirmationPrompt],
-          order_states: updatedOrderStates,
-          is_awaiting_confirmation: true,
-          multi_intent_acknowledged: updatedMultiIntentAcknowledged,
-          current_category: category, // Keep category (blocking)
-          current_sop: sop, // Persist SOP
-          layers: [{ name: "SOP Handler", status: "completed", data: "Awaiting user confirmation" }]
-        };
-      }
-
-      // 4. Handoff to other agents (After confirmation)
-      const identifier = updatedOrderStates.orderId || state.session_id;
-      const idLabel = updatedOrderStates.orderId ? "Order ID" : "Request ID";
-      let agentReply = DIALOGUE_PROMPTS.HANDOFF_SUBMITTING
-        .replace("{{intent}}", intent?.replace("_", " ").toLowerCase() || "")
-        .replace("{{idLabel}}", idLabel)
-        .replace("{{identifier}}", identifier);
-
-      // Perform actual handoff if tool exists
-      try {
-        if (sop.agentOwner === "cancel_order") {
-          const tool = tools.find(t => t.name === "Route_To_Logistics");
-          if (tool) {
-            const toolResult = await tool.invoke({
-              action: "cancel_order",
-              userId: state.user_id,
-              sessionId: state.session_id,
-              orderId: updatedOrderStates.orderId,
-              description: updatedOrderStates.reason || updatedOrderStates.issueDescription || content
-            });
-            if (toolResult && !toolResult.includes("Error")) {
-              agentReply = DIALOGUE_PROMPTS.HANDOFF_SUCCESS
-                .replace("{{intent}}", intent?.replace("_", " ").toLowerCase() || "")
-                .replace("{{idLabel}}", idLabel)
-                .replace("{{identifier}}", identifier)
-                .replace("{{toolResult}}", toolResult);
-            } else if (toolResult.includes("Error")) {
-              agentReply = toolResult;
+        // Fetch SOP if not present and intent is specific
+        if (
+            !sop &&
+            intent &&
+            !["faq", "general", "escalate", "end_session", "reset"].includes(
+                intent,
+            )
+        ) {
+            try {
+                sop = await knowledgeClient.searchInternalSop({
+                    intentCode: intent,
+                    requestingAgent: "orchestrator",
+                });
+                logger.debug(
+                    `SOP fetched for intent ${intent}: ${sop ? "found" : "not found"}`,
+                );
+            } catch (e) {
+                logger.error("Failed to fetch SOP:", e);
             }
-          }
-        } else if (sop.agentOwner === "request_refund") {
-          const tool = tools.find(t => t.name === "Route_To_Resolution");
-          if (tool) {
-            const toolResult = await tool.invoke({
-              action: "request_refund",
-              userId: state.user_id,
-              sessionId: state.session_id,
-              orderId: updatedOrderStates.orderId,
-              issueCategory: intent?.toLowerCase().includes("missing") ? "missing_item" : "quality_issue",
-              description: updatedOrderStates.reason || updatedOrderStates.issueDescription || content,
-              items: updatedOrderStates.missingItems ? [{ name: updatedOrderStates.missingItems, quantity: 1 }] : []
-            });
-            if (toolResult && !toolResult.includes("Error")) {
-              agentReply = DIALOGUE_PROMPTS.HANDOFF_SUCCESS
-                .replace("{{intent}}", intent?.replace("_", " ").toLowerCase() || "")
-                .replace("{{idLabel}}", idLabel)
-                .replace("{{identifier}}", identifier)
-                .replace("{{toolResult}}", toolResult);
-            } else if (toolResult.includes("Error")) {
-              agentReply = toolResult;
-            }
-          }
         }
-      } catch (e) {
-        logger.error("Handoff Error:", e);
-        agentReply = DIALOGUE_PROMPTS.HANDOFF_ERROR
-          .replace("{{idLabel}}", idLabel)
-          .replace("{{identifier}}", identifier);
-      }
 
-      return {
-        partial_responses: [multiIntentGuidance + agentReply],
-        current_category: null,
-        current_intent: null,
-        current_sop: null,
-        order_states: updatedOrderStates, // Keep the states for the next intent
-        is_awaiting_confirmation: false,
-        multi_intent_acknowledged: updatedMultiIntentAcknowledged,
-        layers: [{ name: "SOP Handler", status: "completed", data: `Handoff to ${sop.agentOwner}` }]
-      };
-    }
+        // Use sliding window for context
+        const contextMessages = getSlidingWindowMessages(state.messages, 5);
 
-    // Default fallback if no SOP is active (should be handled by informational_handler, but safety first)
-    return {
-      partial_responses: [DIALOGUE_PROMPTS.FALLBACK_RESPONSE],
-      current_category: null,
-      current_intent: null,
-      current_sop: null,
-      layers: [{ name: "SOP Handler", status: "failed", data: "No active SOP in dialogue node" }]
+        // Handle Multi-Intent Guidance
+        let multiIntentGuidance = "";
+        let updatedMultiIntentAcknowledged = state.multi_intent_acknowledged;
+        if (
+            state.decomposed_intents.length >= 2 &&
+            !state.multi_intent_acknowledged
+        ) {
+            const otherIntents = state.decomposed_intents
+                .filter((i) => i.intent !== intent)
+                .map((i) => i.intent);
+            const allIntents = [intent, ...otherIntents];
+            multiIntentGuidance =
+                DIALOGUE_PROMPTS.MULTI_INTENT_GUIDANCE.replace(
+                    "{{intents}}",
+                    `${allIntents.slice(0, -1).join(", ")} and ${allIntents.slice(-1)}`,
+                ).replace("{{currentIntent}}", intent || "");
+            updatedMultiIntentAcknowledged = true;
+        }
+
+        const userContext =
+            state.user_orders.length > 0
+                ? `<user_orders>\n${formatOrders(state.user_orders)}\n</user_orders>`
+                : "No recent orders found.";
+        const summaryContext = state.summary
+            ? `<summary>\n${state.summary}\n</summary>`
+            : "No previous conversation summary.";
+
+        if (sop) {
+            // 1. Prepare State and Tools
+            const missingData = getMissingData(
+                sop.requiredData,
+                state.order_states,
+            );
+
+            // Separate tools into utility tools (always available) and handoff tools (SOP-specific)
+            const helperTools = tools.filter((t) =>
+                utilityTools.includes(t.name),
+            );
+            const handoffTools = tools.filter((t) =>
+                sop.permittedTools?.includes(t.name),
+            );
+
+            const relevantTools = [...helperTools, ...handoffTools];
+            const toolDescriptions = relevantTools
+                .map((t) => `${t.name}: ${t.description}`)
+                .join("\n");
+
+            // 2. Derive Dynamic Schema based on SOP
+            const dynamicExtractedDataSchema = buildZodSchema(
+                sop.requiredData,
+            ).describe(
+                "Entities extracted from the conversation as required by the SOP.",
+            );
+
+            // Build the tool enum if permitted tools exist
+            const permittedToolNames = relevantTools.map((t) => t.name);
+            const toolNameSchema =
+                permittedToolNames.length > 0
+                    ? z.enum(permittedToolNames as [string, ...string[]])
+                    : z.string();
+
+            const dynamicSopResponseSchema = z.object({
+                extracted_data: dynamicExtractedDataSchema,
+                is_confirmed: z
+                    .boolean()
+                    .describe(
+                        "Whether the user has explicitly confirmed the details gathered so far.",
+                    ),
+                is_complete: z
+                    .boolean()
+                    .describe(
+                        "Whether all required information (including conditional ones) has been gathered and confirmed, and the request is ready for execution.",
+                    ),
+                response: z
+                    .string()
+                    .describe("Your natural language response to the user."),
+                requested_tool: z
+                    .object({
+                        name: toolNameSchema.describe(
+                            "The name of the tool to execute.",
+                        ),
+                        args: z
+                            .string()
+                            .describe(
+                                "A JSON string containing the arguments for the tool call. Must be a valid JSON object.",
+                            ),
+                    })
+                    .nullable()
+                    .describe(
+                        "A tool call to execute ONLY if all SOP requirements and confirmation are met.",
+                    ),
+            });
+
+            // 3. Unified Agent Call
+            const agentPrompt = SOP_AGENT_PROMPT.replace(
+                "{{intentCode}}",
+                intent || "GENERAL",
+            )
+                .replace("{{title}}", sop.title)
+                .replace("{{requiredData}}", JSON.stringify(sop.requiredData))
+                .replace(
+                    "{{workflowSteps}}",
+                    sop.workflowSteps
+                        .map((s: string, i: number) => `${i + 1}. ${s}`)
+                        .join("\n"),
+                )
+                .replace("{{user_context}}", userContext)
+                .replace("{{summary}}", summaryContext)
+                .replace(
+                    "{{gathered_data}}",
+                    JSON.stringify(state.order_states),
+                )
+                .replace("{{missing_data}}", JSON.stringify(missingData))
+                .replace(
+                    "{{is_awaiting_confirmation}}",
+                    state.is_awaiting_confirmation.toString(),
+                )
+                .replace("{{tool_descriptions}}", toolDescriptions);
+
+            let agentOutput: any;
+            try {
+                if (
+                    typeof (strongModel as any).withStructuredOutput ===
+                    "function"
+                ) {
+                    const structuredModel = (
+                        strongModel as any
+                    ).withStructuredOutput(dynamicSopResponseSchema);
+                    agentOutput = await structuredModel.invoke([
+                        { role: "system", content: agentPrompt },
+                        ...contextMessages,
+                    ]);
+                } else {
+                    // Fallback for models/runnables without withStructuredOutput
+                    logger.warn(
+                        "strongModel does not support withStructuredOutput directly. Using prompt-based JSON extraction.",
+                    );
+                    const jsonPrompt = `${agentPrompt}\n\nYou MUST respond with a valid JSON object matching this schema: ${JSON.stringify((dynamicSopResponseSchema as any).shape)}`;
+                    const res = await strongModel.invoke([
+                        { role: "system", content: jsonPrompt },
+                        ...contextMessages,
+                    ]);
+                    const content =
+                        typeof res.content === "string"
+                            ? res.content
+                            : JSON.stringify(res.content);
+                    agentOutput = JSON.parse(
+                        content.replace(/```json|```/g, ""),
+                    );
+                }
+                logger.debug(`Agent Output: ${JSON.stringify(agentOutput)}`);
+            } catch (e) {
+                logger.error(
+                    "Failed to get structured output from SOP Agent:",
+                    e,
+                );
+                return {
+                    partial_responses: [DIALOGUE_PROMPTS.FALLBACK_RESPONSE],
+                    current_intent: intent,
+                    current_sop: sop,
+                };
+            }
+
+            // 3. Process Output and Handle Tools
+            let updatedOrderStates = {
+                ...state.order_states,
+                ...agentOutput.extracted_data,
+            };
+            let finalResponse = agentOutput.response;
+            const isConfirmed = agentOutput.is_confirmed === true;
+            const isComplete = agentOutput.is_complete === true;
+
+            if (agentOutput.requested_tool && isComplete) {
+                const tool = relevantTools.find(
+                    (t) => t.name === agentOutput.requested_tool.name,
+                );
+                if (tool) {
+                    try {
+                        logger.debug(`Executing tool: ${tool.name}`);
+                        let parsedArgs = {};
+                        try {
+                            parsedArgs = JSON.parse(
+                                agentOutput.requested_tool.args,
+                            );
+                        } catch (e) {
+                            logger.error("Failed to parse tool args:", e);
+                        }
+                        const args = {
+                            ...parsedArgs,
+                            userId: state.user_id,
+                            sessionId: state.session_id,
+                        };
+                        const toolResult = await tool.invoke(args);
+
+                        if (sop.permittedTools?.includes(tool.name)) {
+                            logger.log(
+                                `Completion tool ${tool.name} executed successfully for SOP ${sop.id}.`,
+                            );
+                        }
+                    } catch (e) {
+                        logger.error(
+                            `Tool execution error for ${tool.name}:`,
+                            e,
+                        );
+                        finalResponse = `I encountered an error while processing your request. Please try again in a moment.`;
+                    }
+                }
+            }
+
+            const updatedMissingData = getMissingData(
+                sop.requiredData,
+                updatedOrderStates,
+            );
+
+            return {
+                partial_responses: [multiIntentGuidance + finalResponse],
+                current_intent: isComplete ? null : intent,
+                current_sop: isComplete ? null : sop,
+                order_states: updatedOrderStates,
+                is_awaiting_confirmation:
+                    updatedMissingData.length === 0 && !isConfirmed,
+                multi_intent_acknowledged: updatedMultiIntentAcknowledged,
+            };
+        }
+
+        // Default fallback if no SOP is active
+        return {
+            partial_responses: [DIALOGUE_PROMPTS.FALLBACK_RESPONSE],
+            current_intent: null,
+            current_sop: null,
+        };
     };
-  };
 };

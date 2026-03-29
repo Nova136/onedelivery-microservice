@@ -5,8 +5,6 @@ import {
     MessagesPlaceholder,
 } from "@langchain/core/prompts";
 import { BaseMessage } from "@langchain/core/messages";
-// import { HumanMessage } from "@langchain/core/messages";
-// import { MemoryService } from "./memory/memory.service";
 import { KnowledgeClientService } from "./knowledge/knowledge-client.service";
 
 /**
@@ -29,11 +27,11 @@ export class AppService {
             temperature: 0,
         });
 
-//         const systemPrompt = `You are the Guardian Agent for OneDelivery. You handle safety concerns, account/security issues, and escalations.
+        //         const systemPrompt = `You are the Guardian Agent for OneDelivery. You handle safety concerns, account/security issues, and escalations.
 
-// - Help with: safety concerns, account or security issues, complaints needing oversight, policy enforcement, escalation.
-// - Be concise (max 3 sentences), calm, and use the shared chat history for context.
-// - You receive requests from the Orchestrator; respond with a direct answer to the customer.`;
+        // - Help with: safety concerns, account or security issues, complaints needing oversight, policy enforcement, escalation.
+        // - Be concise (max 3 sentences), calm, and use the shared chat history for context.
+        // - You receive requests from the Orchestrator; respond with a direct answer to the customer.`;
 
         const systemPrompt = `You are the Guardian Agent for OneDelivery. You serve two roles:
 
@@ -96,10 +94,11 @@ export class AppService {
             sop: sopContext ? `## SOP REFERENCE\n${sopContext}` : "",
         });
 
-        const response = await this.llm.invoke(formatted) as BaseMessage;
-        const reply = typeof response.content === "string"
-            ? response.content
-            : JSON.stringify(response.content);
+        const response = (await this.llm.invoke(formatted)) as BaseMessage;
+        const reply =
+            typeof response.content === "string"
+                ? response.content
+                : JSON.stringify(response.content);
 
         // if (!isVerification) {
         //     chatHistory.push(newHumanMessage);

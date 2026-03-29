@@ -16,7 +16,6 @@ export const createEscalationNode = () => {
       messages: [new AIMessage(message)],
       partial_responses: null, // Clear any existing partials to avoid double messaging
       retry_count: 0, // Reset for next interaction if any
-      layers: [{ name: "Escalation", status: "completed", data: reason }]
     };
   };
 };

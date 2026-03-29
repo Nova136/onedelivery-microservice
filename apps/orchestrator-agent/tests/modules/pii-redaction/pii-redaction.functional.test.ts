@@ -11,54 +11,41 @@ async function runTests() {
         {
             name: "Email Redaction",
             input: "My email is john.doe@example.com, please contact me there.",
-            validate: (redacted: string) =>
-                redacted.includes("REDACTED_EMAIL_") &&
-                !redacted.includes("john.doe@example.com"),
+            validate: (redacted: string) => redacted.includes("REDACTED_EMAIL_") && !redacted.includes("john.doe@example.com")
         },
         {
             name: "Phone Number Redaction",
             input: "Call me at +1 (555) 123-4567 or 555-987-6543.",
-            validate: (redacted: string) =>
-                redacted.split("REDACTED_PHONE_").length > 2 &&
-                !redacted.includes("555"),
+            validate: (redacted: string) => redacted.split("REDACTED_PHONE_").length > 2 && !redacted.includes("555")
         },
         {
             name: "Credit Card Redaction",
             input: "My card number is 1234-5678-9012-3456.",
-            validate: (redacted: string) =>
-                redacted.includes("REDACTED_CARD_") &&
-                !redacted.includes("1234-5678"),
+            validate: (redacted: string) => redacted.includes("REDACTED_CARD_") && !redacted.includes("1234-5678")
         },
         {
             name: "Name Redaction (NLP)",
             input: "Hello, my name is Alice Smith and I live in London.",
-            validate: (redacted: string) =>
-                redacted.includes("REDACTED_NAME_") &&
-                !redacted.includes("Alice") &&
-                redacted.includes("London"), // London should NOT be redacted
+            validate: (redacted: string) => redacted.includes("REDACTED_NAME_") && !redacted.includes("Alice") && redacted.includes("London") // London should NOT be redacted
         },
         {
             name: "Precise Location Redaction (Regex)",
             input: "Please deliver to 123 Main Street, Apt 4B.",
-            validate: (redacted: string) =>
-                redacted.includes("REDACTED_ADDRESS_") &&
-                !redacted.includes("123 Main Street"),
+            validate: (redacted: string) => redacted.includes("REDACTED_ADDRESS_") && !redacted.includes("123 Main Street")
         },
         {
             name: "Company Name (No Redaction)",
             input: "I am flying with Air Asia today.",
-            validate: (redacted: string) =>
-                redacted.includes("Air Asia") &&
-                !redacted.includes("REDACTED_"),
+            validate: (redacted: string) => redacted.includes("Air Asia") && !redacted.includes("REDACTED_")
         },
         {
             name: "Mixed PII and Scope",
             input: "Contact Bob at bob@gmail.com regarding the delivery to 456 Avenue Road in New York.",
-            validate: (redacted: string) =>
-                redacted.includes("REDACTED_NAME_") &&
-                redacted.includes("REDACTED_EMAIL_") &&
-                redacted.includes("REDACTED_ADDRESS_") &&
-                redacted.includes("New York"), // New York should NOT be redacted
+            validate: (redacted: string) => 
+                redacted.includes("REDACTED_NAME_") && 
+                redacted.includes("REDACTED_EMAIL_") && 
+                redacted.includes("REDACTED_ADDRESS_") && 
+                redacted.includes("New York") // New York should NOT be redacted
         },
         {
             name: "De-tokenization (Retrieval)",
@@ -72,8 +59,8 @@ async function runTests() {
                 const token = tokenMatch[0];
                 const retrieved = await service.retrieve(token);
                 return retrieved === "test@example.com";
-            },
-        },
+            }
+        }
     ];
 
     let passed = 0;
@@ -99,17 +86,15 @@ async function runTests() {
                 console.log("❌ FAILED");
             }
         } catch (error) {
-            console.log(`💥 ERROR: ${error}`);
+            console.log(`💥 ERROR: ${error.message}`);
         }
     }
 
-    console.log(
-        `\n--- TESTS COMPLETED: ${passed}/${testCases.length} PASSED ---`,
-    );
+    console.log(`\n--- TESTS COMPLETED: ${passed}/${testCases.length} PASSED ---`);
     process.exit(passed === testCases.length ? 0 : 1);
 }
 
-runTests().catch((err) => {
+runTests().catch(err => {
     console.error(err);
     process.exit(1);
 });

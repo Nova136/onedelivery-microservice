@@ -2,6 +2,7 @@ export * from "./pre-processing.node";
 export * from "./routing.node";
 export * from "./informational-handler.node";
 export * from "./sop-handler.node";
+export * from "./reset-handler.node";
 export * from "./end-session.node";
 export * from "./post-processing.node";
 export * from "./escalation.node";
