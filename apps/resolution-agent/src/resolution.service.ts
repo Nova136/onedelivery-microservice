@@ -63,7 +63,10 @@ ${rawSop.workflowSteps.join("\n")}
             }
         } catch (error) {
             this.logger.error("Failed to fetch SOP", error);
-            return "REJECTED: Internal database error while fetching Resolution rules.";
+            return this.finalizeReply(
+                payload,
+                "REJECTED: Internal database error while fetching Resolution rules.",
+            );
         }
 
         const preflightReject = await this.maybeRejectPreflight(message);
@@ -71,7 +74,7 @@ ${rawSop.workflowSteps.join("\n")}
             this.logger.log(
                 `[${userId}] Preflight reject — returning without agent loop.`,
             );
-            return preflightReject;
+            return this.finalizeReply(payload, preflightReject);
         }
 
         const basePrompt = resolutionPromptBase
@@ -179,7 +182,7 @@ Before you use a tool or return your final answer, you MUST enclose your interna
         this.logger.log(`[${userId}] Final Result (pre-guardian): "${result}"`);
 
         if (this.shouldSkipResolutionGuardianVerification(result)) {
-            return result;
+            return this.finalizeReply(payload, result);
         }
 
         const verificationMessage = `${GUARDIAN_VERIFY_PREFIX} resolution response against SOP before it is returned to the system. Original request: "${message}". Proposed resolution: "${result}". Confirm it is accurate and follows policy.`;
@@ -196,7 +199,7 @@ Before you use a tool or return your final answer, you MUST enclose your interna
 
         if (!guardianReply.startsWith("FEEDBACK: ")) {
             this.logger.log(`[${userId}] Guardian verified result.`);
-            return result;
+            return this.finalizeReply(payload, result);
         }
 
         // Guardian found issues — inject feedback and let the agent correct itself
@@ -251,7 +254,19 @@ Before you use a tool or return your final answer, you MUST enclose your interna
             .trim() || "REJECTED: Agent failed to correct response after Guardian feedback.";
 
         this.logger.log(`[${userId}] Guardian Retry Result: "${finalResult}"`);
-        return finalResult;
+        return this.finalizeReply(payload, finalResult);
+    }
+
+    /**
+     * Return the string to the RMQ caller and push the same reply to the orchestrator (e.g. WebSocket). No DB.
+     */
+    private finalizeReply(payload: AgentChatPayload, message: string): string {
+        this.agentsClient.notifyOrchestrator({
+            userId: payload.userId,
+            sessionId: payload.sessionId,
+            message,
+        });
+        return message;
     }
 
     /**
