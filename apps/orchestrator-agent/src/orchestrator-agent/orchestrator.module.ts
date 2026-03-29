@@ -79,7 +79,13 @@ import { SessionController } from "./session.controller";
                         environment: "production",
                         component: "sop-handler",
                     },
-                }).withFallbacks({ fallbacks: [geminiPro] });
+                });
+
+                const sopModelFallback = new ChatGoogleGenerativeAI({
+                    model: "gemini-3.1-pro-preview",
+                    apiKey: process.env.GEMINI_API_KEY,
+                    temperature: 0,
+                });
 
                 const infoModel = new ChatOpenAI({
                     modelName: "gpt-5.4-mini",
@@ -141,7 +147,8 @@ import { SessionController } from "./session.controller";
                         orderService,
                         summarizer,
                         knowledgeClient,
-                        sopModel: sopModel as any,
+                        sopModel: sopModel,
+                        sopModelFallback: sopModelFallback,
                         infoModel: infoModel as any,
                         routingModel: routingModel as any,
                         correctionModel: correctionModel as any,

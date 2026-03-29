@@ -1,6 +1,14 @@
 import "reflect-metadata";
 import { OrchestratorService } from "./orchestrator.service";
-import { Post, Body, UseGuards, Controller, Logger } from "@nestjs/common";
+import {
+    Post,
+    Get,
+    Param,
+    Body,
+    UseGuards,
+    Controller,
+    Logger,
+} from "@nestjs/common";
 import {
     ApiBearerAuth,
     ApiOperation,
@@ -19,6 +27,15 @@ export class OrchestratorController {
     private readonly logger = new Logger(OrchestratorController.name);
 
     constructor(private readonly orchestratorService: OrchestratorService) {}
+
+    /**
+     * Get current state of a session
+     */
+    @Get("state/:sessionId")
+    @ApiOperation({ summary: "Get current state of a session" })
+    async getSessionState(@Param("sessionId") sessionId: string) {
+        return this.orchestratorService.getSessionState(sessionId);
+    }
 
     /**
      * Process a user chat message (HTTP)
