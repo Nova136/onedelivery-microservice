@@ -1,4 +1,3 @@
-import "reflect-metadata";
 import { OrchestratorService } from "./orchestrator.service";
 import {
     Post,
@@ -20,13 +19,20 @@ import { HandleUserInputMessageDto } from "@libs/modules/generic/dto/handle-user
 import { ClientAuthGuard } from "@libs/utils/guards/auth.guard";
 import { CurrentUser } from "@libs/utils/decorators/user.decorator";
 import { HandleIncomingMessageDto } from "@libs/modules/generic/dto/handle-incoming-message.dto";
+import { MessagePattern } from "@nestjs/microservices";
+import { AgentChatPayload } from "@libs/modules/generic/interface/agent-chat-payload.interface";
+import { AGENT_CHAT_PATTERN } from "@libs/modules/generic/enum/agent-chat.pattern";
+import { OrchestratorGateway } from "./orchestrator.gateway";
 
 @ApiTags("Orchestrator")
 @Controller("orchestrator-agent")
 export class OrchestratorController {
     private readonly logger = new Logger(OrchestratorController.name);
 
-    constructor(private readonly orchestratorService: OrchestratorService) {}
+    constructor(
+        private readonly orchestratorService: OrchestratorService,
+        private readonly gateway: OrchestratorGateway,
+    ) {}
 
     /**
      * Get current state of a session
@@ -94,59 +100,21 @@ export class OrchestratorController {
     }
 
     /**
-     * Callback for Logistics Agent
+     * Callback for Orchestrator Agent
      */
-    @Post("callback/logistics")
-    @ApiOperation({ summary: "Callback for Logistics Agent" })
-    async handleLogisticsCallback(@Body() body: any) {
+    @MessagePattern(AGENT_CHAT_PATTERN)
+    async handleCallback(@Body() body: AgentChatPayload) {
         try {
-            const {
+            const { sessionId, userId, message } = body;
+            const result = await this.orchestratorService.processAgentCallback(
                 sessionId,
-                result,
-                status,
-                requestId,
-                orderId,
-                ...metadata
-            } = body;
-            return await this.orchestratorService.processAgentCallback(
-                sessionId,
-                result,
-                status,
-                "logistics",
-                requestId,
-                { ...metadata, orderId },
+                userId,
+                message,
             );
+            this.gateway.sendAgentUpdate(sessionId, result.messageContent);
+            return { success: true };
         } catch (error) {
             this.logger.error(`Logistics Callback Error: ${error}`);
-            throw error;
-        }
-    }
-
-    /**
-     * Callback for Resolution Agent
-     */
-    @Post("callback/resolution")
-    @ApiOperation({ summary: "Callback for Resolution Agent" })
-    async handleResolutionCallback(@Body() body: any) {
-        try {
-            const {
-                sessionId,
-                result,
-                status,
-                requestId,
-                orderId,
-                ...metadata
-            } = body;
-            return await this.orchestratorService.processAgentCallback(
-                sessionId,
-                result,
-                status,
-                "resolution",
-                requestId,
-                { ...metadata, orderId },
-            );
-        } catch (error) {
-            this.logger.error(`Resolution Callback Error: ${error}`);
             throw error;
         }
     }

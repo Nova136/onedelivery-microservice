@@ -45,6 +45,13 @@ export class OrchestratorGateway
         this.logger.log(`Client disconnected: ${client.id}`);
     }
 
+    sendAgentUpdate(sessionId: string, messageContent: string) {
+        this.server.to(sessionId).emit("message", {
+            type: "AGENT_UPDATE",
+            message: messageContent,
+        });
+    }
+
     @SubscribeMessage("message")
     async handleMessage(
         @MessageBody() data: any,

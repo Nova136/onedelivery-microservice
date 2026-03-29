@@ -176,11 +176,7 @@ import { SessionController } from "./session.controller";
                 MemoryClientService,
             ],
         },
-        {
-            provide: "WS_CLIENTS",
-            useValue: new Map(),
-        },
     ],
-    exports: [OrchestratorService, "ORCHESTRATOR_GRAPH", "WS_CLIENTS"],
+    exports: [OrchestratorService, "ORCHESTRATOR_GRAPH"],
 })
 export class OrchestratorModule {}

@@ -1,6 +1,5 @@
 import { Injectable, Inject } from "@nestjs/common";
 import { HumanMessage, AIMessage } from "@langchain/core/messages";
-import { WebSocket } from "ws";
 import { MemoryClientService } from "../modules/clients/memory-client/memory-client.service";
 import { PiiRedactionService } from "../modules/pii-redaction/pii-redaction.service";
 import { OutputEvaluatorService } from "../modules/output-evaluator/output-evaluator.service";
@@ -9,7 +8,6 @@ import { OutputEvaluatorService } from "../modules/output-evaluator/output-evalu
 export class OrchestratorService {
     constructor(
         @Inject("ORCHESTRATOR_GRAPH") private readonly graph: any,
-        @Inject("WS_CLIENTS") private clients: Map<string, WebSocket>,
         private readonly memoryService: MemoryClientService,
         private readonly piiService: PiiRedactionService,
         private readonly outputEvaluator: OutputEvaluatorService,
@@ -96,43 +94,12 @@ export class OrchestratorService {
      */
     async processAgentCallback(
         sessionId: string,
-        result: string,
-        status: string,
-        agentType: string,
-        requestId?: string,
-        metadata?: any,
+        userId: string,
+        message: string,
     ) {
         // 1. Redact PII from the agent's result
-        const redactedResult = await this.piiService.redact(result);
-
-        // Build a more descriptive message to avoid ambiguity for multiple requests
-        // We no longer convey the agent name to the end user
-        // We prioritize Order ID if available, else use Request ID
-        const orderId = metadata?.orderId;
-        const identifier = orderId || requestId;
-        const idLabel = orderId ? "Order ID" : "Request ID";
-
-        let messageContent = `Status: ${status || "Completed"}.`;
-        if (identifier) {
-            messageContent += ` ${idLabel}: ${identifier}.`;
-        }
-        messageContent += ` Result: ${redactedResult}`;
-
-        // 2. Evaluate the message for safety/leakage
-        const evaluation = await this.outputEvaluator.evaluateOutput(
-            messageContent,
-            "Background Agent Callback",
-            `Agent: ${agentType}, Status: ${status}, ID: ${identifier || "N/A"}`,
-        );
-
-        if (!evaluation.isSafe) {
-            console.warn(
-                `Agent Callback for session ${sessionId} rejected by evaluator: ${evaluation.issues?.join(", ")}`,
-            );
-            // If it's not safe, we still update the graph state but maybe with a redacted/safe version or just log it
-            // For now, let's just not send it to the user if it's unsafe
-            return { success: false, reason: "Output evaluation failed" };
-        }
+        const redactedResult = await this.piiService.redact(message);
+        const messageContent = `Result: ${redactedResult}`;
 
         // Update LangGraph state in Postgres instead of saving to ChatMessage entity
         const aiMessage = new AIMessage(messageContent);
@@ -146,27 +113,17 @@ export class OrchestratorService {
         );
 
         // Save to persistent history for UI
-        const session = await this.memoryService.getChatHistory("", sessionId);
+        const session = await this.memoryService.getChatHistory(
+            userId,
+            sessionId,
+        );
         await this.memoryService.saveHistory(
-            "",
+            userId,
             sessionId,
             session.messages?.length || 0,
             aiMessage,
         );
 
-        // Send via WebSocket
-        const ws = this.clients.get(sessionId);
-        if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(
-                JSON.stringify({
-                    type: "AGENT_UPDATE",
-                    sessionId: sessionId,
-                    content: messageContent,
-                    agent: agentType,
-                }),
-            );
-        }
-
-        return { success: true };
+        return { success: true, messageContent };
     }
 }
