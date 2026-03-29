@@ -102,9 +102,21 @@ variable "postgres_backup_retention_period" {
 }
 
 variable "enable_alb" {
-  description = "Create ALB and API Gateway (set to false to save ~$32/month when not needed; ECS will have no external HTTP entry)"
+  description = "Create ALB and API Gateway (set to false to save ~$45/month when not needed; ECS will have no external HTTP entry)"
   type        = bool
   default     = false
+}
+
+variable "enable_websocket" {
+  description = "Create WebSocket API Gateway + Lambda Authorizer + DynamoDB tables for async chat (requires enable_alb = true for the HTTP side)"
+  type        = bool
+  default     = false
+}
+
+variable "ws_rate_limit_per_minute" {
+  description = "Maximum WebSocket messages a single user may send per minute (enforced by Lambda Authorizer via DynamoDB)"
+  type        = number
+  default     = 20
 }
 
 variable "vpc_cidr" {

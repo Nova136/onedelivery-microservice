@@ -198,6 +198,7 @@ services:
       - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@postgres:5432/${DB_NAME:-onedelivery}
       - RABBITMQ_URL=amqp://${RABBITMQ_USER:-rabbit}:${RABBITMQ_PASSWORD:-rabbit}@rabbitmq:5672 #gitleaks:allow
       - OPENAI_API_KEY=${OPENAI_API_KEY:-sk}
+      - WEBSOCKET_API_ENDPOINT=http://ws-gateway:3015
     networks:
       - backend
 
