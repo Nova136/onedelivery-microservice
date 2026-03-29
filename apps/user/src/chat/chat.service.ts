@@ -90,7 +90,6 @@ export class ChatService {
 
     async saveHistory(payload: ChatSavePayload): Promise<void> {
         const { userId, sessionId, message } = payload;
-        console.log(payload);
         const session = await this.ensureSession(sessionId, userId);
         const entity = new ChatMessage();
         entity.sessionId = session;
