@@ -201,4 +201,16 @@ export class OrderController {
             message: "Order microservice: list returned",
         };
     }
+
+    @MessagePattern({ cmd: "order.cancel" })
+    async createOrder(@Payload() data: GetOrderDto) {
+        const order = await this.orderService.cancel(data.orderId);
+        return {
+            orderId: order!.id,
+            status: order!.status,
+            customerId: order!.customerId,
+            message: "Order microservice: order cancellation",
+        };
+    }
+
 }

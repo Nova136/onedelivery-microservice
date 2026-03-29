@@ -274,4 +274,14 @@ export class OrderService {
             order: { createdAt: "DESC" },
         });
     }
+
+    async cancel(orderId: string){
+        const order = this.orderRepo.findOne({
+            where: { id: orderId },
+            relations: ["items"],
+        });
+        order.status = OrderStatus.CANCELLED;
+        order.updatedAt = new Date();
+        return await this.orderRepo.save(order);
+    }
 }

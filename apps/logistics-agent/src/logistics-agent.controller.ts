@@ -6,6 +6,7 @@ import { LogisticsAgentService } from "./logistics-agent.service";
 import { ExecuteLogisticsTaskDto } from "./core/dto/execute-logistics-task.dto";
 import { AgentChatPayload } from "@libs/modules/generic/interface/agent-chat-payload.interface";
 import { AGENT_CHAT_PATTERN } from "@libs/modules/generic/enum/agent-chat.pattern";
+import { Cron } from '@nestjs/schedule';
 
 @ApiTags("Logistics Agent (Backend)")
 @Controller("logistics") // Adding a route prefix is good practice for REST fallback
@@ -75,4 +76,12 @@ export class LogisticsAgentController {
 
         return { reply: result };
     }
+
+
+    @Cron("*/5 * * * * *")
+    async handleOrderStatusUpdates(){
+        this.logger.log("cron job");
+
+    }
+
 }
