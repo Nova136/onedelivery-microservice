@@ -21,6 +21,7 @@ import { ResolutionModule } from "./agents/resolution.module";
         AgentsModule,
         KnowledgeModule,
         OrderModule,
+        ResolutionModule,
     ],
     controllers: [LogisticsAgentController],
     providers: [LogisticsAgentService],
