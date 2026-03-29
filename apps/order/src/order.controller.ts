@@ -11,7 +11,9 @@ import { OrderService } from "./order.service";
 import { ClientAuthGuard } from "@libs/utils/guards/auth.guard";
 import { CurrentUser } from "@libs/utils/decorators/user.decorator";
 import { GetOrderDto, CreateOrderDto, CreateOrderRequestDto } from "./core/dto";
+import { OrderStatus } from "./database/entities/order.enum";
 import { ICreateOrderResponse, IListOrdersResponse } from "./core/interface";
+import { log } from "console";
 
 function mapItem(item: {
     id: string;
@@ -116,9 +118,6 @@ export class OrderController {
             items: order.items,
             createdAt: order.createdAt.toISOString(),
             updatedAt: order.updatedAt.toISOString(),
-            totalOrderValue: order.totalOrderValue,
-            totalRefundValue: order.totalRefundValue,
-            refundStatus: order.refundStatus,
         };
     }
 
@@ -169,11 +168,12 @@ export class OrderController {
 
     @MessagePattern({ cmd: "order.list" })
     async listOrders(@Payload() data: { customerId?: string }) {
+        console.log(`Listing orders for customer ${data.customerId}`);
         const orders = await this.orderService.listByCustomer(
             data.customerId ?? "",
         );
         return {
-            orders: orders.map((o) => ({
+            orders: orders.map((o) => ({   
                 orderId: o.id,
                 status: o.status,
                 customerId: o.customerId,
@@ -203,7 +203,7 @@ export class OrderController {
     }
 
     @MessagePattern({ cmd: "order.cancel" })
-    async createOrder(@Payload() data: GetOrderDto) {
+    async cancelOrder(@Payload() data: GetOrderDto) {
         const order = await this.orderService.cancel(data.orderId);
         return {
             orderId: order!.id,
@@ -212,5 +212,52 @@ export class OrderController {
             message: "Order microservice: order cancellation",
         };
     }
+    @MessagePattern({ cmd: "order.updateStatus" })
+    async updateOrderStatus(
+        @Payload() data: { orderId: string; status: string },
+    ) {
+        try {
+            const order = await this.orderService.updateStatus(
+                data.orderId,
+                data.status as OrderStatus,
+            );
+            return {
+                orderId: order.id,
+                status: order.status,
+                customerId: order.customerId,
+                message: "Order microservice: order status updated",
+            };
+        } catch (err) {
+            return {
+                orderId: data.orderId,
+                success: false,
+                message:
+                    err instanceof Error ? err.message : "Failed to update status",
+            };
+        }
+    }
 
+    @MessagePattern({ cmd: "order.advanceLogistics" })
+    async advanceLogistics(@Payload() data: { orderId: string }) {
+        try {
+            const order = await this.orderService.advanceLogisticsStep(
+                data.orderId,
+            );
+            return {
+                orderId: order.id,
+                status: order.status,
+                customerId: order.customerId,
+                message: "Order microservice: logistics step advanced",
+            };
+        } catch (err) {
+            return {
+                orderId: data.orderId,
+                success: false,
+                message:
+                    err instanceof Error
+                        ? err.message
+                        : "Failed to advance logistics step",
+            };
+        }
+    }
 }

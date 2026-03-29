@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
 import { HttpModule } from "@nestjs/axios";
+import { ScheduleModule } from "@nestjs/schedule";
 import { LogisticsAgentController } from "./logistics-agent.controller";
 import { LogisticsAgentService } from "./logistics-agent.service";
 import { AgentsModule } from "./agents/agents.module";
@@ -11,6 +12,7 @@ import { KnowledgeModule } from "./agents/knowledge.module";
 @Module({
     imports: [
         CommonModule,
+        ScheduleModule.forRoot(),
         ConfigModule.forRoot({
             isGlobal: true,
         }),

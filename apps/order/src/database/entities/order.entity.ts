@@ -57,6 +57,10 @@ export class Order {
     })
     priorityOption: PriorityOption;
 
+    /** Set when a logistics auto-advance last ran; used with priority to enforce min time per step. */
+    @Column({ type: "timestamp", nullable: true })
+    lastLogisticsAdvanceAt: Date | null;
+
     @BeforeInsert()
     generateId() {
         const date = new Date();

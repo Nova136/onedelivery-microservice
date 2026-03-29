@@ -1,4 +1,5 @@
 import { Injectable, Logger } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import { ChatOpenAI } from "@langchain/openai";
 import {
     ChatPromptTemplate,
@@ -31,6 +32,7 @@ export class LogisticsAgentService {
         private knowledgeClient: KnowledgeClientService,
         private agentsClient: AgentsClientService,
         private orderClient: OrderClientService,
+        private configService: ConfigService,
     ) {
         // 1. Initialize the LLM (Temperature 0 is crucial for backend math agents!)
         this.llm = new ChatOpenAI({
@@ -54,6 +56,8 @@ export class LogisticsAgentService {
             run_type: "chain",
         }) as any;
     }
+
+    
 
     async executeTask(payload: ExecuteLogisticsTaskDto): Promise<string> {
         this.logger.log(
@@ -299,6 +303,17 @@ export class LogisticsAgentService {
         return finalResponseString;
     }
 
+    async getOrders(): Promise<
+        Array<{ orderId: string; customerId: string; status: string }>
+    > {
+        const { orders } = await this.orderClient.listOrders();
+        return orders.map((o) => ({
+            orderId: o.orderId,
+            customerId: o.customerId,
+            status: o.status,
+        }));
+    }
+
     /** Skip Guardian verification for system-level fallbacks that are not real LLM decisions. */
     private shouldSkipGuardianVerification(result: string): boolean {
         if (!result.startsWith("REJECTED:")) return false;
@@ -306,5 +321,20 @@ export class LogisticsAgentService {
             result.includes("timed out") ||
             result.includes("failed to provide a valid response")
         );
+    }
+    async updateOrderStatus(payload: ExecuteLogisticsTaskDto): Promise<string> {
+        this.logger.log(
+            `[${payload.userId}] Updating order status for order: ${payload.orderId}`,
+        );
+        if (!payload.orderId?.trim()) {
+            return "REJECTED: orderId is required to update order status.";
+        }
+        try {
+            return await this.orderClient.updateOrderStatus(payload.orderId);
+        } catch (err) {
+            const msg =
+                err instanceof Error ? err.message : "Unknown order service error";
+            return `REJECTED: ${msg}`;
+        }
     }
 }

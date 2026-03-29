@@ -186,6 +186,7 @@ const logisticsService = new LogisticsAgentService(
     mockKnowledgeClient,
     {} as any,
     {} as any,
+    { get: () => undefined } as any,
 );
 
 // Override the tools directly on the instance to provide mock deterministic responses

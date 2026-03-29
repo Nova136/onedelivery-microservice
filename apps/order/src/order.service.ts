@@ -19,6 +19,13 @@ import {
     RefundStatus,
 } from "./database/entities/order.enum";
 
+/** Min time (ms) the order must stay in the current logistics step before the next advance. */
+const LOGISTICS_STEP_MIN_MS: Record<PriorityOption, number> = {
+    [PriorityOption.FAST]: 20 * 60 * 1000,
+    [PriorityOption.STANDARD]: 40 * 60 * 1000,
+    [PriorityOption.ECONOMY]: 60 * 60 * 1000,
+};
+
 @Injectable()
 export class OrderService {
     constructor(
@@ -255,9 +262,9 @@ export class OrderService {
         });
     }
 
-    async listByCustomer(customerId: string) {
+    async listByCustomer(customerId?: string) {
         return this.orderRepo.find({
-            where: { customerId },
+            ...(customerId ? { where: { customerId } } : {}),
             relations: ["items"],
             order: { createdAt: "DESC" },
         });
@@ -275,13 +282,66 @@ export class OrderService {
         });
     }
 
-    async cancel(orderId: string){
-        const order = this.orderRepo.findOne({
+    async cancel(orderId: string) {
+        const order = await this.orderRepo.findOne({
             where: { id: orderId },
             relations: ["items"],
         });
+        if (!order) {
+            throw new Error(`Order ${orderId} not found`);
+        }
         order.status = OrderStatus.CANCELLED;
         order.updatedAt = new Date();
+        return this.orderRepo.save(order);
+    }
+
+    async updateStatus(orderId: string, status: OrderStatus) {
+        const order = await this.orderRepo.findOne({
+            where: { id: orderId },
+        });
+        if (!order) {
+            throw new Error(`Order ${orderId} not found`);
+        }
+        order.status = status;
+        order.updatedAt = new Date();
         return await this.orderRepo.save(order);
+    }
+
+    /** Start of the current logistics step for elapsed-time checks (before first advance, uses order timestamps). */
+    private logisticsWaitReference(order: Order): Date {
+        if (order.lastLogisticsAdvanceAt) {
+            return order.lastLogisticsAdvanceAt;
+        }
+        if (order.status === OrderStatus.PAYMENT_COMPLETED) {
+            return order.updatedAt;
+        }
+        return order.createdAt;
+    }
+
+    /** Moves the order one step forward in the fulfillment chain (for logistics automation). */
+    async advanceLogisticsStep(orderId: string): Promise<Order> {
+        const order = await this.getById(orderId);
+        if (!order) {
+            throw new Error(`Order ${orderId} not found`);
+        }
+        const next: Partial<Record<OrderStatus, OrderStatus>> = {
+            [OrderStatus.CREATED]: OrderStatus.PREPARATION,
+            [OrderStatus.PAYMENT_COMPLETED]: OrderStatus.PREPARATION,
+            [OrderStatus.PREPARATION]: OrderStatus.IN_DELIVERY,
+            [OrderStatus.IN_DELIVERY]: OrderStatus.DELIVERED,
+        };
+        const n = next[order.status];
+        if (!n) {
+            return order;
+        }
+        const minMs = LOGISTICS_STEP_MIN_MS[order.priorityOption];
+        const elapsed = Date.now() - this.logisticsWaitReference(order).getTime();
+        if (elapsed < minMs) {
+            return order;
+        }
+        order.status = n;
+        order.updatedAt = new Date();
+        order.lastLogisticsAdvanceAt = new Date();
+        return this.orderRepo.save(order);
     }
 }
