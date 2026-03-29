@@ -1,9 +1,11 @@
-# Local dev stack: Postgres, RabbitMQ (event bus), LocalStack (S3 + SNS), Kong (API gateway).
+# Local dev stack: Postgres, RabbitMQ (event bus), LocalStack (S3 + SNS + DynamoDB), Kong (API gateway),
+# ws-gateway (WebSocket gateway — local replacement for Lambda + API Gateway WebSocket).
 # Run: docker compose up -d
 # See .env.example for variables.
 #
 # Gateway: Kong listens on 8000 (proxy). Point the frontend to http://localhost:8000 .
-# Routes: /order -> order:3001, /logistics -> logistics:3002, /payment -> payment:3003, /audit -> audit:3004, /user -> user:3005
+# HTTP routes: /order -> order:3001, /logistics -> logistics:3002, etc. (services run on host via npm run start:all)
+# WebSocket:   ws://localhost:8000/ws  →  ws-gateway:3015
 # (Microservices run on host via npm run start:all; Kong uses host.docker.internal.)
 
 services:
@@ -97,10 +99,44 @@ services:
       - "${LOCALSTACK_PORT:-4566}:4566" # Gateway
     volumes:
       - localstack_data:/var/lib/localstack
-      - ./scripts/localstack-init.sh:/etc/localstack/init/ready.d/init.sh:ro
+      - ./scripts/localstack-init.sh:/etc/localstack/init/ready.d/init.sh
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:4566/_localstack/health"]
       interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - backend
+
+  # Local replacement for Lambda + API Gateway WebSocket.
+  # Handles $connect (JWT auth + rate limit), sendMessage → RabbitMQ, $disconnect.
+  # Exposes POST /connections/:connectionId for orchestrator-agent push-back.
+  # Set WEBSOCKET_API_ENDPOINT=http://ws-gateway:3015 in orchestrator-agent .env for local dev.
+  ws-gateway:
+    build:
+      context: ./scripts/ws-gateway
+      dockerfile: Dockerfile
+    container_name: onedelivery-ws-gateway
+    restart: unless-stopped
+    environment:
+      WS_PORT: 3015
+      DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@database:5432/${DB_NAME:-onedelivery}
+      JWT_SECRET: ${JWT_SECRET:-ffa32c3d40342bec6c1bcfba7b4f8197}
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-rabbit}:${RABBITMQ_PASSWORD:-rabbit}@rabbitmq:5672
+      ORCHESTRATOR_QUEUE: ${RABBITMQ_ORCHESTRATOR_AGENT_QUEUE:-orchestrator_agent_queue}
+      ALLOWED_ROLES: ${WS_ALLOWED_ROLES:-User,Admin}
+      RATE_LIMIT_PER_MINUTE: ${WS_RATE_LIMIT_PER_MINUTE:-20}
+    ports:
+      - "${WS_GATEWAY_PORT:-3015}:3015"
+    depends_on:
+      database:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3015/health', r => process.exit(r.statusCode === 404 ? 0 : 0)).on('error', () => process.exit(1))\""]
+      interval: 10s
       timeout: 5s
       retries: 5
       start_period: 10s

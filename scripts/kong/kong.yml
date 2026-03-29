@@ -3,6 +3,8 @@
 # Debug Docker stack maps 3001:9001 (audit), 3002:9002 (logistics), 3003:9003 (order), 3004:9004 (payment), 3005:9005 (user), 3006:9006 (incident).
 # Agents: 3010 orchestrator-agent, 3011 logistics-agent, 3012 resolution-agent, 3013 guardian-agent, 3014 qa-agent.
 # Kong uses host.docker.internal:300x to reach the service on the host.
+#
+# WebSocket: ws://localhost:8000/ws?token=<JWT>  → ws-gateway:3015 (Kong proxies WS transparently over HTTP)
 
 _format_version: "3.0"
 
@@ -113,3 +115,16 @@ services:
       - name: qa-agent-route
         paths: ["/qa-agent"]
         strip_path: false
+
+  # WebSocket chat gateway (local replacement for Lambda + API Gateway WebSocket).
+  # Clients connect with:  ws://localhost:8000/ws?token=<JWT>[&sessionId=<id>]
+  # Kong proxies the WebSocket upgrade to ws-gateway:3015 and strips the /ws prefix.
+  - name: ws-gateway
+    url: http://ws-gateway:3015
+    routes:
+      - name: ws-gateway-route
+        paths: ["/ws"]
+        strip_path: true
+        protocols:
+          - http
+          - https

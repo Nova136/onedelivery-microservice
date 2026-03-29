@@ -1,0 +1,10 @@
+{
+  "name": "onedelivery-ws-send-message",
+  "version": "1.0.0",
+  "description": "Lambda: publish WebSocket chat messages to RabbitMQ",
+  "main": "index.js",
+  "dependencies": {
+    "amqplib": "^0.10.4",
+    "pg": "^8.13.3"
+  }
+}
