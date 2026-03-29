@@ -17,6 +17,6 @@ export enum RefundStatus {
 
 export enum PriorityOption {
     STANDARD = "PRIO-STD",
-    FAST = "PRIO-FAST",
+    EXPRESS = "PRIO-EXPRESS",
     ECONOMY = "PRIO-ECON",
 }
