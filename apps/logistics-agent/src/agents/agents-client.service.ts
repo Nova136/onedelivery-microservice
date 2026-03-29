@@ -14,12 +14,15 @@ export interface AgentChatResult {
 export class AgentsClientService {
     constructor(
         @Inject("GUARDIAN_AGENT") private readonly guardianClient: ClientProxy,
+        @Inject("RESOLUTION_AGENT") private readonly resolutionClient: ClientProxy,
     ) {}
 
     private getClient(agent: AgentName): ClientProxy {
         switch (agent) {
             case "guardian":
                 return this.guardianClient;
+            case "resolution":
+                return this.resolutionClient;
             default:
                 throw new Error(`Unknown agent: ${agent}`);
         }

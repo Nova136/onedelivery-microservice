@@ -18,4 +18,12 @@ export class ResolutionController {
         const result = await this.resolutionService.processRefund(payload);
         return { reply: result };
     }
+
+    @MessagePattern("resolution.cancel")
+    async handleRefundCancelRequest(@Payload() orderId: string){
+        this.logger.log(
+            `Received cancel refund request for order ${orderId}`);
+        const result = await this.resolutionService.processCancelRefund(orderId);
+        return result;
+    }
 }

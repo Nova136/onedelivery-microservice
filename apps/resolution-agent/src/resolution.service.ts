@@ -254,6 +254,10 @@ Before you use a tool or return your final answer, you MUST enclose your interna
         return finalResult;
     }
 
+    async processCancelRefund(orderId: string): Promise<string> {
+            return "refunded"
+    }
+
     /**
      * Single order fetch: reject if refundStatus is not NONE, or (missing/wrong items) if amount > $20.
      */

@@ -21,9 +21,9 @@ import {
 
 /** Min time (ms) the order must stay in the current logistics step before the next advance. */
 const LOGISTICS_STEP_MIN_MS: Record<PriorityOption, number> = {
-    [PriorityOption.FAST]: 20 * 60 * 1000,
-    [PriorityOption.STANDARD]: 40 * 60 * 1000,
-    [PriorityOption.ECONOMY]: 60 * 60 * 1000,
+    [PriorityOption.FAST]: 15 * 60 * 1000,
+    [PriorityOption.STANDARD]: 25 * 60 * 1000,
+    [PriorityOption.ECONOMY]: 35 * 60 * 1000,
 };
 
 @Injectable()
@@ -326,7 +326,7 @@ export class OrderService {
         }
         const next: Partial<Record<OrderStatus, OrderStatus>> = {
             [OrderStatus.CREATED]: OrderStatus.PREPARATION,
-            [OrderStatus.PAYMENT_COMPLETED]: OrderStatus.PREPARATION,
+            [OrderStatus.PAYMENT_COMPLETED]: OrderStatus.CREATED,
             [OrderStatus.PREPARATION]: OrderStatus.IN_DELIVERY,
             [OrderStatus.IN_DELIVERY]: OrderStatus.DELIVERED,
         };

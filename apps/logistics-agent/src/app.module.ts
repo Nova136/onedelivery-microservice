@@ -8,6 +8,7 @@ import { AgentsModule } from "./agents/agents.module";
 import { CommonModule } from "@libs/modules/common/common.module";
 import { OrderModule } from "./agents/order.module";
 import { KnowledgeModule } from "./agents/knowledge.module";
+import { ResolutionModule } from "./agents/resolution.module";
 
 @Module({
     imports: [
