@@ -16,30 +16,83 @@ export default class SopSeeder implements Seeder {
                 agentOwner: "orchestrator",
                 title: "Asking for money back for missing or wrong items or quality issue or late delivery.",
                 requiredData: [
-                    "orderId",
-                    "issueCategory (missing_item, quality_issue, wrong_item, late_delivery)",
-                    "description",
-                    "items (array of objects with item name and quantity. NOTE: Only require this if the category is missing_item or wrong_item. DO NOT assume or infer quantity from singular/plural words. You MUST explicitly ask the user for the exact numeric quantity if it is not explicitly provided.)",
+                    {
+                        name: "orderId",
+                        type: "string",
+                        description: "The order ID.",
+                    },
+                    {
+                        name: "issueCategory",
+                        type: "string",
+                        description:
+                            "Categorize the problem: 'missing_item', 'wrong_item', 'quality_issue', or 'late_delivery'.",
+                    },
+                    {
+                        name: "description",
+                        type: "string",
+                        description:
+                            "The user's description of the issue in their own words.",
+                    },
+                    {
+                        name: "items",
+                        type: "array",
+                        description:
+                            "An array of objects containing the name and quantity of an affected item. Only require this if the category is missing_item or wrong_item.",
+                        itemsSchema: [
+                            {
+                                name: "name",
+                                type: "string",
+                                description: "The name of the affected item.",
+                            },
+                            {
+                                name: "quantity",
+                                type: "number",
+                                description:
+                                    "The quantity of this specific item affected.",
+                            },
+                        ],
+                    },
                 ],
                 workflowSteps: [
                     "1. Ensure you have gathered all the required data from the user. Ask clarifying questions if anything is missing.",
                     "2. Empathize with the user and apologize for the mistake with their food.",
                     "3. Execute the Route_To_Resolution tool, passing the gathered data.",
-                    "4. Wait for the Route_To_Resolution tool to return a success or rejection string.",
-                    "5. If successful, confirm the specific refund amount with the user so they know what to expect.",
-                    "6. If rejected, politely explain that the request requires a manual review and ask if they'd like to be transferred to human support.",
-                    "7. If the user agrees to be transferred, execute the Escalate_To_Human tool.",
                 ],
-                permittedTools: ["Route_To_Resolution", "Escalate_To_Human"],
+                permittedTools: ["Route_To_Resolution"],
             },
             {
                 intentCode: "PROCESS_REFUND_LOGIC",
                 agentOwner: "refund_agent",
                 title: "Refund Calculation and Execution",
                 requiredData: [
-                    "orderId",
-                    "issueCategory",
-                    "items (array of objects with item name and quantity. NOTE: Only require this if the category is missing_item or wrong_item. If late_delivery or quality_issue, skip this.)",
+                    {
+                        name: "orderId",
+                        type: "string",
+                        description: "The order ID.",
+                    },
+                    {
+                        name: "issueCategory",
+                        type: "string",
+                        description: "The category of the issue.",
+                    },
+                    {
+                        name: "items",
+                        type: "array",
+                        description:
+                            "Array of items affected. Only required if the category is missing_item or wrong_item.",
+                        itemsSchema: [
+                            {
+                                name: "name",
+                                type: "string",
+                                description: "Item name",
+                            },
+                            {
+                                name: "quantity",
+                                type: "number",
+                                description: "Item quantity",
+                            },
+                        ],
+                    },
                 ],
                 workflowSteps: [
                     "1. First, you MUST get the full order details using the Get_Order_Details tool. Look closely at the 'totalRefundedAmount' and 'totalOrderValue'.",
@@ -70,25 +123,36 @@ export default class SopSeeder implements Seeder {
                 agentOwner: "orchestrator",
                 title: "Cancelling an ongoing order.",
                 requiredData: [
-                    "orderId",
-                    "reason for cancellation (extract this from the user's message if provided naturally, e.g., 'I don't want it anymore', 'taking too long')",
+                    {
+                        name: "orderId",
+                        type: "string",
+                        description: "The order ID.",
+                    },
+                    {
+                        name: "description",
+                        type: "string",
+                        description:
+                            "The user's reason for cancellation in their own words.",
+                    },
                 ],
                 workflowSteps: [
-                    "1. Ensure you have gathered all the required data from the user. If the user already provided a reason, proceed immediately. If the reason for cancellation is not provided, you MUST ask the user for it (but let them know they can skip it).",
-                    "2. Empathize with the user's need to cancel.",
+                    "1. Ensure you have gathered all the required data from the user. Ask clarifying questions if anything is missing.",
+                    "2. Empathize with the user and apologize for the mistake with their food.",
                     "3. Execute the Route_To_Logistics tool, passing the gathered data.",
-                    "4. Wait for the Route_To_Logistics tool to return a success or rejection string.",
-                    "5. If successful, confirm to the user that the order has been cancelled and their refund is processing.",
-                    "6. If rejected, politely explain why and ask if they'd like to be transferred to human support.",
-                    "7. If the user agrees to be transferred, execute the Escalate_To_Human tool.",
                 ],
-                permittedTools: ["Route_To_Logistics", "Escalate_To_Human"],
+                permittedTools: ["Route_To_Logistics"],
             },
             {
                 intentCode: "PROCESS_CANCELLATION_LOGIC",
                 agentOwner: "logistics_agent",
                 title: "Order Cancellation Validation and Execution",
-                requiredData: ["orderId"],
+                requiredData: [
+                    {
+                        name: "orderId",
+                        type: "string",
+                        description: "The order ID.",
+                    },
+                ],
                 workflowSteps: [
                     "1. Execute Get_Order_Details tool to fetch the current state of the order.",
                     "2. Wait for the Get_Order_Details tool's response.",

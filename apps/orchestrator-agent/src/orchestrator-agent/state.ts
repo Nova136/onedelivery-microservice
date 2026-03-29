@@ -5,7 +5,7 @@ import { BaseMessage } from "@langchain/core/messages";
  * The graph state MUST include the following properties:
  * - messages: An array of recent conversation turns.
  * - summary: A rolling summary of the older conversation context.
- * - current_category: The current routing category (sticky session).
+ * - current_intent: The current routing intent (sticky session).
  * - order_states: A dictionary (key-value map) where the key is the orderId.
  */
 export const OrchestratorState = Annotation.Root({
@@ -13,10 +13,6 @@ export const OrchestratorState = Annotation.Root({
   summary: Annotation<string>({
     reducer: (x, y) => (y === undefined ? x : y),
     default: () => "",
-  }),
-  current_category: Annotation<string | null>({
-    reducer: (x, y) => (y === undefined ? x : y),
-    default: () => null,
   }),
   current_intent: Annotation<string | null>({
     reducer: (x, y) => (y === undefined ? x : y),
@@ -54,7 +50,7 @@ export const OrchestratorState = Annotation.Root({
     },
     default: () => [],
   }),
-  decomposed_intents: Annotation<Array<{ category: string; intent: string; query: string }>>({
+  decomposed_intents: Annotation<Array<{ intent: string; query: string }>>({
     reducer: (x, y) => y ?? x,
     default: () => [],
   }),
@@ -74,7 +70,7 @@ export const OrchestratorState = Annotation.Root({
     reducer: (x, y) => y ?? x,
     default: () => false,
   }),
-  remaining_intents: Annotation<Array<{ category: string; intent: string; query: string }>>({
+  remaining_intents: Annotation<Array<{ intent: string; query: string }>>({
     reducer: (x, y) => y ?? x,
     default: () => [],
   }),
@@ -85,11 +81,6 @@ export const OrchestratorState = Annotation.Root({
   session_id: Annotation<string>({
     reducer: (x, y) => y ?? x,
     default: () => "",
-  }),
-  // Internal tracking for the UI to show layer progress
-  layers: Annotation<Array<{ name: string; status: "pending" | "completed" | "failed"; data: any }>>({
-    reducer: (x, y) => [...x, ...y],
-    default: () => [],
   }),
 });
 

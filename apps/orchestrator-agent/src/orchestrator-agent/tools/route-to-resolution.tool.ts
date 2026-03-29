@@ -13,7 +13,7 @@ interface ResolutionPayload {
     userId: string;
     sessionId: string;
     orderId?: string;
-    issueCategory?:
+    issueIntent?:
         | "missing_item"
         | "wrong_item"
         | "quality_issue"
@@ -41,7 +41,7 @@ const resolutionSchema = z.object({
         .string()
         .optional()
         .describe("The order ID. REQUIRED if action is 'request_refund'."),
-    issueCategory: z
+    issueIntent: z
         .enum(["missing_item", "wrong_item", "quality_issue", "late_delivery"])
         .optional()
         .describe(

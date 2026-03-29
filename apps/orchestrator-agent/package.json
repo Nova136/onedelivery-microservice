@@ -17,5 +17,15 @@
         "test:pii-redaction": "tsx tests/modules/pii-redaction/pii-redaction.functional.test.ts",
         "test:semantic-router": "tsx tests/modules/semantic-router/semantic-router.functional.test.ts",
         "test:semantic-router-adversarial": "tsx tests/modules/semantic-router/semantic-router.adversarial.test.ts"
+    },
+    "dependencies": {
+        "@nestjs/platform-socket.io": "^11.1.17",
+        "@nestjs/websockets": "^11.1.17",
+        "socket.io": "^4.8.3",
+        "socket.io-client": "^4.8.3",
+        "uuid": "^11.1.0"
+    },
+    "devDependencies": {
+        "@types/uuid": "^10.0.0"
     }
 }

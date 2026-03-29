@@ -1,3 +1,5 @@
+import { BaseChatModel } from "@langchain/core/language_models/chat_models";
+import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { ChatOpenAI } from "@langchain/openai";
 import { Logger, Injectable } from "@nestjs/common";
 
@@ -26,22 +28,35 @@ const INPUT_VALIDATOR_PROMPT = `
 @Injectable()
 export class InputValidatorService {
     private readonly logger = new Logger(InputValidatorService.name);
-    private model: ChatOpenAI;
+    private model: BaseChatModel;
 
     constructor() {
-        this.model = new ChatOpenAI({
+        const primaryModel = new ChatOpenAI({
             modelName: "gpt-4o-mini",
             openAIApiKey: process.env.OPENAI_API_KEY,
             temperature: 0,
-            metadata: { environment: "production", component: "input-validator" },
-            tags: ["production", "guardrail"]
+            metadata: {
+                environment: "production",
+                component: "input-validator",
+            },
+            tags: ["production", "guardrail"],
         });
+
+        const geminiFallback = new ChatGoogleGenerativeAI({
+            model: "gemini-3-flash-preview",
+            apiKey: process.env.GEMINI_API_KEY,
+            temperature: 0,
+        });
+
+        this.model = primaryModel.withFallbacks({
+            fallbacks: [geminiFallback],
+        }) as unknown as BaseChatModel;
     }
 
     async validateMessage(
         message: string,
     ): Promise<{ isValid: boolean; error?: string }> {
-        this.logger.log(`Validating message: "${message.substring(0, 50)}..."`);
+        this.logger.log(`Validating message: "${message}"`);
         // Basic checks first
         if (!message || message.trim().length === 0) {
             this.logger.warn("Empty message received.");
@@ -89,31 +104,54 @@ export class InputValidatorService {
             "wget",
         ];
 
-        if (injectionKeywords.some(keyword => lowerMessage.includes(keyword))) {
-            this.logger.warn(`Security Threat Detected: Potential Prompt Injection in message: "${message.substring(0, 50)}..."`);
-            return { isValid: false, error: "Security Threat Detected: Potential Prompt Injection" };
+        if (
+            injectionKeywords.some((keyword) => lowerMessage.includes(keyword))
+        ) {
+            this.logger.warn(
+                `Security Threat Detected: Potential Prompt Injection in message: "${message.substring(0, 50)}..."`,
+            );
+            return {
+                isValid: false,
+                error: "Security Threat Detected: Potential Prompt Injection",
+            };
         }
 
         // 2. Detect potential base64 or hex encoded payloads
         const base64Regex = /[A-Za-z0-9+/]{40,}={0,2}/;
         const hexRegex = /\b[0-9a-fA-F]{40,}\b/;
         if (base64Regex.test(message) || hexRegex.test(message)) {
-            this.logger.warn("Security Threat Detected: Potential Obfuscated Payload.");
-            return { isValid: false, error: "Security Threat Detected: Potential Obfuscated Payload" };
+            this.logger.warn(
+                "Security Threat Detected: Potential Obfuscated Payload.",
+            );
+            return {
+                isValid: false,
+                error: "Security Threat Detected: Potential Obfuscated Payload",
+            };
         }
 
         // 3. Detect character-level manipulation (e.g., using invisible characters or homoglyphs)
-        const controlCharsRegex = /[\u0000-\u0008\u000B-\u000C\u000E-\u001F\u007F-\u009F\u200B-\u200D\uFEFF]/;
+        const controlCharsRegex =
+            /[\u0000-\u0008\u000B-\u000C\u000E-\u001F\u007F-\u009F\u200B-\u200D\uFEFF]/;
         if (controlCharsRegex.test(message)) {
-            this.logger.warn("Security Threat Detected: Malformed Input (Control Characters).");
-            return { isValid: false, error: "Security Threat Detected: Malformed Input" };
+            this.logger.warn(
+                "Security Threat Detected: Malformed Input (Control Characters).",
+            );
+            return {
+                isValid: false,
+                error: "Security Threat Detected: Malformed Input",
+            };
         }
 
         // 4. Detect excessive repetition (DoS mitigation)
         const repetitionRegex = /(.)\1{20,}/;
         if (repetitionRegex.test(message)) {
-            this.logger.warn("Security Threat Detected: Excessive Repetition (Potential DoS).");
-            return { isValid: false, error: "Security Threat Detected: Malformed Input" };
+            this.logger.warn(
+                "Security Threat Detected: Excessive Repetition (Potential DoS).",
+            );
+            return {
+                isValid: false,
+                error: "Security Threat Detected: Malformed Input",
+            };
         }
 
         // Use LLM for content validation

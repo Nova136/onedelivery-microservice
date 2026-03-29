@@ -1,14 +1,16 @@
-import { StateGraph, START, END, BaseCheckpointSaver, Send } from "@langchain/langgraph";
-import { OrchestratorState, OrchestratorStateType } from "./state";
-import { ChatOpenAI } from "@langchain/openai";
-import { InputValidatorService } from "../modules/input-validator/input-validator.service";
-import { SemanticRouterService } from "../modules/semantic-router/semantic-router.service";
-import { OutputEvaluatorService } from "../modules/output-evaluator/output-evaluator.service";
-import { KnowledgeClientService } from "../modules/clients/knowledge-client/knowledge-client.service";
-import { OrderClientService } from "../modules/clients/order-client/order-client.service";
-import { SummarizerService } from "../modules/summarizer/summarizer.service";
+import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { StructuredTool } from "@langchain/core/tools";
+import { StateGraph, START, END, BaseCheckpointSaver, Send } from "@langchain/langgraph";
+import { AgentsClientService } from "../modules/clients/agents-client/agents-client.service";
+import { KnowledgeClientService } from "../modules/clients/knowledge-client/knowledge-client.service";
+import { MemoryClientService } from "../modules/clients/memory-client/memory-client.service";
+import { OrderClientService } from "../modules/clients/order-client/order-client.service";
+import { InputValidatorService } from "../modules/input-validator/input-validator.service";
+import { OutputEvaluatorService } from "../modules/output-evaluator/output-evaluator.service";
+import { SemanticRouterService } from "../modules/semantic-router/semantic-router.service";
+import { SummarizerService } from "../modules/summarizer/summarizer.service";
 import * as nodes from "./nodes";
+import { OrchestratorState, OrchestratorStateType } from "./state";
 
 // Define Services Interface
 export interface GraphServices {
@@ -18,8 +20,11 @@ export interface GraphServices {
   orderService: OrderClientService;
   summarizer: SummarizerService;
   knowledgeClient: KnowledgeClientService;
-  strongModel: ChatOpenAI;
-  lightModel: ChatOpenAI;
+  sopModel: BaseChatModel;
+  infoModel: BaseChatModel;
+  routingModel: BaseChatModel;
+  correctionModel: BaseChatModel;
+  aggregationModel: BaseChatModel;
   tools: StructuredTool[];
 }
 
@@ -38,11 +43,14 @@ export function createOrchestratorGraph(services: GraphServices, checkpointer: B
   }
 
   /**
-   * Router for Category Branching (Parallel Processing)
+   * Router for Intent Branching (Parallel Processing)
    */
-  function routeByCategory(state: OrchestratorStateType) {
-    // If we have a sticky category, route directly to it
-    if (state.current_category && (state.current_category === "cancel_order" || state.current_category === "request_refund")) {
+  async function routeByIntent(state: OrchestratorStateType) {
+    const sops = await services.knowledgeClient.listOrchestratorSops();
+    const sopIntents = sops.map(s => s.intentCode);
+
+    // If we have a sticky intent, route directly to it
+    if (state.current_intent && sopIntents.includes(state.current_intent)) {
       return "sop_handler";
     }
 
@@ -52,24 +60,25 @@ export function createOrchestratorGraph(services: GraphServices, checkpointer: B
     }
 
     const sends = state.decomposed_intents.map((intentObj, index) => {
-      const category = intentObj.category;
-      const intentCode = intentObj.intent || "GENERAL_QUERY";
+      const intentCode = intentObj.intent || "general";
       
       const payload = {
         ...state,
-        current_category: category,
         current_intent: intentCode,
         current_intent_index: index,
       };
 
-      if (category === "faq" || category === "general") {
+      if (intentCode === "faq" || intentCode === "general") {
         return new Send("informational_handler", payload);
       }
-      if (category === "escalate") {
+      if (intentCode === "escalate") {
         return new Send("escalation", payload);
       }
-      if (category === "end_session") {
+      if (intentCode === "end_session") {
         return new Send("end_session", payload);
+      }
+      if (intentCode === "reset") {
+        return new Send("reset_handler", payload);
       }
       return new Send("sop_handler", payload);
     });
@@ -85,15 +94,17 @@ export function createOrchestratorGraph(services: GraphServices, checkpointer: B
     }))
     .addNode("routing", nodes.createRoutingNode({
       semanticRouter: services.semanticRouter,
-      lightModel: services.lightModel
+      lightModel: services.routingModel,
+      knowledgeClient: services.knowledgeClient
     }))
     .addNode("informational_handler", nodes.createInformationalHandlerNode({
-      lightModel: services.lightModel,
+      lightModel: services.infoModel,
       tools: services.tools
     }))
     .addNode("end_session", nodes.createEndSessionNode(services.tools))
+    .addNode("reset_handler", nodes.createResetHandlerNode())
     .addNode("sop_handler", nodes.createSopHandlerNode({
-      strongModel: services.strongModel,
+      strongModel: services.sopModel,
       tools: services.tools,
       knowledgeClient: services.knowledgeClient
     }))
@@ -101,11 +112,11 @@ export function createOrchestratorGraph(services: GraphServices, checkpointer: B
       outputEvaluator: services.outputEvaluator
     }))
     .addNode("self_correction", nodes.createSelfCorrectionNode({
-      strongModel: services.strongModel
+      strongModel: services.correctionModel,
     }))
     .addNode("post_processing", nodes.createPostProcessingNode({
       summarizer: services.summarizer,
-      lightModel: services.lightModel
+      lightModel: services.aggregationModel,
     }))
     .addNode("escalation", nodes.createEscalationNode())
     .addEdge(START, "pre_processing")
@@ -113,15 +124,17 @@ export function createOrchestratorGraph(services: GraphServices, checkpointer: B
       routing: "routing",
       post_processing: "post_processing"
     })
-    .addConditionalEdges("routing", routeByCategory, [
+    .addConditionalEdges("routing", routeByIntent, [
       "informational_handler",
       "sop_handler",
       "escalation",
       "end_session",
+      "reset_handler",
       "post_processing"
     ])
     .addEdge("informational_handler", "post_processing")
     .addEdge("end_session", "post_processing")
+    .addEdge("reset_handler", "post_processing")
     .addEdge("sop_handler", "post_processing")
     .addEdge("escalation", "post_processing")
     .addEdge("post_processing", "output_evaluation")

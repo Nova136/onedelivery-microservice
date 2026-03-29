@@ -1,28 +1,31 @@
-import { Module, Global } from "@nestjs/common";
+import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
+import { ChatOpenAI } from "@langchain/openai";
+import { Global, Module } from "@nestjs/common";
+import { AgentsClientModule } from "../modules/clients/agents-client/agents-client.module";
+import { AgentsClientService } from "../modules/clients/agents-client/agents-client.service";
+import { KnowledgeClientModule } from "../modules/clients/knowledge-client/knowledge-client.module";
+import { KnowledgeClientService } from "../modules/clients/knowledge-client/knowledge-client.service";
+import { MemoryClientModule } from "../modules/clients/memory-client/memory-client.module";
+import { MemoryClientService } from "../modules/clients/memory-client/memory-client.service";
+import { OrderClientModule } from "../modules/clients/order-client/order-client.module";
+import { OrderClientService } from "../modules/clients/order-client/order-client.service";
+import { InputValidatorModule } from "../modules/input-validator/input-validator.module";
+import { InputValidatorService } from "../modules/input-validator/input-validator.service";
+import { OutputEvaluatorModule } from "../modules/output-evaluator/output-evaluator.module";
+import { OutputEvaluatorService } from "../modules/output-evaluator/output-evaluator.service";
+import { PiiRedactionModule } from "../modules/pii-redaction/pii-redaction.module";
+import { PiiRedactionService } from "../modules/pii-redaction/pii-redaction.service";
+import { SemanticRouterModule } from "../modules/semantic-router/semantic-router.module";
+import { SemanticRouterService } from "../modules/semantic-router/semantic-router.service";
+import { SummarizerModule } from "../modules/summarizer/summarizer.module";
+import { SummarizerService } from "../modules/summarizer/summarizer.service";
+import { createCheckpointer } from "./checkpointer";
+import { createOrchestratorGraph } from "./graph";
+import { OrchestratorGateway } from "./orchestrator.gateway";
 import { OrchestratorController } from "./orchestrator.controller";
 import { OrchestratorService } from "./orchestrator.service";
-import { PiiRedactionModule } from "../modules/pii-redaction/pii-redaction.module";
-import { InputValidatorModule } from "../modules/input-validator/input-validator.module";
-import { SemanticRouterModule } from "../modules/semantic-router/semantic-router.module";
-import { OutputEvaluatorModule } from "../modules/output-evaluator/output-evaluator.module";
-import { SummarizerModule } from "../modules/summarizer/summarizer.module";
-import { KnowledgeClientModule } from "../modules/clients/knowledge-client/knowledge-client.module";
-import { OrderClientModule } from "../modules/clients/order-client/order-client.module";
-import { AgentsClientModule } from "../modules/clients/agents-client/agents-client.module";
-import { MemoryClientModule } from "../modules/clients/memory-client/memory-client.module";
-import { createOrchestratorGraph } from "./graph";
-import { createCheckpointer } from "./checkpointer";
-import { ChatOpenAI } from "@langchain/openai";
-import { PiiRedactionService } from "../modules/pii-redaction/pii-redaction.service";
-import { InputValidatorService } from "../modules/input-validator/input-validator.service";
-import { SemanticRouterService } from "../modules/semantic-router/semantic-router.service";
-import { OutputEvaluatorService } from "../modules/output-evaluator/output-evaluator.service";
-import { SummarizerService } from "../modules/summarizer/summarizer.service";
-import { KnowledgeClientService } from "../modules/clients/knowledge-client/knowledge-client.service";
-import { OrderClientService } from "../modules/clients/order-client/order-client.service";
-import { AgentsClientService } from "../modules/clients/agents-client/agents-client.service";
-import { MemoryClientService } from "../modules/clients/memory-client/memory-client.service";
 import * as tools from "./tools";
+import { SessionController } from "./session.controller";
 
 @Global()
 @Module({
@@ -37,9 +40,10 @@ import * as tools from "./tools";
         MemoryClientModule,
         SummarizerModule,
     ],
-    controllers: [OrchestratorController],
+    controllers: [OrchestratorController, SessionController],
     providers: [
         OrchestratorService,
+        OrchestratorGateway,
         {
             provide: "ORCHESTRATOR_GRAPH",
             useFactory: async (
@@ -51,33 +55,76 @@ import * as tools from "./tools";
                 summarizer: SummarizerService,
                 knowledgeClient: KnowledgeClientService,
                 agentsClient: AgentsClientService,
+                memoryService: MemoryClientService,
             ) => {
                 const checkpointer = await createCheckpointer();
 
-                const strongModel = new ChatOpenAI({
-                    modelName: "gpt-4o",
+                const geminiFlash = new ChatGoogleGenerativeAI({
+                    model: "gemini-3-flash-preview",
+                    apiKey: process.env.GEMINI_API_KEY,
+                    temperature: 0,
+                });
+
+                const geminiPro = new ChatGoogleGenerativeAI({
+                    model: "gemini-3.1-pro-preview",
+                    apiKey: process.env.GEMINI_API_KEY,
+                    temperature: 0,
+                });
+
+                const sopModel = new ChatOpenAI({
+                    modelName: "gpt-5.4",
                     openAIApiKey: process.env.OPENAI_API_KEY,
                     temperature: 0,
                     metadata: {
                         environment: "production",
-                        component: "orchestrator-strong",
+                        component: "sop-handler",
                     },
-                    tags: ["production", "orchestrator"],
-                });
+                }).withFallbacks({ fallbacks: [geminiPro] });
 
-                const lightModel = new ChatOpenAI({
-                    modelName: "gpt-4o-mini",
+                const infoModel = new ChatOpenAI({
+                    modelName: "gpt-5.4-mini",
                     openAIApiKey: process.env.OPENAI_API_KEY,
                     temperature: 0,
                     metadata: {
                         environment: "production",
-                        component: "orchestrator-light",
+                        component: "info-handler",
                     },
-                    tags: ["production", "orchestrator"],
-                });
+                }).withFallbacks({ fallbacks: [geminiFlash] });
 
-                const endChatTool =
-                    tools.createEndChatSessionTool(agentsClient);
+                const routingModel = new ChatOpenAI({
+                    modelName: "gpt-5.4-mini",
+                    openAIApiKey: process.env.OPENAI_API_KEY,
+                    temperature: 0,
+                    metadata: {
+                        environment: "production",
+                        component: "routing-node",
+                    },
+                }).withFallbacks({ fallbacks: [geminiFlash] });
+
+                const correctionModel = new ChatOpenAI({
+                    modelName: "gpt-5.4",
+                    openAIApiKey: process.env.OPENAI_API_KEY,
+                    temperature: 0,
+                    metadata: {
+                        environment: "production",
+                        component: "self-correction",
+                    },
+                }).withFallbacks({ fallbacks: [geminiPro] });
+
+                const aggregationModel = new ChatOpenAI({
+                    modelName: "gpt-5.4-mini",
+                    openAIApiKey: process.env.OPENAI_API_KEY,
+                    temperature: 0,
+                    metadata: {
+                        environment: "production",
+                        component: "post-processing",
+                    },
+                }).withFallbacks({ fallbacks: [geminiFlash] });
+
+                const endChatTool = tools.createEndChatSessionTool(
+                    agentsClient,
+                    memoryService,
+                );
                 const logisticsTool =
                     tools.createRouteToLogisticsTool(agentsClient);
                 const resolutionTool =
@@ -88,16 +135,17 @@ import * as tools from "./tools";
 
                 return createOrchestratorGraph(
                     {
-                        piiService,
                         inputValidator,
                         semanticRouter,
                         outputEvaluator,
                         orderService,
                         summarizer,
                         knowledgeClient,
-                        agentsClient,
-                        strongModel,
-                        lightModel,
+                        sopModel: sopModel as any,
+                        infoModel: infoModel as any,
+                        routingModel: routingModel as any,
+                        correctionModel: correctionModel as any,
+                        aggregationModel: aggregationModel as any,
                         tools: [
                             endChatTool,
                             logisticsTool,

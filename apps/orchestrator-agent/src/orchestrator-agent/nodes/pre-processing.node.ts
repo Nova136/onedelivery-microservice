@@ -18,9 +18,7 @@ export const createPreProcessingNode = (deps: PreProcessingDependencies) => {
     const lastMessage = state.messages[state.messages.length - 1];
     
     if (!(lastMessage instanceof HumanMessage)) {
-      return {
-        layers: [{ name: "Preprocessing", status: "completed", data: "Skipped (not a human message)" }]
-      };
+      return {};
     }
 
     const content = lastMessage.content as string;
@@ -48,22 +46,12 @@ export const createPreProcessingNode = (deps: PreProcessingDependencies) => {
         messages: [new AIMessage(`I'm sorry, but I cannot process that request: ${validation.error}`)],
         user_orders: orders,
         is_input_valid: false,
-        layers: [
-          { name: "Preprocessing", status: "failed", data: `Validation failed: ${validation.error}` }
-        ]
       };
     }
 
     return {
       user_orders: orders,
       is_input_valid: true,
-      layers: [
-        { 
-          name: "Preprocessing", 
-          status: "completed", 
-          data: `Orders: ${orders.length}, Valid: true` 
-        }
-      ]
     };
   };
 };

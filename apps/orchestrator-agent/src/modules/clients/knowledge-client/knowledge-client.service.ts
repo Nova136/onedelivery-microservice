@@ -31,7 +31,7 @@ export class KnowledgeClientService {
         return result;
     }
 
-    async listSops(): Promise<ListSopResponse[]> {
+    async listOrchestratorSops(): Promise<ListSopResponse[]> {
         const result = await firstValueFrom(
             this.knowledgeClient.send<ListSopResponse[]>("sop.list", {
                 requestingAgent: "orchestrator",

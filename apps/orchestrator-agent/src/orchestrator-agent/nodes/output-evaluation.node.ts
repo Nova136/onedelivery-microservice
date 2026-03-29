@@ -1,34 +1,35 @@
-import { AIMessage, HumanMessage } from "@langchain/core/messages";
-import { OrchestratorStateType } from "../state";
-import { OutputEvaluatorService } from "../../modules/output-evaluator/output-evaluator.service";
-import { formatOrders } from "../utils/format-orders";
 import { Logger } from "@nestjs/common";
+import { OrchestratorStateType } from "../state";
 
 export interface OutputEvaluationDependencies {
-  outputEvaluator: OutputEvaluatorService;
+    outputEvaluator: any; // Using any for now as I don't have the exact type
 }
 
 const logger = new Logger("OutputEvaluationNode");
 
-export const createOutputEvaluationNode = (deps: OutputEvaluationDependencies) => {
-  return async (state: OrchestratorStateType) => {
-    logger.log(`Evaluating output for session ${state.session_id}`);
-    const { outputEvaluator } = deps;
+export const createOutputEvaluationNode = (
+    deps: OutputEvaluationDependencies,
+) => {
+    return async (state: OrchestratorStateType) => {
+        logger.log(`Evaluating output for session ${state.session_id}`);
+        const { outputEvaluator } = deps;
 
-    const lastAIMessage = state.messages[state.messages.length - 1];
-    if (!(lastAIMessage instanceof AIMessage)) {
-        return {};
-    }
+        const lastMessage = state.messages[state.messages.length - 1];
+        const output = lastMessage.content as string;
+        const input =
+            (state.messages[state.messages.length - 2]?.content as string) ||
+            "";
+        const context = state.summary || "";
 
-    const content = lastAIMessage.content as string;
-    const lastHumanMessage = [...state.messages].reverse().find((m) => m instanceof HumanMessage);
-    const input = lastHumanMessage ? (lastHumanMessage.content as string) : "";
-    const context = `Summary: ${state.summary}\nUser Orders: ${formatOrders(state.user_orders)}\nOrder States: ${JSON.stringify(state.order_states)}`;
+        const evaluation = await outputEvaluator.evaluateOutput(
+            output,
+            input,
+            context,
+        );
 
-    const evaluation = await outputEvaluator.evaluateOutput(content, input, context);
-
-    return {
-      last_evaluation: evaluation
+        return {
+            last_evaluation: evaluation,
+            retry_count: state.retry_count || 0,
+        };
     };
-  };
 };

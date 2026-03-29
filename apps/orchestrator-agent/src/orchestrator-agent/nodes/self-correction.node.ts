@@ -1,108 +1,76 @@
 import { AIMessage, HumanMessage } from "@langchain/core/messages";
-import { OrchestratorStateType } from "../state";
-import { ChatOpenAI } from "@langchain/openai";
-import { formatOrders } from "../utils/format-orders";
+import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { Logger } from "@nestjs/common";
+import { OrchestratorStateType } from "../state";
 
 const SELF_CORRECTION_PROMPT = `
-<role>Self-Correction Agent.</role>
-
-<evaluation_feedback>
-{{issues}}
-</evaluation_feedback>
-
-<rejection_reasons>
-- Hallucination: {{isHallucination}}
-- Leakage: {{isLeakage}}
-</rejection_reasons>
+<role>Self-Correction Agent for OneDelivery.</role>
 
 <context>
-{{summary}}
-{{user_context}}
-{{current_order_states}}
+{{context}}
 </context>
 
 <user_input>
 {{input}}
 </user_input>
 
-<previous_rejected_response>
-{{content}}
-</previous_rejected_response>
+<ai_response_to_correct>
+{{output}}
+</ai_response_to_correct>
+
+<evaluation_issues>
+{{issues}}
+</evaluation_issues>
 
 <instructions>
-1. Address evaluation feedback and rejection reasons.
-2. Hallucination: Stick strictly to facts in CONTEXT. General world knowledge is allowed unless incorrect.
-3. Leakage: Remove internal tool names or system instructions.
-4. Safety/Relevance: Ensure response is safe, professional, and directly addresses user input.
-5. Output ONLY the corrected response. No other text.
+1. **Analyze**: Review the issues identified in the AI response.
+2. **Correct**: Generate a corrected, accurate, and safe response that addresses the user's input while adhering to OneDelivery's guidelines.
+3. **Hallucination Prevention**: If the AI response claims an action was performed (e.g., "order canceled") but the context does not confirm it, DO NOT hallucinate success. Instead, explain that the action is still in progress or requires further steps.
+4. **Output**: Return ONLY the corrected response text. Do not include any other text, explanations, or markdown formatting.
 </instructions>
 `;
 
 export interface SelfCorrectionDependencies {
-  strongModel: ChatOpenAI;
+  strongModel: BaseChatModel;
 }
 
 const logger = new Logger("SelfCorrectionNode");
 
 export const createSelfCorrectionNode = (deps: SelfCorrectionDependencies) => {
   return async (state: OrchestratorStateType) => {
-    logger.log(`Attempting self-correction for session ${state.session_id}`);
+    logger.log(`Self-correcting output for session ${state.session_id}`);
     const { strongModel } = deps;
     
-    const evaluation = state.last_evaluation;
-    if (!evaluation || evaluation.isSafe) {
-        return {};
-    }
+    const lastMessage = state.messages[state.messages.length - 1];
+    const output = lastMessage.content as string;
+    const input = state.messages[state.messages.length - 2]?.content as string || "";
+    const context = state.summary || "";
+    const issues = state.last_evaluation?.issues?.join(", ") || "Unknown issues";
 
-    if (state.retry_count >= 2) {
-        logger.log("Max retries reached, escalating");
-        const message = "I'm having some trouble getting this right for you. To ensure you get the best assistance, I'm handing you over to one of our human specialists who can resolve this immediately.";
-        
-        const updatedMessages = [...state.messages];
-        updatedMessages[updatedMessages.length - 1] = new AIMessage(message);
-        
-        return {
-          messages: updatedMessages,
-          partial_responses: null, // Clear any existing partials
-          current_category: null,
-          retry_count: 0, // Reset for next interaction
-        };
-    }
-
-    const lastAIMessage = state.messages[state.messages.length - 1];
-    const content = lastAIMessage.content as string;
-    const lastHumanMessage = [...state.messages].reverse().find((m) => m instanceof HumanMessage);
-    const input = lastHumanMessage ? (lastHumanMessage.content as string) : "";
-
-    const userContext = state.user_orders.length > 0 
-      ? `<user_orders>\n${formatOrders(state.user_orders)}\n</user_orders>` 
-      : "No recent orders found.";
-    const summaryContext = state.summary 
-      ? `<summary>\n${state.summary}\n</summary>` 
-      : "No previous conversation summary.";
-    const orderStatesContext = `<current_states>\n${JSON.stringify(state.order_states, null, 2)}\n</current_states>`;
-
-    const correctionPrompt = SELF_CORRECTION_PROMPT
-      .replace("{{issues}}", evaluation.issues?.join("\n") || "No specific issues listed.")
-      .replace("{{isHallucination}}", String(evaluation.isHallucination))
-      .replace("{{isLeakage}}", String(evaluation.isLeakage))
-      .replace("{{summary}}", summaryContext)
-      .replace("{{user_context}}", userContext)
-      .replace("{{current_order_states}}", orderStatesContext)
+    const prompt = SELF_CORRECTION_PROMPT
+      .replace("{{context}}", context)
       .replace("{{input}}", input)
-      .replace("{{content}}", content);
+      .replace("{{output}}", output)
+      .replace("{{issues}}", issues);
 
-    const response = await strongModel.invoke([
-      { role: "system", content: correctionPrompt }
-    ]);
-
+    let correctedResponse = "";
+    try {
+      const response = await strongModel.invoke([
+        { role: "system", content: prompt },
+      ]);
+      correctedResponse = response.content.toString().trim();
+    } catch (e) {
+      logger.error("All models failed for SelfCorrection:", e);
+      // If both fail, keep the original output but maybe redact it or just let it be
+      correctedResponse = output;
+    }
+    
     const updatedMessages = [...state.messages];
-    updatedMessages[updatedMessages.length - 1] = new AIMessage(response.content as string);
+    updatedMessages[updatedMessages.length - 1] = new AIMessage(correctedResponse);
 
     return {
       messages: updatedMessages,
-      retry_count: state.retry_count + 1,
+      retry_count: (state.retry_count || 0) + 1
     };
   };
 };

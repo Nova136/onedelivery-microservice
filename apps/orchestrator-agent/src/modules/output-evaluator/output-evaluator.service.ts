@@ -1,3 +1,5 @@
+import { BaseChatModel } from "@langchain/core/language_models/chat_models";
+import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { ChatOpenAI } from "@langchain/openai";
 import { Logger, Injectable } from "@nestjs/common";
 
@@ -37,26 +39,27 @@ const OUTPUT_EVALUATOR_PROMPT = `
 @Injectable()
 export class OutputEvaluatorService {
     private readonly logger = new Logger(OutputEvaluatorService.name);
-    private model: ChatOpenAI;
+    private model: BaseChatModel;
 
     constructor() {
-        this.model = new ChatOpenAI({
-            modelName: "gpt-4o-mini",
+        const primaryModel = new ChatOpenAI({
+            modelName: "gpt-5.4",
             openAIApiKey: process.env.OPENAI_API_KEY,
             temperature: 0,
-            metadata: {
-                environment: "production",
-                component: "output-evaluator",
-            },
-            tags: ["production", "guardrail"],
+            metadata: { environment: "production", component: "output-evaluator" },
+            tags: ["production", "guardrail"]
         });
+
+        const geminiFallback = new ChatGoogleGenerativeAI({
+            model: "gemini-3.1-pro-preview",
+            apiKey: process.env.GEMINI_API_KEY,
+            temperature: 0,
+        });
+
+        this.model = primaryModel.withFallbacks({ fallbacks: [geminiFallback] }) as unknown as BaseChatModel;
     }
 
-    async evaluateOutput(
-        output: string,
-        input: string,
-        context: string,
-    ): Promise<{
+    async evaluateOutput(output: string, input: string, context: string): Promise<{
         isSafe: boolean;
         isHallucination: boolean;
         isLeakage: boolean;
@@ -73,10 +76,8 @@ export class OutputEvaluatorService {
 
         // Use LLM for comprehensive evaluation
         try {
-            const prompt = OUTPUT_EVALUATOR_PROMPT.replace(
-                "{{context}}",
-                context,
-            )
+            const prompt = OUTPUT_EVALUATOR_PROMPT
+                .replace("{{context}}", context)
                 .replace("{{input}}", input)
                 .replace("{{output}}", output);
 
@@ -90,9 +91,7 @@ export class OutputEvaluatorService {
             const result = response.content.toString();
             this.logger.debug(`LLM Evaluation Result: ${result}`);
             const scoreMatch = result.match(/SCORE:\s*([0-9.]+)/i);
-            const hallucinationMatch = result.match(
-                /HALLUCINATION:\s*(YES|NO)/i,
-            );
+            const hallucinationMatch = result.match(/HALLUCINATION:\s*(YES|NO)/i);
             const leakageMatch = result.match(/LEAKAGE:\s*(YES|NO)/i);
             const issuesMatch = result.match(/ISSUES:\s*(.+)/i);
 
@@ -101,12 +100,8 @@ export class OutputEvaluatorService {
                 score = parseFloat(scoreMatch[1]);
             }
 
-            const isHallucination = hallucinationMatch
-                ? hallucinationMatch[1].toUpperCase() === "YES"
-                : false;
-            const isLeakage = leakageMatch
-                ? leakageMatch[1].toUpperCase() === "YES"
-                : false;
+            const isHallucination = hallucinationMatch ? hallucinationMatch[1].toUpperCase() === "YES" : false;
+            const isLeakage = leakageMatch ? leakageMatch[1].toUpperCase() === "YES" : false;
 
             if (isHallucination) {
                 issues.push("Hallucination detected");
@@ -137,10 +132,7 @@ export class OutputEvaluatorService {
                 issues: issues.length > 0 ? issues : undefined,
             };
         } catch (error) {
-            this.logger.error(
-                "LLM Evaluation failed, falling back to basic safety check",
-                error,
-            );
+            this.logger.error("LLM Evaluation failed, falling back to basic safety check", error);
             return {
                 isSafe: issues.length === 0,
                 isHallucination: false,
