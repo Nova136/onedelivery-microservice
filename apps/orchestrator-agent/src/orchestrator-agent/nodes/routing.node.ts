@@ -13,7 +13,7 @@ Does the user want to proceed? Answer ONLY "YES" or "NO".`,
 
 export interface RoutingDependencies {
     semanticRouter: SemanticRouterService;
-    lightModel: BaseChatModel;
+    llm: BaseChatModel;
     knowledgeClient: KnowledgeClientService;
 }
 
@@ -22,7 +22,7 @@ const logger = new Logger("RoutingNode");
 export const createRoutingNode = (deps: RoutingDependencies) => {
     return async (state: OrchestratorStateType) => {
         logger.log(`Processing state for session ${state.session_id}`);
-        const { semanticRouter, lightModel, knowledgeClient } = deps;
+        const { semanticRouter, llm, knowledgeClient } = deps;
 
         // Use sliding window for context
         const contextMessages = getSlidingWindowMessages(state.messages, 3); // Routing needs less context
@@ -71,7 +71,7 @@ export const createRoutingNode = (deps: RoutingDependencies) => {
 
             let wantsToProceed = false;
             try {
-                const checkResponse = await lightModel.invoke([
+                const checkResponse = await llm.invoke([
                     { role: "system", content: checkPrompt },
                 ]);
                 wantsToProceed =

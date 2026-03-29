@@ -26,7 +26,11 @@ class LLMJudge {
         });
     }
 
-    async evaluate(input: string, response: string, expectedOutcome: string): Promise<{ score: number; reasoning: string }> {
+    async evaluate(
+        input: string,
+        response: string,
+        expectedOutcome: string,
+    ): Promise<{ score: number; reasoning: string }> {
         const prompt = `
         You are an impartial judge evaluating the performance of a customer support AI.
         
@@ -45,7 +49,10 @@ class LLMJudge {
 
         const res = await this.model.invoke(prompt);
         try {
-            const content = typeof res.content === 'string' ? res.content : JSON.stringify(res.content);
+            const content =
+                typeof res.content === "string"
+                    ? res.content
+                    : JSON.stringify(res.content);
             return JSON.parse(content.replace(/```json|```/g, ""));
         } catch (e) {
             return { score: 0, reasoning: "Failed to parse judge output." };
@@ -54,10 +61,12 @@ class LLMJudge {
 }
 
 async function runWorkflowTests() {
-    console.log("--- STARTING REFUND & CANCELLATION WORKFLOW TESTS WITH LLM JUDGE ---\n");
+    console.log(
+        "--- STARTING REFUND & CANCELLATION WORKFLOW TESTS WITH LLM JUDGE ---\n",
+    );
 
     // Initialize Models
-    const strongModel = new ChatOpenAI({
+    const llm = new ChatOpenAI({
         modelName: "gpt-5.4",
         temperature: 0,
     });
@@ -67,20 +76,25 @@ async function runWorkflowTests() {
         apiKey: process.env.GEMINI_API_KEY || "mock-key",
     });
 
-    const model = strongModel.withFallbacks({ fallbacks: [geminiFallback] }) as unknown as BaseChatModel;
+    const model = llm.withFallbacks({
+        fallbacks: [geminiFallback],
+    }) as unknown as BaseChatModel;
 
     // Initialize Services
     const knowledgeClient = new KnowledgeClientService(null);
-    
+
     // Mock Tools
     class MockResolutionTool extends StructuredTool {
         name = "Route_To_Resolution";
-        description = "Route the request to the resolution team for refund processing.";
-        schema = z.object({ 
-            orderId: z.string(), 
-            issueCategory: z.string(), 
+        description =
+            "Route the request to the resolution team for refund processing.";
+        schema = z.object({
+            orderId: z.string(),
+            issueCategory: z.string(),
             description: z.string(),
-            items: z.array(z.object({ name: z.string(), quantity: z.number() })).optional()
+            items: z
+                .array(z.object({ name: z.string(), quantity: z.number() }))
+                .optional(),
         });
         async _call(input: any) {
             return `Refund request for order ${input.orderId} (${input.issueCategory}) routed to resolution team. Description: ${input.description}`;
@@ -89,7 +103,8 @@ async function runWorkflowTests() {
 
     class MockLogisticsTool extends StructuredTool {
         name = "Route_To_Logistics";
-        description = "Route the request to the logistics team for order cancellation.";
+        description =
+            "Route the request to the logistics team for order cancellation.";
         schema = z.object({ orderId: z.string(), description: z.string() });
         async _call(input: any) {
             return `Cancellation request for order ${input.orderId} routed to logistics team. Reason: ${input.description}`;
@@ -97,7 +112,11 @@ async function runWorkflowTests() {
     }
 
     const tools = [new MockResolutionTool(), new MockLogisticsTool()];
-    const sopHandler = createSopHandlerNode({ strongModel: model, tools, knowledgeClient });
+    const sopHandler = createSopHandlerNode({
+        llm: model,
+        tools,
+        knowledgeClient,
+    });
     const judge = new LLMJudge();
 
     const testCases = [
@@ -105,37 +124,42 @@ async function runWorkflowTests() {
             name: "Refund: Missing Issue Category & Description",
             intent: "REQUEST_REFUND",
             input: "I want a refund for order #12345.",
-            expectedOutcome: "The agent should identify that issueCategory and description are missing and ask for them.",
-            initialState: { order_states: { orderId: "12345" } }
+            expectedOutcome:
+                "The agent should identify that issueCategory and description are missing and ask for them.",
+            initialState: { order_states: { orderId: "12345" } },
         },
         {
             name: "Refund: Missing Items for Missing Item Category",
             intent: "REQUEST_REFUND",
             input: "I want a refund for order #12345 because some items are missing.",
-            expectedOutcome: "The agent should identify the category as 'missing_item' and ask for the specific items and quantities that are missing.",
-            initialState: { order_states: { orderId: "12345" } }
+            expectedOutcome:
+                "The agent should identify the category as 'missing_item' and ask for the specific items and quantities that are missing.",
+            initialState: { order_states: { orderId: "12345" } },
         },
         {
             name: "Refund: Full Data Provided (Quality Issue)",
             intent: "REQUEST_REFUND",
             input: "I want a refund for order #12345. The food was cold and spilled everywhere.",
-            expectedOutcome: "The agent should extract orderId #12345, category 'quality_issue', and the description, then ask for confirmation.",
-            initialState: { order_states: {} }
+            expectedOutcome:
+                "The agent should extract orderId #12345, category 'quality_issue', and the description, then ask for confirmation.",
+            initialState: { order_states: {} },
         },
         {
             name: "Cancellation: Missing Description",
             intent: "CANCEL_ORDER",
             input: "Please cancel my order #9999.",
-            expectedOutcome: "The agent should identify the missing description (reason) and ask why the user wants to cancel.",
-            initialState: { order_states: { orderId: "9999" } }
+            expectedOutcome:
+                "The agent should identify the missing description (reason) and ask why the user wants to cancel.",
+            initialState: { order_states: { orderId: "9999" } },
         },
         {
             name: "Cancellation: Full Data Provided",
             intent: "CANCEL_ORDER",
             input: "Cancel order #9999. I've been waiting for 2 hours and I'm not hungry anymore.",
-            expectedOutcome: "The agent should extract orderId #9999 and the description, then ask for confirmation.",
-            initialState: { order_states: {} }
-        }
+            expectedOutcome:
+                "The agent should extract orderId #9999 and the description, then ask for confirmation.",
+            initialState: { order_states: {} },
+        },
     ];
 
     let passed = 0;
@@ -146,10 +170,18 @@ async function runWorkflowTests() {
                 messages: [new HumanMessage(test.input)],
                 user_id: "test-user",
                 session_id: `session-${Date.now()}`,
-                user_orders: [{ orderId: "12345", status: "DELIVERED", createdAt: new Date().toISOString() }],
+                user_orders: [
+                    {
+                        orderId: "12345",
+                        status: "DELIVERED",
+                        createdAt: new Date().toISOString(),
+                    },
+                ],
                 summary: "",
                 current_intent: test.intent,
-                decomposed_intents: [{ intent: test.intent, query: test.input }],
+                decomposed_intents: [
+                    { intent: test.intent, query: test.input },
+                ],
                 order_states: test.initialState.order_states,
                 is_awaiting_confirmation: false,
                 multi_intent_acknowledged: true,
@@ -158,7 +190,11 @@ async function runWorkflowTests() {
             const result: any = await sopHandler(state);
             const response = result.partial_responses[0];
 
-            const evaluation = await judge.evaluate(test.input, response, test.expectedOutcome);
+            const evaluation = await judge.evaluate(
+                test.input,
+                response,
+                test.expectedOutcome,
+            );
 
             if (evaluation.score >= 0.8) {
                 console.log("✅ PASSED");
@@ -173,7 +209,9 @@ async function runWorkflowTests() {
         }
     }
 
-    console.log(`\n--- WORKFLOW TESTS COMPLETED: ${passed}/${testCases.length} PASSED ---`);
+    console.log(
+        `\n--- WORKFLOW TESTS COMPLETED: ${passed}/${testCases.length} PASSED ---`,
+    );
 }
 
 // Only run if specific env vars are present or if explicitly called

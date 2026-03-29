@@ -39,7 +39,7 @@ export class OrchestratorService {
             session.messages?.length || 0,
             humanMessage,
         );
-        
+
         // Run the graph using the checkpointer (PostgresSaver)
         const result = await this.graph.invoke(
             {
@@ -82,6 +82,16 @@ export class OrchestratorService {
     }
 
     /**
+     * Get current graph state for a session
+     */
+    async getSessionState(sessionId: string) {
+        const state = await this.graph.getState({
+            configurable: { thread_id: sessionId },
+        });
+        return state.values;
+    }
+
+    /**
      * Core agent callback logic
      */
     async processAgentCallback(
@@ -94,7 +104,7 @@ export class OrchestratorService {
     ) {
         // 1. Redact PII from the agent's result
         const redactedResult = await this.piiService.redact(result);
-        
+
         // Build a more descriptive message to avoid ambiguity for multiple requests
         // We no longer convey the agent name to the end user
         // We prioritize Order ID if available, else use Request ID
@@ -112,11 +122,13 @@ export class OrchestratorService {
         const evaluation = await this.outputEvaluator.evaluateOutput(
             messageContent,
             "Background Agent Callback",
-            `Agent: ${agentType}, Status: ${status}, ID: ${identifier || "N/A"}`
+            `Agent: ${agentType}, Status: ${status}, ID: ${identifier || "N/A"}`,
         );
 
         if (!evaluation.isSafe) {
-            console.warn(`Agent Callback for session ${sessionId} rejected by evaluator: ${evaluation.issues?.join(", ")}`);
+            console.warn(
+                `Agent Callback for session ${sessionId} rejected by evaluator: ${evaluation.issues?.join(", ")}`,
+            );
             // If it's not safe, we still update the graph state but maybe with a redacted/safe version or just log it
             // For now, let's just not send it to the user if it's unsafe
             return { success: false, reason: "Output evaluation failed" };
@@ -138,7 +150,7 @@ export class OrchestratorService {
         await this.memoryService.saveHistory(
             "",
             sessionId,
-            (session.messages?.length || 0),
+            session.messages?.length || 0,
             aiMessage,
         );
 

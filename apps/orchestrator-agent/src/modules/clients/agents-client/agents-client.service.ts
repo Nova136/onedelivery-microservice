@@ -1,4 +1,8 @@
-import { Logger } from "@nestjs/common";
+import { Injectable, Inject } from "@nestjs/common";
+import { ClientProxy } from "@nestjs/microservices";
+import { firstValueFrom } from "rxjs";
+import { AGENT_CHAT_PATTERN } from "@libs/modules/generic/enum/agent-chat.pattern";
+import { AgentChatPayload } from "@libs/modules/generic/interface/agent-chat-payload.interface";
 
 export type AgentName = "resolution" | "qa" | "guardian" | "logistic";
 
@@ -6,16 +10,17 @@ export interface AgentChatResult {
     reply: string;
 }
 
+@Injectable()
 export class AgentsClientService {
-    private readonly logger = new Logger(AgentsClientService.name);
     constructor(
-        private readonly resolutionClient: any,
-        private readonly qaClient: any,
-        private readonly guardianClient: any,
-        private readonly logisticClient: any,
+        @Inject("RESOLUTION_AGENT")
+        private readonly resolutionClient: ClientProxy,
+        @Inject("QA_AGENT") private readonly qaClient: ClientProxy,
+        @Inject("GUARDIAN_AGENT") private readonly guardianClient: ClientProxy,
+        @Inject("LOGISTIC_AGENT") private readonly logisticClient: ClientProxy,
     ) {}
 
-    private getClient(agent: AgentName): any {
+    private getClient(agent: AgentName): ClientProxy {
         switch (agent) {
             case "resolution":
                 return this.resolutionClient;
@@ -30,12 +35,11 @@ export class AgentsClientService {
         }
     }
 
-    async send(agent: AgentName, payload: any): Promise<string> {
+    async send(agent: AgentName, payload: AgentChatPayload): Promise<string> {
         const client = this.getClient(agent);
-        return new Promise((resolve) => {
-            client.send("agent.chat", payload).subscribe((res: any) => {
-                resolve(res?.reply ?? "No response from agent.");
-            });
-        });
+        const result = await firstValueFrom(
+            client.send<AgentChatResult>(AGENT_CHAT_PATTERN, payload),
+        );
+        return result?.reply ?? "No response from agent.";
     }
 }

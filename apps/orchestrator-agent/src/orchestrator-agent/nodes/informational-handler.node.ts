@@ -64,87 +64,102 @@ You are OneDelivery's helpful and professional customer service assistant.
 `;
 
 export interface InformationalHandlerDependencies {
-  lightModel: BaseChatModel;
-  tools: StructuredTool[];
+    llm: BaseChatModel;
+    tools: StructuredTool[];
 }
 
 const logger = new Logger("InformationalHandlerNode");
 
-export const createInformationalHandlerNode = (deps: InformationalHandlerDependencies) => {
-  return async (state: OrchestratorStateType) => {
-    logger.log(`Processing state for session ${state.session_id}`);
-    const { lightModel, tools } = deps;
-    
-    const contextMessages = getSlidingWindowMessages(state.messages, 3);
-    const lastMessage = state.messages[state.messages.length - 1];
-    
-    const currentIntent = state.decomposed_intents[state.current_intent_index];
-    const intentCode = currentIntent?.intent || "general";
-    const query = currentIntent?.query || lastMessage.content as string;
+export const createInformationalHandlerNode = (
+    deps: InformationalHandlerDependencies,
+) => {
+    return async (state: OrchestratorStateType) => {
+        logger.log(`Processing state for session ${state.session_id}`);
+        const { llm, tools } = deps;
 
-    if (intentCode === "faq") {
-      const faqTool = tools.find(t => t.name === "Search_FAQ");
-      if (!faqTool) {
-        return {
-          messages: [new AIMessage("I'm sorry, I'm having trouble accessing our FAQ system right now. How else can I help you?")],
-        };
-      }
+        const contextMessages = getSlidingWindowMessages(state.messages, 3);
+        const lastMessage = state.messages[state.messages.length - 1];
 
-      let toolResult: any;
-      try {
-        toolResult = await faqTool.invoke({ query });
-      } catch (e) {
-        logger.error("FAQ Tool execution error:", e);
-        toolResult = "Error searching FAQ.";
-      }
+        const currentIntent =
+            state.decomposed_intents[state.current_intent_index];
+        const intentCode = currentIntent?.intent || "general";
+        const query = currentIntent?.query || (lastMessage.content as string);
 
-      let finalResponseContent: string;
-      try {
-        const finalResponse = await lightModel.invoke([
-          { role: "system", content: FAQ_SUMMARIZER_PROMPT },
-          ...contextMessages,
-          { role: "user", content: `FAQ Search Results for "${query}":\n${JSON.stringify(toolResult)}` }
-        ]);
-        finalResponseContent = finalResponse.content as string;
-      } catch (e) {
-        logger.error("All models failed for FAQ:", e);
-        finalResponseContent = "I'm sorry, I'm having trouble processing your request right now.";
-      }
+        if (intentCode === "faq") {
+            const faqTool = tools.find((t) => t.name === "Search_FAQ");
+            if (!faqTool) {
+                return {
+                    messages: [
+                        new AIMessage(
+                            "I'm sorry, I'm having trouble accessing our FAQ system right now. How else can I help you?",
+                        ),
+                    ],
+                };
+            }
 
-      return {
-        partial_responses: [finalResponseContent],
-      };
-    } else {
-      // General Handler logic
-      const userContext = state.user_orders.length > 0 
-        ? `<user_orders>\n${formatOrders(state.user_orders)}\n</user_orders>` 
-        : "No recent orders found.";
-      const summaryContext = state.summary 
-        ? `<summary>\n${state.summary}\n</summary>` 
-        : "No previous conversation summary.";
-      
-      const sessionContext = `<session_context>\nUser ID: ${state.user_id}\nSession ID: ${state.session_id}\n</session_context>`;
+            let toolResult: any;
+            try {
+                toolResult = await faqTool.invoke({ query });
+            } catch (e) {
+                logger.error("FAQ Tool execution error:", e);
+                toolResult = "Error searching FAQ.";
+            }
 
-      const systemPrompt = GENERAL_HANDLER_PROMPT
-        .replace("{{userContext}}", userContext)
-        .replace("{{summaryContext}}", summaryContext)
-        .replace("{{sessionContext}}", sessionContext);
+            let finalResponseContent: string;
+            try {
+                const finalResponse = await llm.invoke([
+                    { role: "system", content: FAQ_SUMMARIZER_PROMPT },
+                    ...contextMessages,
+                    {
+                        role: "user",
+                        content: `FAQ Search Results for "${query}":\n${JSON.stringify(toolResult)}`,
+                    },
+                ]);
+                finalResponseContent = finalResponse.content as string;
+            } catch (e) {
+                logger.error("All models failed for FAQ:", e);
+                finalResponseContent =
+                    "I'm sorry, I'm having trouble processing your request right now.";
+            }
 
-      let responseContent: string;
-      try {
-        const response = await lightModel.invoke([
-          { role: "system", content: systemPrompt },
-          { role: "user", content: query }
-        ]);
-        responseContent = response.content as string;
-      } catch (e) {
-        logger.error("All models failed for General Handler:", e);
-        responseContent = "I'm sorry, I'm having trouble processing your request right now.";
-      }
+            return {
+                partial_responses: [finalResponseContent],
+            };
+        } else {
+            // General Handler logic
+            const userContext =
+                state.user_orders.length > 0
+                    ? `<user_orders>\n${formatOrders(state.user_orders)}\n</user_orders>`
+                    : "No recent orders found.";
+            const summaryContext = state.summary
+                ? `<summary>\n${state.summary}\n</summary>`
+                : "No previous conversation summary.";
 
-      return {
-        partial_responses: [responseContent],
-      };
-    }
-  };
+            const sessionContext = `<session_context>\nUser ID: ${state.user_id}\nSession ID: ${state.session_id}\n</session_context>`;
+
+            const systemPrompt = GENERAL_HANDLER_PROMPT.replace(
+                "{{userContext}}",
+                userContext,
+            )
+                .replace("{{summaryContext}}", summaryContext)
+                .replace("{{sessionContext}}", sessionContext);
+
+            let responseContent: string;
+            try {
+                const response = await llm.invoke([
+                    { role: "system", content: systemPrompt },
+                    { role: "user", content: query },
+                ]);
+                responseContent = response.content as string;
+            } catch (e) {
+                logger.error("All models failed for General Handler:", e);
+                responseContent =
+                    "I'm sorry, I'm having trouble processing your request right now.";
+            }
+
+            return {
+                partial_responses: [responseContent],
+            };
+        }
+    };
 };

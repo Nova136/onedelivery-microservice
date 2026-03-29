@@ -31,46 +31,50 @@ const SELF_CORRECTION_PROMPT = `
 `;
 
 export interface SelfCorrectionDependencies {
-  strongModel: BaseChatModel;
+    llm: BaseChatModel;
 }
 
 const logger = new Logger("SelfCorrectionNode");
 
 export const createSelfCorrectionNode = (deps: SelfCorrectionDependencies) => {
-  return async (state: OrchestratorStateType) => {
-    logger.log(`Self-correcting output for session ${state.session_id}`);
-    const { strongModel } = deps;
-    
-    const lastMessage = state.messages[state.messages.length - 1];
-    const output = lastMessage.content as string;
-    const input = state.messages[state.messages.length - 2]?.content as string || "";
-    const context = state.summary || "";
-    const issues = state.last_evaluation?.issues?.join(", ") || "Unknown issues";
+    return async (state: OrchestratorStateType) => {
+        logger.log(`Self-correcting output for session ${state.session_id}`);
+        const { llm } = deps;
 
-    const prompt = SELF_CORRECTION_PROMPT
-      .replace("{{context}}", context)
-      .replace("{{input}}", input)
-      .replace("{{output}}", output)
-      .replace("{{issues}}", issues);
+        const lastMessage = state.messages[state.messages.length - 1];
+        const output = lastMessage.content as string;
+        const input =
+            (state.messages[state.messages.length - 2]?.content as string) ||
+            "";
+        const context = state.summary || "";
+        const issues =
+            state.last_evaluation?.issues?.join(", ") || "Unknown issues";
 
-    let correctedResponse = "";
-    try {
-      const response = await strongModel.invoke([
-        { role: "system", content: prompt },
-      ]);
-      correctedResponse = response.content.toString().trim();
-    } catch (e) {
-      logger.error("All models failed for SelfCorrection:", e);
-      // If both fail, keep the original output but maybe redact it or just let it be
-      correctedResponse = output;
-    }
-    
-    const updatedMessages = [...state.messages];
-    updatedMessages[updatedMessages.length - 1] = new AIMessage(correctedResponse);
+        const prompt = SELF_CORRECTION_PROMPT.replace("{{context}}", context)
+            .replace("{{input}}", input)
+            .replace("{{output}}", output)
+            .replace("{{issues}}", issues);
 
-    return {
-      messages: updatedMessages,
-      retry_count: (state.retry_count || 0) + 1
+        let correctedResponse = "";
+        try {
+            const response = await llm.invoke([
+                { role: "system", content: prompt },
+            ]);
+            correctedResponse = response.content.toString().trim();
+        } catch (e) {
+            logger.error("All models failed for SelfCorrection:", e);
+            // If both fail, keep the original output but maybe redact it or just let it be
+            correctedResponse = output;
+        }
+
+        const updatedMessages = [...state.messages];
+        updatedMessages[updatedMessages.length - 1] = new AIMessage(
+            correctedResponse,
+        );
+
+        return {
+            messages: updatedMessages,
+            retry_count: (state.retry_count || 0) + 1,
+        };
     };
-  };
 };

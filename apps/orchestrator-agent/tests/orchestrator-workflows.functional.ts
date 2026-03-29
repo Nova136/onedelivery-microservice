@@ -12,7 +12,7 @@ import dotenv from "dotenv";
 dotenv.config();
 
 async function runTests() {
-    const lightModel = new ChatOpenAI({
+    const llm = new ChatOpenAI({
         modelName: "gpt-4o-mini",
         temperature: 0,
     });
@@ -35,7 +35,7 @@ async function runTests() {
     const tools = [new MockFaqTool()];
 
     const informationalNode = createInformationalHandlerNode({
-        lightModel,
+        llm,
         tools,
     });
     const endSessionNode = createEndSessionNode(tools);

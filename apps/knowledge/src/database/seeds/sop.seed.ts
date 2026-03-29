@@ -54,9 +54,7 @@ export default class SopSeeder implements Seeder {
                     },
                 ],
                 workflowSteps: [
-                    "1. Ensure you have gathered all the required data from the user. Ask clarifying questions if anything is missing.",
-                    "2. Empathize with the user and apologize for the mistake with their food.",
-                    "3. Execute the Route_To_Resolution tool, passing the gathered data.",
+                    "1. Gather all the required data from the user. Ask clarifying questions if anything is missing.",
                 ],
                 permittedTools: ["Route_To_Resolution"],
             },
@@ -136,9 +134,7 @@ export default class SopSeeder implements Seeder {
                     },
                 ],
                 workflowSteps: [
-                    "1. Ensure you have gathered all the required data from the user. Ask clarifying questions if anything is missing.",
-                    "2. Empathize with the user and apologize for the mistake with their food.",
-                    "3. Execute the Route_To_Logistics tool, passing the gathered data.",
+                    "1. Gather all the required data from the user. Ask clarifying questions if anything is missing.",
                 ],
                 permittedTools: ["Route_To_Logistics"],
             },

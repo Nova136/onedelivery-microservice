@@ -82,18 +82,22 @@ function getMissingData(
 
 const SOP_AGENT_PROMPT = `
 <role>
-You are a helpful and empathetic customer support agent for OneDelivery.
+You are a specialized JSON-only Slot Filling and State-Tracking Agent for OneDelivery. Your output MUST be a valid JSON object and nothing else.
 </role>
 
-<task>
-Follow the Standard Operating Procedure (SOP) for "{{intentCode}}": "{{title}}".
-</task>
+<goal>
+Your goal is to analyze the user's conversation, extract the required data points for the current task, determine the conversation state (\`is_complete\`, \`is_confirmed\`), and request a tool execution when all data is gathered and confirmed.
+</goal>
 
-<sop>
+<constraints>
+- **Data Gathering Only**: You are a data gatherer, not a decision-maker. Do not validate the feasibility of a request or enforce policies.
+- **Strict Schema Adherence**: Your entire output must be a single, valid JSON object that conforms to the provided schema. Do not add any conversational text, notes, or explanations.
+- **Normalization**: Correct obvious typos in extracted data (e.g., "topo slow" -> "too slow").
+</constraints>
+
+<data_requirements>
 Required Data: {{requiredData}}
-Workflow Steps:
-{{workflowSteps}}
-</sop>
+</data_requirements>
 
 <context>
 {{user_context}}
@@ -104,19 +108,11 @@ Is Awaiting Confirmation: {{is_awaiting_confirmation}}
 </context>
 
 <instructions>
-1. **Analyze**: Review the conversation history and context to extract any required entities.
-2. **Update State**: 
-   - Identify what has been gathered. 
-   - Set "is_confirmed" to true ONLY if the user explicitly confirms a summary of the details you've already gathered.
-   - If they are providing new information or changing details, "is_confirmed" should be false.
-3. **Dialogue**: 
-   - If data is missing, ask for it naturally and empathetically. You can ask for multiple missing items at once if it makes sense for a better user experience.
-   - If all data is gathered but not confirmed, present a clear summary of the details and ask for confirmation.
-   - If confirmed, inform the user you are proceeding with their request.
-4. **Tools**: You have access to the following tools: {{tool_descriptions}}. 
-   - If the SOP requires executing a tool and you have all the data and confirmation, specify the tool call in your output.
-   - Use helper tools (like Search_FAQ) if they help you answer the user's questions.
-5. **Output**: You MUST return a JSON object following the required schema.
+1.  **Analyze**: Review the conversation history and context to extract entities required by the SOP.
+2.  **State Determination**:
+    *   Set \`is_confirmed\` to \`true\` ONLY if the user has explicitly and positively confirmed the summary of gathered details in their latest message.
+    *   Set \`is_complete\` to \`true\` ONLY if all required data has been gathered AND the user has confirmed it.
+3.  **Tool Request**: If \`is_complete\` is \`true\`, populate \`requested_tool\` with the appropriate tool from the permitted list and its arguments. Otherwise, set it to \`null\`.
 </instructions>
 `;
 
@@ -125,10 +121,17 @@ const DIALOGUE_PROMPTS = {
         "I've noted your requests about {{intents}}. To ensure we handle everything correctly, let's address them one by one, starting with {{currentIntent}}.\n\n",
     FALLBACK_RESPONSE:
         "I'm sorry, I'm not quite sure how to handle that specific request. Could you please provide a bit more detail or clarify what you need?",
+    MISSING_DATA_PROMPT:
+        "To proceed with your request for {{intent}}, I'll need a bit more information. Could you please provide the following: {{missing_fields}}?",
+    CONFIRMATION_PROMPT:
+        "Great, I have all the details. Just to confirm, here's what I've got:\n\n{{gathered_data}}\n\nIs this correct?",
+    EXECUTION_PROMPT:
+        "Thank you for confirming. I'm now processing your request for {{intent}}.",
 };
 
 export interface SopHandlerDependencies {
-    strongModel: BaseChatModel;
+    llm: BaseChatModel;
+    llmFallback: BaseChatModel;
     tools: StructuredTool[];
     knowledgeClient: KnowledgeClientService;
     utilityTools?: string[];
@@ -140,7 +143,8 @@ export const createSopHandlerNode = (deps: SopHandlerDependencies) => {
     return async (state: OrchestratorStateType) => {
         logger.log(`Processing state for session ${state.session_id}`);
         const {
-            strongModel,
+            llm,
+            llmFallback,
             tools,
             knowledgeClient,
             utilityTools = ["Search_FAQ", "Search_Internal_SOP"],
@@ -245,9 +249,6 @@ export const createSopHandlerNode = (deps: SopHandlerDependencies) => {
                     .describe(
                         "Whether all required information (including conditional ones) has been gathered and confirmed, and the request is ready for execution.",
                     ),
-                response: z
-                    .string()
-                    .describe("Your natural language response to the user."),
                 requested_tool: z
                     .object({
                         name: toolNameSchema.describe(
@@ -267,17 +268,9 @@ export const createSopHandlerNode = (deps: SopHandlerDependencies) => {
 
             // 3. Unified Agent Call
             const agentPrompt = SOP_AGENT_PROMPT.replace(
-                "{{intentCode}}",
-                intent || "GENERAL",
+                "{{requiredData}}",
+                JSON.stringify(sop.requiredData),
             )
-                .replace("{{title}}", sop.title)
-                .replace("{{requiredData}}", JSON.stringify(sop.requiredData))
-                .replace(
-                    "{{workflowSteps}}",
-                    sop.workflowSteps
-                        .map((s: string, i: number) => `${i + 1}. ${s}`)
-                        .join("\n"),
-                )
                 .replace("{{user_context}}", userContext)
                 .replace("{{summary}}", summaryContext)
                 .replace(
@@ -288,40 +281,23 @@ export const createSopHandlerNode = (deps: SopHandlerDependencies) => {
                 .replace(
                     "{{is_awaiting_confirmation}}",
                     state.is_awaiting_confirmation.toString(),
-                )
-                .replace("{{tool_descriptions}}", toolDescriptions);
+                );
 
             let agentOutput: any;
             try {
-                if (
-                    typeof (strongModel as any).withStructuredOutput ===
-                    "function"
-                ) {
-                    const structuredModel = (
-                        strongModel as any
-                    ).withStructuredOutput(dynamicSopResponseSchema);
-                    agentOutput = await structuredModel.invoke([
-                        { role: "system", content: agentPrompt },
-                        ...contextMessages,
-                    ]);
-                } else {
-                    // Fallback for models/runnables without withStructuredOutput
-                    logger.warn(
-                        "strongModel does not support withStructuredOutput directly. Using prompt-based JSON extraction.",
-                    );
-                    const jsonPrompt = `${agentPrompt}\n\nYou MUST respond with a valid JSON object matching this schema: ${JSON.stringify((dynamicSopResponseSchema as any).shape)}`;
-                    const res = await strongModel.invoke([
-                        { role: "system", content: jsonPrompt },
-                        ...contextMessages,
-                    ]);
-                    const content =
-                        typeof res.content === "string"
-                            ? res.content
-                            : JSON.stringify(res.content);
-                    agentOutput = JSON.parse(
-                        content.replace(/```json|```/g, ""),
-                    );
-                }
+                const structuredModel = llm.withStructuredOutput(
+                    dynamicSopResponseSchema,
+                );
+                const structuredModelFallback =
+                    llmFallback.withStructuredOutput(dynamicSopResponseSchema);
+                const structuredModelWithFallbacks =
+                    structuredModel.withFallbacks({
+                        fallbacks: [structuredModelFallback],
+                    });
+                agentOutput = await structuredModelWithFallbacks.invoke([
+                    { role: "system", content: agentPrompt },
+                    ...contextMessages,
+                ]);
                 logger.debug(`Agent Output: ${JSON.stringify(agentOutput)}`);
             } catch (e) {
                 logger.error(
@@ -340,7 +316,43 @@ export const createSopHandlerNode = (deps: SopHandlerDependencies) => {
                 ...state.order_states,
                 ...agentOutput.extracted_data,
             };
-            let finalResponse = agentOutput.response;
+            let finalResponse = "";
+            const updatedMissingData = getMissingData(
+                sop.requiredData,
+                updatedOrderStates,
+            );
+
+            if (agentOutput.is_complete && agentOutput.is_confirmed) {
+                finalResponse = DIALOGUE_PROMPTS.EXECUTION_PROMPT.replace(
+                    "{{intent}}",
+                    intent,
+                );
+            } else if (
+                updatedMissingData.length === 0 &&
+                !agentOutput.is_confirmed
+            ) {
+                const gatheredDataSummary = Object.entries(updatedOrderStates)
+                    .filter(
+                        ([, value]) =>
+                            value !== null &&
+                            value !== undefined &&
+                            (!Array.isArray(value) || value.length > 0),
+                    )
+                    .map(([key, value]) => `- ${key}: ${JSON.stringify(value)}`)
+                    .join("\n");
+                finalResponse = DIALOGUE_PROMPTS.CONFIRMATION_PROMPT.replace(
+                    "{{gathered_data}}",
+                    gatheredDataSummary,
+                );
+            } else if (updatedMissingData.length > 0) {
+                finalResponse = DIALOGUE_PROMPTS.MISSING_DATA_PROMPT.replace(
+                    "{{intent}}",
+                    intent,
+                ).replace("{{missing_fields}}", updatedMissingData.join(", "));
+            } else {
+                finalResponse = DIALOGUE_PROMPTS.FALLBACK_RESPONSE;
+            }
+
             const isConfirmed = agentOutput.is_confirmed === true;
             const isComplete = agentOutput.is_complete === true;
 
@@ -359,32 +371,31 @@ export const createSopHandlerNode = (deps: SopHandlerDependencies) => {
                         } catch (e) {
                             logger.error("Failed to parse tool args:", e);
                         }
-                        const args = {
+                        // Inject system fields from state
+                        const args: any = {
                             ...parsedArgs,
+                            action: state.current_intent.toLowerCase(),
                             userId: state.user_id,
                             sessionId: state.session_id,
                         };
-                        const toolResult = await tool.invoke(args);
-
-                        if (sop.permittedTools?.includes(tool.name)) {
-                            logger.log(
-                                `Completion tool ${tool.name} executed successfully for SOP ${sop.id}.`,
+                        // Fire-and-forget: trigger the tool but don't wait for the result.
+                        // The backend agent will send a callback when it's done.
+                        tool.invoke(args).catch((toolError) => {
+                            logger.error(
+                                `Asynchronous tool execution error for ${tool.name}:`,
+                                toolError,
                             );
-                        }
+                        });
+                        logger.log(`Completion tool ${tool.name} triggered.`);
                     } catch (e) {
                         logger.error(
-                            `Tool execution error for ${tool.name}:`,
+                            `Synchronous tool setup error for ${tool.name}:`,
                             e,
                         );
-                        finalResponse = `I encountered an error while processing your request. Please try again in a moment.`;
+                        finalResponse = `I encountered an error while trying to start your request. Please try again.`;
                     }
                 }
             }
-
-            const updatedMissingData = getMissingData(
-                sop.requiredData,
-                updatedOrderStates,
-            );
 
             return {
                 partial_responses: [multiIntentGuidance + finalResponse],

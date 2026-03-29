@@ -15,7 +15,7 @@ import { createResetHandlerNode } from "../src/orchestrator-agent/nodes/reset-ha
 dotenv.config();
 
 async function runTests() {
-    const primaryLightModel = new ChatOpenAI({
+    const primaryllm = new ChatOpenAI({
         modelName: "gpt-5.4-mini",
         temperature: 0,
     });
@@ -25,7 +25,9 @@ async function runTests() {
         apiKey: "mock-key",
     });
 
-    const lightModel = primaryLightModel.withFallbacks({ fallbacks: [geminiFallback] }) as unknown as BaseChatModel;
+    const llm = primaryllm.withFallbacks({
+        fallbacks: [geminiFallback],
+    }) as unknown as BaseChatModel;
 
     const knowledgeClient = new KnowledgeClientService(null);
     const router = new SemanticRouterService(knowledgeClient);
@@ -44,7 +46,7 @@ async function runTests() {
     }
     const tools = [new MockFaqTool()];
 
-    const informationalNode = createInformationalHandlerNode({ lightModel, tools });
+    const informationalNode = createInformationalHandlerNode({ llm, tools });
     const endSessionNode = createEndSessionNode(tools);
     const escalationNode = createEscalationNode();
     const resetNode = createResetHandlerNode();
@@ -55,50 +57,64 @@ async function runTests() {
             input: "What is your delivery fee?",
             expectedIntent: "faq",
             testNode: informationalNode,
-            validateResponse: (res: string) => res.includes("$5.99")
+            validateResponse: (res: string) => res.includes("$5.99"),
         },
         {
             name: "Workflow: General (Medical advice rejection)",
             input: "How do I treat a fever?",
             expectedIntent: "general",
             testNode: informationalNode,
-            validateResponse: (res: string) => res.toLowerCase().includes("sorry") || res.toLowerCase().includes("can't") || res.toLowerCase().includes("medical")
+            validateResponse: (res: string) =>
+                res.toLowerCase().includes("sorry") ||
+                res.toLowerCase().includes("can't") ||
+                res.toLowerCase().includes("medical"),
         },
         {
             name: "Workflow: General (Competitor rejection)",
             input: "Is Grab better than OneDelivery?",
             expectedIntent: "general",
             testNode: informationalNode,
-            validateResponse: (res: string) => res.toLowerCase().includes("sorry") || res.toLowerCase().includes("onedelivery")
+            validateResponse: (res: string) =>
+                res.toLowerCase().includes("sorry") ||
+                res.toLowerCase().includes("onedelivery"),
         },
         {
             name: "Workflow: End Session",
             input: "Thanks, goodbye!",
             expectedIntent: "end_session",
             testNode: endSessionNode,
-            validateResponse: (res: string) => res.toLowerCase().includes("onedelivery") || res.toLowerCase().includes("closed") || res.toLowerCase().includes("assistance")
+            validateResponse: (res: string) =>
+                res.toLowerCase().includes("onedelivery") ||
+                res.toLowerCase().includes("closed") ||
+                res.toLowerCase().includes("assistance"),
         },
         {
             name: "Workflow: Escalate (Legal Threat)",
             input: "I'm going to sue you!",
             expectedIntent: "escalate",
             testNode: escalationNode,
-            validateResponse: (res: string) => res.toLowerCase().includes("escalat") || res.toLowerCase().includes("human") || res.toLowerCase().includes("support")
+            validateResponse: (res: string) =>
+                res.toLowerCase().includes("escalat") ||
+                res.toLowerCase().includes("human") ||
+                res.toLowerCase().includes("support"),
         },
         {
             name: "Workflow: Multi-Intent (FAQ + General)",
             input: "What is your delivery fee? Also, how do I treat a fever?",
             expectedIntent: "faq",
             testNode: informationalNode, // Test FAQ first
-            validateResponse: (res: string) => res.includes("$5.99")
+            validateResponse: (res: string) => res.includes("$5.99"),
         },
         {
             name: "Workflow: Reset",
             input: "Actually, never mind. Reset everything.",
             expectedIntent: "reset",
             testNode: resetNode,
-            validateResponse: (res: string) => res.toLowerCase().includes("reset") || res.toLowerCase().includes("cancel") || res.toLowerCase().includes("cleared")
-        }
+            validateResponse: (res: string) =>
+                res.toLowerCase().includes("reset") ||
+                res.toLowerCase().includes("cancel") ||
+                res.toLowerCase().includes("cleared"),
+        },
     ];
 
     console.log("--- STARTING ORCHESTRATOR WORKFLOW FUNCTIONAL TESTS ---\n");
@@ -108,11 +124,17 @@ async function runTests() {
         process.stdout.write(`Testing: ${test.name.padEnd(45)} `);
         try {
             const messages = [new HumanMessage(test.input)];
-            
+
             // 1. Test Routing
-            const { intents, decomposed } = await router.classifyIntents([{ role: "user", content: test.input }], "", []);
+            const { intents, decomposed } = await router.classifyIntents(
+                [{ role: "user", content: test.input }],
+                "",
+                [],
+            );
             if (!intents.includes(test.expectedIntent)) {
-                console.log(`❌ FAILED (Routing: Expected ${test.expectedIntent}, got ${intents.join(", ")})`);
+                console.log(
+                    `❌ FAILED (Routing: Expected ${test.expectedIntent}, got ${intents.join(", ")})`,
+                );
                 continue;
             }
 
@@ -128,7 +150,11 @@ async function runTests() {
             };
 
             const result: any = await test.testNode(state);
-            const response = result.partial_responses ? result.partial_responses[0] : (result.messages ? result.messages[0].content : "");
+            const response = result.partial_responses
+                ? result.partial_responses[0]
+                : result.messages
+                  ? result.messages[0].content
+                  : "";
 
             if (test.validateResponse(response as string)) {
                 console.log("✅ PASSED");
@@ -142,7 +168,9 @@ async function runTests() {
         }
     }
 
-    console.log(`\n--- TESTS COMPLETED: ${passed}/${testCases.length} PASSED ---`);
+    console.log(
+        `\n--- TESTS COMPLETED: ${passed}/${testCases.length} PASSED ---`,
+    );
 }
 
 runTests();
