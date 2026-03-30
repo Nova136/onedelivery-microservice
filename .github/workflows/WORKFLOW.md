@@ -89,6 +89,9 @@ Set these in **GitHub → Settings → Secrets and variables → Actions → Var
 
 ## Security Scan Summary
 
+> **Required permissions** — both `pipeline.yml` and `stage-ci.yml` must declare:
+> `security-events: write` (SARIF upload) and `actions: read` (workflow run context lookup by CodeQL action).
+
 | Scan | Tool | Type | Report location |
 |---|---|---|---|
 | Filesystem vulnerabilities | Trivy | SCA | Console / workflow logs |
