@@ -105,20 +105,22 @@ jobs:
   sast-semgrep:
     name: SAST — Semgrep
     runs-on: ubuntu-latest
-    container:
-      image: semgrep/semgrep
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Install Semgrep
+        run: pip install semgrep
+
       - name: Run Semgrep
         run: >
-          semgrep ci
+          semgrep scan
           --sarif
           --output semgrep.sarif
           --config "p/typescript"
           --config "p/nodejs"
           --config "p/owasp-top-ten"
+          .
         env:
           SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
         continue-on-error: true
