@@ -6,6 +6,7 @@ on:
 permissions:
   contents: read
   pull-requests: read
+  security-events: write   # required for CodeQL/SARIF uploads
 
 jobs:
   run-tests:
@@ -96,6 +97,76 @@ jobs:
         with:
           name: owasp-dependency-check-report
           path: owasp-report/
+
+  # ---------------------------------------------------------------------------
+  # SAST — Semgrep static analysis (TypeScript / Node.js rules)
+  # Uploads SARIF to GitHub Security tab; never blocks the pipeline (continue-on-error).
+  # ---------------------------------------------------------------------------
+  sast-semgrep:
+    name: SAST — Semgrep
+    runs-on: ubuntu-latest
+    container:
+      image: semgrep/semgrep
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Semgrep
+        run: >
+          semgrep ci
+          --sarif
+          --output semgrep.sarif
+          --config "p/typescript"
+          --config "p/nodejs"
+          --config "p/owasp-top-ten"
+        env:
+          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+        continue-on-error: true
+
+      - name: Upload SARIF to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep
+
+      - name: Upload SARIF artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: semgrep-sarif
+          path: semgrep.sarif
+
+  # ---------------------------------------------------------------------------
+  # DAST — OWASP ZAP baseline scan
+  # Runs only when DAST_TARGET_URL is set (point it at a staging deployment).
+  # Uploads HTML/JSON report as an artifact; never blocks the pipeline.
+  # ---------------------------------------------------------------------------
+  dast-zap:
+    name: DAST — OWASP ZAP Baseline
+    runs-on: ubuntu-latest
+    if: ${{ vars.DAST_TARGET_URL != '' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: ZAP Baseline Scan
+        uses: zaproxy/action-baseline@v0.14.0
+        with:
+          target: ${{ vars.DAST_TARGET_URL }}
+          rules_file_name: .zap/rules.tsv
+          cmd_options: "-a -j"
+          fail_action: false
+        continue-on-error: true
+
+      - name: Upload ZAP report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: zap-dast-report
+          path: |
+            report_html.html
+            report_json.json
 
   # One analysis per module; each uses its own sonar-project.properties via projectBaseDir.
   # https://github.com/SonarSource/sonarqube-scan-action#projectbasedir
