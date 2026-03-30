@@ -52,7 +52,6 @@ jobs:
       matrix:
         evaluation:
           - test-orchestrator-agent
-          # - test-orchestrator-agent-multiturn
           - test-logistics-agent
           - test-resolution-agent
           - test-qa-agent
