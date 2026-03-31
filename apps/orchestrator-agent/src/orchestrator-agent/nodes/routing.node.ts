@@ -1,19 +1,16 @@
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { Logger } from "@nestjs/common";
+import { z } from "zod";
 import { KnowledgeClientService } from "../../modules/clients/knowledge-client/knowledge-client.service";
 import { SemanticRouterService } from "../../modules/semantic-router/semantic-router.service";
 import { OrchestratorStateType } from "../state";
 import { getSlidingWindowMessages } from "../utils/message-window";
-
-const ROUTING_PROMPTS = {
-    CHECK_PROMPT: `The user was asked if they want to proceed with their remaining questions.
-User message: "{{content}}"
-Does the user want to proceed? Answer ONLY "YES" or "NO".`,
-};
+import { ROUTING_PROMPTS } from "../prompts/routing.prompt";
 
 export interface RoutingDependencies {
     semanticRouter: SemanticRouterService;
     llm: BaseChatModel;
+    llmFallback: BaseChatModel;
     knowledgeClient: KnowledgeClientService;
 }
 
@@ -22,7 +19,7 @@ const logger = new Logger("RoutingNode");
 export const createRoutingNode = (deps: RoutingDependencies) => {
     return async (state: OrchestratorStateType) => {
         logger.log(`Processing state for session ${state.session_id}`);
-        const { semanticRouter, llm, knowledgeClient } = deps;
+        const { semanticRouter, llm, llmFallback, knowledgeClient } = deps;
 
         // Use sliding window for context
         const contextMessages = getSlidingWindowMessages(state.messages, 3); // Routing needs less context
@@ -71,12 +68,26 @@ export const createRoutingNode = (deps: RoutingDependencies) => {
 
             let wantsToProceed = false;
             try {
-                const checkResponse = await llm.invoke([
+                const schema = z.object({
+                    thought: z.string().describe("Reasoning for the decision"),
+                    wants_to_proceed: z
+                        .boolean()
+                        .describe("Whether the user wants to proceed"),
+                });
+                const structuredLlm = llm.withStructuredOutput(schema);
+                const structuredFallback =
+                    llmFallback.withStructuredOutput(schema);
+                const llmWithFallback = structuredLlm.withFallbacks({
+                    fallbacks: [structuredFallback],
+                });
+
+                const checkResponse = (await llmWithFallback.invoke([
                     { role: "system", content: checkPrompt },
-                ]);
-                wantsToProceed =
-                    checkResponse.content.toString().trim().toUpperCase() ===
-                    "YES";
+                ])) as any;
+                logger.log(
+                    `Routing Confirmation Reasoning: ${checkResponse.thought}`,
+                );
+                wantsToProceed = checkResponse.wants_to_proceed;
             } catch (e) {
                 logger.error("All models failed for Routing confirmation:", e);
                 // Default to NO if both fail

@@ -1,10 +1,4 @@
-export interface SopRequiredData {
-    name: string;
-    type: "string" | "number" | "boolean" | "array" | "object";
-    description?: string;
-    itemsSchema?: SopRequiredData[];
-    properties?: SopRequiredData[];
-}
+import { SopRequiredData } from "../../database/entities/sop.entity";
 
 export interface SearchSopResponse {
     intentCode: string;

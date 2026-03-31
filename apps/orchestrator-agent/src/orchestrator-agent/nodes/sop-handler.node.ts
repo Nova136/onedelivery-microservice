@@ -1,140 +1,23 @@
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { StructuredTool } from "@langchain/core/tools";
+import { SystemMessage } from "@langchain/core/messages";
 import { Logger } from "@nestjs/common";
 import { z } from "zod";
 import { KnowledgeClientService } from "../../modules/clients/knowledge-client/knowledge-client.service";
 import { OrchestratorStateType } from "../state";
 import { formatOrders } from "../utils/format-orders";
 import { getSlidingWindowMessages } from "../utils/message-window";
-import { SopRequiredData } from "../../modules/clients/knowledge-client/interface/search-sop-response.interface";
-
-/**
- * Helper to build a dynamic Zod schema from SopRequiredData
- */
-function buildZodSchema(requiredData: SopRequiredData[]): z.ZodObject<any> {
-    const shape: any = {};
-    requiredData.forEach((item) => {
-        shape[item.name] = getZodType(item).nullable();
-    });
-    return z.object(shape);
-}
-
-function getZodType(item: SopRequiredData): z.ZodTypeAny {
-    let schema: z.ZodTypeAny;
-    switch (item.type) {
-        case "string":
-            schema = z.string();
-            break;
-        case "number":
-            schema = z.number();
-            break;
-        case "boolean":
-            schema = z.boolean();
-            break;
-        case "array":
-            if (item.itemsSchema) {
-                schema = z.array(buildZodSchema(item.itemsSchema));
-            } else {
-                schema = z.array(z.string());
-            }
-            break;
-        case "object":
-            if (item.properties) {
-                schema = buildZodSchema(item.properties);
-            } else {
-                schema = z.record(z.string());
-            }
-            break;
-        default:
-            schema = z.string();
-    }
-    if (item.description) {
-        schema = schema.describe(item.description);
-    }
-    return schema;
-}
-
-/**
- * Helper to identify missing data based on SopRequiredData
- */
-function getMissingData(
-    requiredData: SopRequiredData[],
-    gatheredData: any,
-): string[] {
-    const missing: string[] = [];
-    requiredData.forEach((item) => {
-        const value = gatheredData[item.name];
-        if (
-            value === undefined ||
-            value === null ||
-            (typeof value === "string" && value.trim() === "") ||
-            (Array.isArray(value) && value.length === 0)
-        ) {
-            missing.push(item.name);
-        } else if (item.type === "object" && item.properties) {
-            const nestedMissing = getMissingData(item.properties, value);
-            if (nestedMissing.length > 0) {
-                missing.push(`${item.name} (${nestedMissing.join(", ")})`);
-            }
-        }
-    });
-    return missing;
-}
-
-const SOP_AGENT_PROMPT = `
-<role>
-You are a specialized JSON-only Slot Filling and State-Tracking Agent for OneDelivery. Your output MUST be a valid JSON object and nothing else.
-</role>
-
-<goal>
-Your goal is to analyze the user's conversation, extract the required data points for the current task, determine the conversation state (\`is_complete\`, \`is_confirmed\`), and request a tool execution when all data is gathered and confirmed.
-</goal>
-
-<constraints>
-- **Data Gathering Only**: You are a data gatherer, not a decision-maker. Do not validate the feasibility of a request or enforce policies.
-- **Strict Schema Adherence**: Your entire output must be a single, valid JSON object that conforms to the provided schema. Do not add any conversational text, notes, or explanations.
-- **Normalization**: Correct obvious typos in extracted data (e.g., "topo slow" -> "too slow").
-</constraints>
-
-<data_requirements>
-Required Data: {{requiredData}}
-</data_requirements>
-
-<context>
-{{user_context}}
-{{summary}}
-Current Gathered Data: {{gathered_data}}
-Missing Data: {{missing_data}}
-Is Awaiting Confirmation: {{is_awaiting_confirmation}}
-</context>
-
-<instructions>
-1.  **Analyze**: Review the conversation history and context to extract entities required by the SOP.
-2.  **State Determination**:
-    *   Set \`is_confirmed\` to \`true\` ONLY if the user has explicitly and positively confirmed the summary of gathered details in their latest message.
-    *   Set \`is_complete\` to \`true\` ONLY if all required data has been gathered AND the user has confirmed it.
-3.  **Tool Request**: If \`is_complete\` is \`true\`, populate \`requested_tool\` with the appropriate tool from the permitted list and its arguments. Otherwise, set it to \`null\`.
-</instructions>
-`;
-
-const DIALOGUE_PROMPTS = {
-    MULTI_INTENT_GUIDANCE:
-        "[SYSTEM INSTRUCTION: Acknowledge that the user has multiple requests ({{intents}}). Tell them we will handle them one by one, starting with {{currentIntent}}.]\n\n",
-    FALLBACK_RESPONSE:
-        "[SYSTEM INSTRUCTION: Politely inform the user that you are not sure how to handle their specific request and ask for clarification.]",
-    MISSING_DATA_PROMPT:
-        "[SYSTEM INSTRUCTION: Ask the user to provide the following missing information to proceed with {{intent}}: {{missing_fields}}.]",
-    CONFIRMATION_PROMPT:
-        "[SYSTEM INSTRUCTION: Ask the user to confirm if the following gathered details are correct before proceeding:\n{{gathered_data}}]",
-    EXECUTION_PROMPT:
-        "[SYSTEM INSTRUCTION: Thank the user for confirming and inform them that the request for {{intent}} has been submitted and is currently being processed.]",
-};
+import { PromptShieldService } from "../../modules/prompt-shield/prompt-shield.service";
+import { buildZodSchema, getMissingData } from "../utils/sop-utils";
+import { SOP_AGENT_PROMPT, DIALOGUE_PROMPTS } from "../prompts/sop.prompt";
+import { executeSopTool } from "../utils/sop-tool-executor";
 
 export interface SopHandlerDependencies {
     llm: BaseChatModel;
     llmFallback: BaseChatModel;
     tools: StructuredTool[];
     knowledgeClient: KnowledgeClientService;
+    promptShield: PromptShieldService;
     utilityTools?: string[];
 }
 
@@ -148,6 +31,7 @@ export const createSopHandlerNode = (deps: SopHandlerDependencies) => {
             llmFallback,
             tools,
             knowledgeClient,
+            promptShield,
             utilityTools = ["Search_FAQ", "Search_Internal_SOP"],
         } = deps;
         const intent = state.current_intent;
@@ -176,6 +60,23 @@ export const createSopHandlerNode = (deps: SopHandlerDependencies) => {
 
         // Use sliding window for context
         const contextMessages = getSlidingWindowMessages(state.messages, 5);
+        
+        // Isolate the specific query for this intent if available from the router
+        const currentIntentObj = state.decomposed_intents[state.current_intent_index];
+        const query = currentIntentObj?.query || (state.messages[state.messages.length - 1].content as string);
+
+        // Replace the last message in the context window with the isolated query
+        // This prevents the SOP agent from getting confused by multi-intent messages
+        if (contextMessages.length > 0) {
+            const lastMsg = contextMessages[contextMessages.length - 1];
+            if (lastMsg.constructor.name === "HumanMessage") {
+                // We recreate it to ensure it's a fresh instance with just the isolated query
+                contextMessages[contextMessages.length - 1] = {
+                    ...lastMsg,
+                    content: query
+                } as any;
+            }
+        }
 
         // Handle Multi-Intent Guidance
         let multiIntentGuidance = "";
@@ -198,10 +99,10 @@ export const createSopHandlerNode = (deps: SopHandlerDependencies) => {
 
         const userContext =
             state.user_orders.length > 0
-                ? `<user_orders>\n${formatOrders(state.user_orders)}\n</user_orders>`
+                ? promptShield.wrapUntrustedData("user_orders", formatOrders(state.user_orders))
                 : "No recent orders found.";
         const summaryContext = state.summary
-            ? `<summary>\n${state.summary}\n</summary>`
+            ? promptShield.wrapUntrustedData("session_summary", state.summary)
             : "No previous conversation summary.";
 
         if (sop) {
@@ -239,7 +140,13 @@ export const createSopHandlerNode = (deps: SopHandlerDependencies) => {
                     : z.string();
 
             const dynamicSopResponseSchema = z.object({
+                thought: z.string().describe("Step-by-step reasoning for the current state and actions."),
                 extracted_data: dynamicExtractedDataSchema,
+                missing_fields: z
+                    .array(z.string())
+                    .describe(
+                        "A list of fields that are still missing based on the SOP logic. You MUST include ALL fields from the 'Missing Data' section in the context unless they are explicitly conditional and the condition is not met. Do NOT filter this list based on what you think should be asked first; provide the full list of missing required data.",
+                    ),
                 is_confirmed: z
                     .boolean()
                     .describe(
@@ -272,6 +179,8 @@ export const createSopHandlerNode = (deps: SopHandlerDependencies) => {
                 "{{requiredData}}",
                 JSON.stringify(sop.requiredData),
             )
+                .replace("{{current_intent}}", intent || "Unknown")
+                .replace("{{current_intent}}", intent || "Unknown")
                 .replace("{{user_context}}", userContext)
                 .replace("{{summary}}", summaryContext)
                 .replace(
@@ -299,7 +208,15 @@ export const createSopHandlerNode = (deps: SopHandlerDependencies) => {
                     { role: "system", content: agentPrompt },
                     ...contextMessages,
                 ]);
-                logger.debug(`Agent Output: ${JSON.stringify(agentOutput)}`);
+                logger.log(`SOP Agent Reasoning: ${agentOutput.thought}`);
+                logger.debug(
+                    `SOP Agent State: ${JSON.stringify({
+                        extracted_data: agentOutput.extracted_data,
+                        missing_fields: agentOutput.missing_fields,
+                        is_complete: agentOutput.is_complete,
+                        requested_tool: agentOutput.requested_tool?.name,
+                    })}`,
+                );
             } catch (e) {
                 logger.error(
                     "Failed to get structured output from SOP Agent:",
@@ -318,10 +235,9 @@ export const createSopHandlerNode = (deps: SopHandlerDependencies) => {
                 ...agentOutput.extracted_data,
             };
             let finalResponse = "";
-            const updatedMissingData = getMissingData(
-                sop.requiredData,
-                updatedOrderStates,
-            );
+            
+            // Use LLM-identified missing fields for conditional logic support
+            const missingFields = agentOutput.missing_fields || [];
 
             if (agentOutput.is_complete && agentOutput.is_confirmed) {
                 finalResponse = DIALOGUE_PROMPTS.EXECUTION_PROMPT.replace(
@@ -329,7 +245,7 @@ export const createSopHandlerNode = (deps: SopHandlerDependencies) => {
                     intent || "this request",
                 );
             } else if (
-                updatedMissingData.length === 0 &&
+                missingFields.length === 0 &&
                 !agentOutput.is_confirmed
             ) {
                 const gatheredDataSummary = Object.entries(updatedOrderStates)
@@ -345,11 +261,11 @@ export const createSopHandlerNode = (deps: SopHandlerDependencies) => {
                     "{{gathered_data}}",
                     gatheredDataSummary,
                 );
-            } else if (updatedMissingData.length > 0) {
+            } else if (missingFields.length > 0) {
                 finalResponse = DIALOGUE_PROMPTS.MISSING_DATA_PROMPT.replace(
                     "{{intent}}",
                     intent || "this request",
-                ).replace("{{missing_fields}}", updatedMissingData.join(", "));
+                ).replace("{{missing_fields}}", missingFields.join(", "));
             } else {
                 finalResponse = DIALOGUE_PROMPTS.FALLBACK_RESPONSE;
             }
@@ -357,55 +273,51 @@ export const createSopHandlerNode = (deps: SopHandlerDependencies) => {
             const isConfirmed = agentOutput.is_confirmed === true;
             const isComplete = agentOutput.is_complete === true;
 
+            let messages: any[] = [];
+
             if (agentOutput.requested_tool && isComplete) {
                 const tool = relevantTools.find(
                     (t) => t.name === agentOutput.requested_tool.name,
                 );
                 if (tool) {
-                    try {
-                        logger.debug(`Executing tool: ${tool.name}`);
-                        let parsedArgs = {};
-                        try {
-                            parsedArgs = JSON.parse(
-                                agentOutput.requested_tool.args,
-                            );
-                        } catch (e) {
-                            logger.error("Failed to parse tool args:", e);
-                        }
-                        // Inject system fields from state
-                        const args: any = {
-                            ...parsedArgs,
-                            action: state.current_intent.toLowerCase(),
-                            userId: state.user_id,
-                            sessionId: state.session_id,
+                    const executionResult = await executeSopTool(
+                        tool,
+                        agentOutput,
+                        state,
+                        intent || "",
+                        updatedOrderStates,
+                        updatedMultiIntentAcknowledged
+                    );
+
+                    if (executionResult.partial_responses) {
+                        return {
+                            partial_responses: executionResult.partial_responses,
+                            current_intent: intent,
+                            current_sop: sop,
+                            order_states: executionResult.updatedOrderStates || updatedOrderStates,
+                            is_awaiting_confirmation: executionResult.is_awaiting_confirmation ?? false,
+                            multi_intent_acknowledged: executionResult.multi_intent_acknowledged ?? updatedMultiIntentAcknowledged,
+                            retrieved_context: sop ? [JSON.stringify(sop)] : [],
                         };
-                        // Fire-and-forget: trigger the tool but don't wait for the result.
-                        // The backend agent will send a callback when it's done.
-                        tool.invoke(args).catch((toolError) => {
-                            logger.error(
-                                `Asynchronous tool execution error for ${tool.name}:`,
-                                toolError,
-                            );
-                        });
-                        logger.log(`Completion tool ${tool.name} triggered.`);
-                    } catch (e) {
-                        logger.error(
-                            `Synchronous tool setup error for ${tool.name}:`,
-                            e,
-                        );
-                        finalResponse = `I encountered an error while trying to start your request. Please try again.`;
+                    }
+
+                    messages = executionResult.messages;
+                    if (executionResult.finalResponse) {
+                        finalResponse = executionResult.finalResponse;
                     }
                 }
             }
 
             return {
+                messages,
                 partial_responses: [multiIntentGuidance + finalResponse],
                 current_intent: isComplete ? null : intent,
                 current_sop: isComplete ? null : sop,
                 order_states: updatedOrderStates,
                 is_awaiting_confirmation:
-                    updatedMissingData.length === 0 && !isConfirmed,
+                    missingFields.length === 0 && !isConfirmed,
                 multi_intent_acknowledged: updatedMultiIntentAcknowledged,
+                retrieved_context: sop ? [JSON.stringify(sop)] : [],
             };
         }
 
@@ -414,6 +326,7 @@ export const createSopHandlerNode = (deps: SopHandlerDependencies) => {
             partial_responses: [DIALOGUE_PROMPTS.FALLBACK_RESPONSE],
             current_intent: null,
             current_sop: null,
+            retrieved_context: [],
         };
     };
 };

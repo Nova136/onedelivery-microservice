@@ -1,7 +1,8 @@
 export interface SopRequiredData {
     name: string;
     type: "string" | "number" | "boolean" | "array" | "object";
-    description?: string;
+    description: string;
+    enum?: string[];
     itemsSchema?: SopRequiredData[];
     properties?: SopRequiredData[];
 }

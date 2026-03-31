@@ -1,31 +1,13 @@
 import { AIMessage, HumanMessage } from "@langchain/core/messages";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { Logger } from "@nestjs/common";
+import { z } from "zod";
 import { OrchestratorStateType } from "../state";
-
-const AGGREGATOR_PROMPT = `
-You are OneDelivery's AI customer support representative. 
-Your task is to process internal system instructions and/or partial responses, and formulate a single, coherent, natural-sounding, and professional reply to the user.
-
-### Guidelines:
-1. **Professional & Empathetic Tone:** Maintain a helpful and friendly tone suitable for customer support.
-2. **Translate Internal Terms:** DO NOT expose internal system terms or JSON. 
-   - Translate intent codes (like 'REQUEST_REFUND', 'CANCEL_ORDER') into natural language (e.g., "your refund request", "cancelling your order").
-   - Translate internal field names (like 'issueCategory', 'orderId', 'items') into conversational requests (e.g., "the reason for the issue", "your order number", "which items").
-3. **Coherence:** If there are multiple instructions, combine them logically.
-4. **Formatting:** Use clear formatting (like standard text bullet points) if confirming multiple gathered details to make it easy to read. DO NOT use markdown formatting like asterisks (**) for bolding or italics. Output strictly in plain text.
-
-### System Instructions / Partial Responses:
-{{partial_responses}}
-
-### User Query:
-{{user_query}}
-
-Please provide the final aggregated response below:
-`;
+import { AGGREGATOR_PROMPT } from "../prompts/aggregation.prompt";
 
 export interface AggregationDependencies {
     llm: BaseChatModel;
+    llmFallback: BaseChatModel;
 }
 
 const logger = new Logger("AggregationNode");
@@ -33,7 +15,7 @@ const logger = new Logger("AggregationNode");
 export const createAggregationNode = (deps: AggregationDependencies) => {
     return async (state: OrchestratorStateType) => {
         logger.log(`Aggregating responses for session ${state.session_id}`);
-        const { llm } = deps;
+        const { llm, llmFallback } = deps;
 
         let updatedMessages = [...state.messages];
         let isAwaitingConfirmation = state.is_awaiting_confirmation;
@@ -68,10 +50,26 @@ export const createAggregationNode = (deps: AggregationDependencies) => {
 
             let finalResponse = "";
             try {
-                const response = await llm.invoke([
+                const schema = z.object({
+                    thought: z
+                        .string()
+                        .describe("Reasoning for the aggregation"),
+                    final_response: z
+                        .string()
+                        .describe("The final aggregated response text"),
+                });
+                const structuredLlm = llm.withStructuredOutput(schema);
+                const structuredFallback =
+                    llmFallback.withStructuredOutput(schema);
+                const llmWithFallback = structuredLlm.withFallbacks({
+                    fallbacks: [structuredFallback],
+                });
+
+                const response = (await llmWithFallback.invoke([
                     { role: "system", content: prompt },
-                ]);
-                finalResponse = response.content.toString().trim();
+                ])) as any;
+                logger.log(`Aggregation Reasoning: ${response.thought}`);
+                finalResponse = response.final_response;
             } catch (e) {
                 logger.error("Aggregation failed:", e);
                 // Fallback to simple concatenation
@@ -89,7 +87,7 @@ export const createAggregationNode = (deps: AggregationDependencies) => {
 
         return {
             messages: updatedMessages,
-            partial_responses: partialResponses,
+            partial_responses: null,
             is_awaiting_confirmation: isAwaitingConfirmation,
             decomposed_intents: [],
             has_truncated_intents: state.remaining_intents.length > 0,

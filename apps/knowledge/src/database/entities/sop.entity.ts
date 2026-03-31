@@ -1,10 +1,11 @@
 import { BaseEntity } from "@libs/utils/base.entity";
 import { Column, Entity } from "typeorm";
 
-interface SopRequiredData {
+export interface SopRequiredData {
     name: string;
     type: "string" | "number" | "boolean" | "array" | "object";
-    description?: string;
+    description: string;
+    enum?: string[];
     itemsSchema?: SopRequiredData[];
     properties?: SopRequiredData[];
 }

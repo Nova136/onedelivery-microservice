@@ -1,4 +1,4 @@
-import { AIMessage } from "@langchain/core/messages";
+import { AIMessage, SystemMessage } from "@langchain/core/messages";
 import { OrchestratorStateType } from "../state";
 import { Logger } from "@nestjs/common";
 
@@ -13,7 +13,10 @@ export const createEscalationNode = () => {
       : "I understand this is a sensitive or complex matter. I'm connecting you with a human specialist who can help you further. Please stay on the line.";
 
     return {
-      messages: [new AIMessage(message)],
+      messages: [
+        new SystemMessage("SYSTEM_ACTION: Escalation triggered successfully. The user is being transferred to a human agent."),
+        new AIMessage(message)
+      ],
       partial_responses: null, // Clear any existing partials to avoid double messaging
       retry_count: 0, // Reset for next interaction if any
     };

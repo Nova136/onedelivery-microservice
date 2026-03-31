@@ -64,8 +64,7 @@ ${sop.permittedTools && sop.permittedTools.length > 0 ? sop.permittedTools.join(
                 return formattedSop;
             } catch (err) {
                 const msg = err instanceof Error ? err.message : String(err);
-                // 4. Give the LLM instructions on how to handle the crash gracefully
-                return `System Error: Knowledge Microservice unreachable. ${msg}. STRICT RULE: Tell the user you are experiencing technical difficulties and ask if they need a human agent.`;
+                throw new Error(`System Error: Knowledge Microservice unreachable. ${msg}`);
             }
         },
         {
