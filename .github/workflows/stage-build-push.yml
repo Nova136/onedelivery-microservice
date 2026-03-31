@@ -19,6 +19,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Build all NestJS apps
+        run: |
+          while IFS= read -r svc || [[ -n "$svc" ]]; do
+            svc=$(echo "$svc" | tr -d '[:space:]')
+            [[ -z "$svc" ]] && continue
+            echo "Building $svc..."
+            npx nest build "$svc"
+          done < .github/workflows/microservice.list
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 

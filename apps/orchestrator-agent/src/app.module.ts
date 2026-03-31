@@ -11,9 +11,12 @@ import { McpToolRegistryModule } from "./modules/mcp/mcp-tool-registry.module";
 import { SemanticRouterModule } from "./modules/semantic-router/semantic-router.module";
 import { SpecializedAgentsModule } from "./modules/specialized-agents/specialized-agents.module";
 import { WebsocketCallbackModule } from "./modules/websocket/websocket-callback.module";
+import { HealthModule } from "@libs/modules/health-check/health-check.module";
 
 @Module({
     imports: [
+        ConfigModule.forRoot({ isGlobal: true }),
+        HealthModule,
         MemoryModule,
         ModerationModule,
         PrivacyModule,
