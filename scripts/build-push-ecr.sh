@@ -91,6 +91,7 @@ for name in "${SERVICES[@]}"; do
       --file "$DOCKERFILE" \
       --build-arg SERVICE_NAME="$name" \
       --build-arg EXPOSE_PORT="$port" \
+      --tag "$tag_sha" \
       --tag "$tag_latest" \
       .; then
     echo "==> [$name] Build succeeded. Pushing..."
