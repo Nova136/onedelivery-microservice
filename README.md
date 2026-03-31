@@ -234,3 +234,19 @@ Then execute the update
 export AWS_PROFILE=onedelivery
 terraform plan -out=tfplan  
 terraform apply tfplan
+
+account_id = "542829982577"
+alb_dns_name = "onedelivery-alb-870475991.ap-southeast-1.elb.amazonaws.com"
+alb_zone_id = "Z1LMS91P8CMLE5"
+api_gateway_id = "q08c0f2i55"
+api_gateway_invoke_url = "https://q08c0f2i55.execute-api.ap-southeast-1.amazonaws.com"
+ecs_cluster_arn = "arn:aws:ecs:ap-southeast-1:542829982577:cluster/onedelivery-cluster"
+ecs_cluster_name = "onedelivery-cluster"
+postgres_address = "onedelivery-postgres.chqkmym8y08l.ap-southeast-1.rds.amazonaws.com"
+postgres_endpoint = <sensitive>
+postgres_port = 5432
+region = "ap-southeast-1"
+routing_note = "API Gateway -> ALB:80 -> path-based to ECS (/order, /logistics, /payment, /audit, /user, /incident, /knowledge, /orchestrator-agent, /guardian-agent, /logistics-agent, /qa-agent). Use api_gateway_invoke_url as the API base URL."
+vpc_id = "vpc-01f4d46470a373bd0"
+websocket_management_endpoint = "https://18gvmx3hn7.execute-api.ap-southeast-1.amazonaws.com/prod"
+websocket_url = "wss://18gvmx3hn7.execute-api.ap-southeast-1.amazonaws.com/prod"

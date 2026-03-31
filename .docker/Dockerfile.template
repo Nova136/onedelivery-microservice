@@ -1,12 +1,25 @@
+# ---- build stage ----
+FROM node:24-alpine AS builder
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci
+
+COPY . .
+
+ARG SERVICE_NAME
+RUN npx nest build ${SERVICE_NAME}
+
+# ---- runtime stage ----
 FROM node:24-alpine
 
 WORKDIR /app
 
-# Copy repo (node_modules excluded by .dockerignore)
-COPY . .
-
-# Install runtime deps only.
+COPY package*.json ./
 RUN npm ci --omit=dev
+
+COPY --from=builder /app/dist ./dist
 
 ARG SERVICE_NAME
 ARG EXPOSE_PORT

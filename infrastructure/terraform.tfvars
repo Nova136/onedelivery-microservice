@@ -32,7 +32,7 @@ postgres_backup_retention_period = 7  # Days; 0 disables automated backups
 
 # ── ECS Fargate ───────────────────────────────────────────────────────────────
 
-ecs_desired_count = 0   # Set to 1+ to start tasks; 0 avoids Fargate cost
+ecs_desired_count = 1   # Set to 1+ to start tasks; 0 avoids Fargate cost
 ecs_cpu           = 256 # CPU units per task (256 = 0.25 vCPU)
 ecs_memory_mb     = 512 # Memory per task in MB
 
