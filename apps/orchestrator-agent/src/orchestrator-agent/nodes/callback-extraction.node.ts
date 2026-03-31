@@ -22,7 +22,7 @@ export const createCallbackExtractionNode = (
         if (!state.is_safe) {
             return {
                 synthesized_message:
-                    "An update was received from our delivery team.",
+                    "Your request has been updated. Please check your order details for the most current information.",
             };
         }
 
@@ -75,7 +75,7 @@ export const createCallbackExtractionNode = (
             logger.error("Failed to extract data from callback:", e);
             return {
                 synthesized_message:
-                    "An update was received from our delivery team.",
+                    "Your request has been updated. Please check your order details for the most current information.",
             };
         }
     };
