@@ -94,6 +94,7 @@ import { SnakeNamingStrategy } from "typeorm-naming-strategies";
             schema: "order",
             entities: [Order, OrderItem],
             synchronize: process.env.NODE_ENV !== "production",
+            ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false,
             namingStrategy: new SnakeNamingStrategy(),
         }),
         TypeOrmModule.forFeature([Order, OrderItem]),

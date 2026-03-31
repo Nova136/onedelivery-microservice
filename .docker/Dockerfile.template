@@ -1,4 +1,3 @@
-
 FROM node:24-alpine
 
 ARG SERVICE_NAME
@@ -14,16 +13,16 @@ RUN apk upgrade
 
 RUN npm install -g npm@latest
 
+COPY package*.json ./
+
+RUN npm ci --legacy-peer-deps && \
+    npm install @nestjs/cli --no-save --legacy-peer-deps
+
 COPY . .
-RUN rm -rf package-lock.json .env
-
-RUN npm install --legacy-peer-deps --include=dev
-
-# Clear npm cache
-RUN npm cache clean --force
+RUN rm -rf .env
 
 RUN ./node_modules/.bin/nest build ${SERVICE_NAME}
 
 ENV SERVICE_NAME=${SERVICE_NAME}
 EXPOSE ${EXPOSE_PORT}
-CMD [ "node", "./dist/apps/$SERVICE_NAME/main.js" ]
+CMD ["sh", "-c", "node ./dist/apps/$SERVICE_NAME/main.js"]
