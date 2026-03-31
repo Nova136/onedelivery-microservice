@@ -32,6 +32,7 @@ import { SentimentService } from "./sentiment/sentiment.service";
             schema: "user",
             entities: [User, ChatSession, ChatMessage, Sentiment],
             synchronize: process.env.NODE_ENV !== "production",
+            ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false,
             namingStrategy: new SnakeNamingStrategy(),
         }),
         TypeOrmModule.forFeature([ChatMessage, ChatSession, Sentiment]),

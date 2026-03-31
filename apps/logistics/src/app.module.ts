@@ -30,6 +30,7 @@ import { SnakeNamingStrategy } from "typeorm-naming-strategies";
             schema: "logistics",
             entities: [Delivery, DeliveryTracking, Product],
             synchronize: process.env.NODE_ENV !== "production",
+            ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false,
             namingStrategy: new SnakeNamingStrategy(),
         }),
         TypeOrmModule.forFeature([Delivery, DeliveryTracking]),
