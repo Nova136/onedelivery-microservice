@@ -7,6 +7,7 @@ import { AppController } from "./app.controller";
 import { AppService } from "./app.service";
 import { MemoryModule } from "./memory/memory.module";
 import { CommonModule } from "@libs/modules/common/common.module";
+import { HealthModule } from "@libs/modules/health-check/health-check.module";
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { CommonModule } from "@libs/modules/common/common.module";
       isGlobal: true,
     }),
     HttpModule,
+    HealthModule,
     MemoryModule,
     ScheduleModule.forRoot(),
     ClientsModule.registerAsync([
