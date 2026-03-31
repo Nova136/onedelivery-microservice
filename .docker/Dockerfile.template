@@ -17,12 +17,12 @@ RUN npm install -g npm@latest
 COPY . .
 RUN rm -rf package-lock.json .env
 
-RUN npm install --legacy-peer-deps && npm install -g @nestjs/cli
+RUN npm install --legacy-peer-deps
 
 # Clear npm cache
 RUN npm cache clean --force
 
-RUN nest build ${SERVICE_NAME}
+RUN ./node_modules/.bin/nest build ${SERVICE_NAME}
 
 ENV SERVICE_NAME=${SERVICE_NAME}
 EXPOSE ${EXPOSE_PORT}
