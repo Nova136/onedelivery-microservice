@@ -58,7 +58,7 @@ export class SummarizerService {
    - If the agent says the request is "submitted" or "processing", the outcome is "Submitted" and it should also be listed in 'Pending Actions'.
    - Only use "Cancelled" or "Resolved" if the agent explicitly confirms the action is FINAL and complete.
    - Clear the 'Current Goal' if no task is active, or update it to the new 'Current Active Task'.
-3. **Style**: Be concise, information-dense, and remove redundancies.
+3. **Style**: Be concise, information-dense, and remove redundancies. Target length: ~200 words. If the conversation is very long, prioritize the most recent status and critical facts (Order IDs, resolutions).
 4. **Output**: Return ONLY the updated summary text.
 </instructions>
 `;
@@ -73,11 +73,16 @@ Current Active Task: ${currentTask}
 </context>
 `.trim();
 
-        const response = await this.model.invoke([
-            { role: "system", content: cleanSystemPrompt },
-            { role: "user", content: userData },
-            ...messages,
-        ]);
+        const response = await this.model.invoke(
+            [
+                { role: "system", content: cleanSystemPrompt },
+                { role: "user", content: userData },
+                ...messages,
+            ],
+            {
+                runName: "Summarizer",
+            },
+        );
 
         return response.content as string;
     }

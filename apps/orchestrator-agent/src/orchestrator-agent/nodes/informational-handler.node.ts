@@ -7,7 +7,10 @@ import { OrchestratorStateType } from "../state";
 import { formatOrders } from "../utils/format-orders";
 import { getSlidingWindowMessages } from "../utils/message-window";
 import { PromptShieldService } from "../../modules/prompt-shield/prompt-shield.service";
-import { FAQ_SUMMARIZER_PROMPT, GENERAL_HANDLER_PROMPT } from "../prompts/informational.prompt";
+import {
+    FAQ_SUMMARIZER_PROMPT,
+    GENERAL_HANDLER_PROMPT,
+} from "../prompts/informational.prompt";
 
 export interface InformationalHandlerDependencies {
     llm: BaseChatModel;
@@ -41,7 +44,7 @@ export const createInformationalHandlerNode = (
                 // We recreate it to ensure it's a fresh instance with just the isolated query
                 contextMessages[contextMessages.length - 1] = {
                     ...lastMsg,
-                    content: query
+                    content: query,
                 } as any;
             }
         }
@@ -62,39 +65,58 @@ export const createInformationalHandlerNode = (
             const systemMessages: SystemMessage[] = [];
             try {
                 toolResult = await faqTool.invoke({ query });
-                systemMessages.push(new SystemMessage(`SYSTEM_ACTION: Tool Search_FAQ executed successfully.`));
+                systemMessages.push(
+                    new SystemMessage(
+                        `SYSTEM_ACTION: Tool Search_FAQ executed successfully.`,
+                    ),
+                );
             } catch (e) {
                 logger.error("FAQ Tool execution error:", e);
-                toolResult = "System Error: Knowledge Microservice unreachable. STRICT RULE: Tell the user you are experiencing technical difficulties and ask them to visit the FAQ page or try again later.";
-                systemMessages.push(new SystemMessage(`SYSTEM_ACTION: Tool Search_FAQ failed.`));
+                toolResult =
+                    "System Error: Knowledge Microservice unreachable. STRICT RULE: Tell the user you are experiencing technical difficulties and ask them to visit the FAQ page or try again later.";
+                systemMessages.push(
+                    new SystemMessage(`SYSTEM_ACTION: Tool Search_FAQ failed.`),
+                );
             }
 
             let finalResponseContent: string;
             try {
                 const schema = z.object({
                     thought: z.string().describe("Reasoning for the response"),
-                    response: z.string().describe("The final response to the user"),
+                    response: z
+                        .string()
+                        .describe("The final response to the user"),
                 });
                 const structuredLlm = llm.withStructuredOutput(schema);
-                const structuredFallback = llmFallback.withStructuredOutput(schema);
+                const structuredFallback =
+                    llmFallback.withStructuredOutput(schema);
                 const llmWithFallback = structuredLlm.withFallbacks({
                     fallbacks: [structuredFallback],
                 });
 
-                const systemPrompt = FAQ_SUMMARIZER_PROMPT.split("<input>")[0].trim() + "\n\n" + FAQ_SUMMARIZER_PROMPT.split("</input>")[1].trim();
-                const userData = `<input>${FAQ_SUMMARIZER_PROMPT.split("<input>")[1].split("</input>")[0]}</input>`
-                    .replace("{{query}}", query)
-                    .replace("{{results}}", JSON.stringify(toolResult))
-                    .trim();
+                const systemPrompt =
+                    FAQ_SUMMARIZER_PROMPT.split("<input>")[0].trim() +
+                    "\n\n" +
+                    FAQ_SUMMARIZER_PROMPT.split("</input>")[1].trim();
+                const userData =
+                    `<input>${FAQ_SUMMARIZER_PROMPT.split("<input>")[1].split("</input>")[0]}</input>`
+                        .replace("{{query}}", query)
+                        .replace("{{results}}", JSON.stringify(toolResult))
+                        .trim();
 
-                const finalResponse = (await llmWithFallback.invoke([
-                    { role: "system", content: systemPrompt },
-                    ...contextMessages,
+                const finalResponse = (await llmWithFallback.invoke(
+                    [
+                        { role: "system", content: systemPrompt },
+                        ...contextMessages,
+                        {
+                            role: "user",
+                            content: userData,
+                        },
+                    ],
                     {
-                        role: "user",
-                        content: userData,
+                        runName: "FaqHandler",
                     },
-                ])) as any;
+                )) as any;
                 logger.log(`FAQ Handler Reasoning: ${finalResponse.thought}`);
                 finalResponseContent = finalResponse.response;
             } catch (e) {
@@ -112,10 +134,16 @@ export const createInformationalHandlerNode = (
             // General Handler logic
             const userContext =
                 state.user_orders.length > 0
-                    ? promptShield.wrapUntrustedData("user_orders", formatOrders(state.user_orders))
+                    ? promptShield.wrapUntrustedData(
+                          "user_orders",
+                          formatOrders(state.user_orders),
+                      )
                     : "No recent orders found.";
             const summaryContext = state.summary
-                ? promptShield.wrapUntrustedData("session_summary", state.summary)
+                ? promptShield.wrapUntrustedData(
+                      "session_summary",
+                      state.summary,
+                  )
                 : "No previous conversation summary.";
 
             const sessionContext = `<session_context>\nUser ID: ${state.user_id}\nSession ID: ${state.session_id}\n</session_context>`;
@@ -124,26 +152,39 @@ export const createInformationalHandlerNode = (
             try {
                 const schema = z.object({
                     thought: z.string().describe("Reasoning for the response"),
-                    response: z.string().describe("The final response to the user"),
+                    response: z
+                        .string()
+                        .describe("The final response to the user"),
                 });
                 const structuredLlm = llm.withStructuredOutput(schema);
-                const structuredFallback = llmFallback.withStructuredOutput(schema);
+                const structuredFallback =
+                    llmFallback.withStructuredOutput(schema);
                 const llmWithFallback = structuredLlm.withFallbacks({
                     fallbacks: [structuredFallback],
                 });
 
                 // Split prompt into system instructions and user data to avoid role confusion
-                const systemPrompt = GENERAL_HANDLER_PROMPT.split("<context>")[0].trim() + "\n\n" + GENERAL_HANDLER_PROMPT.split("</context>")[1].trim();
-                const userData = `<context>${GENERAL_HANDLER_PROMPT.split("<context>")[1].split("</context>")[0]}</context>`
-                    .replace("{{userContext}}", userContext)
-                    .replace("{{summaryContext}}", summaryContext)
-                    .replace("{{sessionContext}}", sessionContext).trim();
+                const systemPrompt =
+                    GENERAL_HANDLER_PROMPT.split("<context>")[0].trim() +
+                    "\n\n" +
+                    GENERAL_HANDLER_PROMPT.split("</context>")[1].trim();
+                const userData =
+                    `<context>${GENERAL_HANDLER_PROMPT.split("<context>")[1].split("</context>")[0]}</context>`
+                        .replace("{{userContext}}", userContext)
+                        .replace("{{summaryContext}}", summaryContext)
+                        .replace("{{sessionContext}}", sessionContext)
+                        .trim();
 
-                const response = (await llmWithFallback.invoke([
-                    { role: "system", content: systemPrompt },
-                    { role: "user", content: userData },
-                    ...contextMessages,
-                ])) as any;
+                const response = (await llmWithFallback.invoke(
+                    [
+                        { role: "system", content: systemPrompt },
+                        { role: "user", content: userData },
+                        ...contextMessages,
+                    ],
+                    {
+                        runName: "GeneralHandler",
+                    },
+                )) as any;
                 logger.log(`General Handler Reasoning: ${response.thought}`);
                 responseContent = response.response;
             } catch (e) {

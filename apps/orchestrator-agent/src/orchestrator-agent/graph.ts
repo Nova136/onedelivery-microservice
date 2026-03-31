@@ -204,5 +204,6 @@ export function createOrchestratorGraph(
 
     return workflow.compile({
         checkpointer,
+        name: "OrchestratorGraph",
     });
 }

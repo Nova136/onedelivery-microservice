@@ -35,24 +35,33 @@ export const createSelfCorrectionNode = (deps: SelfCorrectionDependencies) => {
                     .describe("The corrected response text"),
             });
             const structuredLlm = llm.withStructuredOutput(schema);
-            const structuredFallback =
-                llmFallback.withStructuredOutput(schema);
+            const structuredFallback = llmFallback.withStructuredOutput(schema);
             const llmWithFallback = structuredLlm.withFallbacks({
                 fallbacks: [structuredFallback],
             });
 
             // Split prompt into system instructions and user data to avoid role confusion
-            const systemPrompt = SELF_CORRECTION_PROMPT.split("<input>")[0].trim() + "\n\n" + SELF_CORRECTION_PROMPT.split("</input>")[1].trim();
-            const userData = `<input>${SELF_CORRECTION_PROMPT.split("<input>")[1].split("</input>")[0]}</input>`
-                .replace("{{context}}", context)
-                .replace("{{input}}", input)
-                .replace("{{output}}", output)
-                .replace("{{issues}}", issues).trim();
+            const systemPrompt =
+                SELF_CORRECTION_PROMPT.split("<input>")[0].trim() +
+                "\n\n" +
+                SELF_CORRECTION_PROMPT.split("</input>")[1].trim();
+            const userData =
+                `<input>${SELF_CORRECTION_PROMPT.split("<input>")[1].split("</input>")[0]}</input>`
+                    .replace("{{context}}", context)
+                    .replace("{{input}}", input)
+                    .replace("{{output}}", output)
+                    .replace("{{issues}}", issues)
+                    .trim();
 
-            const response = (await llmWithFallback.invoke([
-                { role: "system", content: systemPrompt },
-                { role: "user", content: userData },
-            ])) as any;
+            const response = (await llmWithFallback.invoke(
+                [
+                    { role: "system", content: systemPrompt },
+                    { role: "user", content: userData },
+                ],
+                {
+                    runName: "SelfCorrection",
+                },
+            )) as any;
             logger.log(`Self-Correction Reasoning: ${response.thought}`);
             correctedResponse = response.corrected_response;
         } catch (e) {

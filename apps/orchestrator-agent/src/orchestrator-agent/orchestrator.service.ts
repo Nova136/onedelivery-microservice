@@ -218,14 +218,9 @@ export class OrchestratorService {
         // 2. Get current state for context
         const state = await this.getSessionState(sessionId);
 
-        // Save incoming agent message to history
+        // We don't save the raw agent message to the database chat history
+        // but we still use it for the callback graph and summarization
         const systemMessage = new SystemMessage(message);
-        await this.memoryService.saveHistory(
-            userId,
-            sessionId,
-            session.messages?.length || 0,
-            systemMessage,
-        );
 
         const result = await this.callbackGraph.invoke(
             {
@@ -252,13 +247,19 @@ export class OrchestratorService {
             `Final Callback Response for session ${sessionId}: ${result.synthesized_message}`,
         );
 
-        // Save synthesized message to history
+        // Save synthesized message to history (the reply we give to user)
         const aiMessage = new AIMessage(result.synthesized_message);
         await this.memoryService.saveHistory(
             userId,
             sessionId,
-            (session.messages?.length || 0) + 1,
+            session.messages?.length || 0,
             aiMessage,
+        );
+
+        // Update the main orchestrator graph state so it remembers this interaction
+        await this.graph.updateState(
+            { configurable: { thread_id: sessionId } },
+            { messages: [aiMessage] },
         );
 
         // Update summary after agent callback in background to keep context fresh

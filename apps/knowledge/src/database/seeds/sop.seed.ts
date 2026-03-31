@@ -43,7 +43,7 @@ export default class SopSeeder implements Seeder {
                         name: "items",
                         type: "array",
                         description:
-                            "An array of objects containing the name and quantity of an affected item. Only require this if the category is missing_item or wrong_item.",
+                            "An array of objects containing the name and quantity of an affected item. Only require this if the category is missing_item, quality_issue, or wrong_item.",
                         itemsSchema: [
                             {
                                 name: "name",
