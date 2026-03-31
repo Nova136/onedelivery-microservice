@@ -208,20 +208,25 @@ export class IntentClassifierService {
             confidence?: number;
         }> = [];
         try {
-            const response = await this.model.invoke([
+            const response = await this.model.invoke(
+                [
+                    {
+                        role: "system",
+                        content: systemPrompt,
+                    },
+                    {
+                        role: "user",
+                        content: userData,
+                    },
+                    {
+                        role: "user",
+                        content: `Conversation History:\n${contextMessages.map((m) => `${m instanceof HumanMessage ? "human" : "ai"}: ${m.content}`).join("\n")}`,
+                    },
+                ],
                 {
-                    role: "system",
-                    content: systemPrompt,
+                    runName: "IntentClassifier",
                 },
-                {
-                    role: "user",
-                    content: userData,
-                },
-                {
-                    role: "user",
-                    content: `Conversation History:\n${contextMessages.map((m) => `${m instanceof HumanMessage ? "human" : "ai"}: ${m.content}`).join("\n")}`,
-                },
-            ]);
+            );
             this.logger.log(`Router Reasoning: ${response.thought}`);
             decomposed = response.results;
             this.logger.debug(

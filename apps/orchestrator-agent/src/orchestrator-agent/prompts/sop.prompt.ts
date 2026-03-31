@@ -42,7 +42,7 @@ export const DIALOGUE_PROMPTS = {
     MISSING_DATA_PROMPT:
         "[SYSTEM: Please ask the user to provide the following information needed for their {{intent}} request: {{missing_fields}}. Use natural language for the field names and avoid robotic lists.]",
     CONFIRMATION_PROMPT:
-        "[SYSTEM: Please ask the user to confirm these gathered details before proceeding:\n{{gathered_data}}. Present these details naturally, not as a raw list.]",
+        "[SYSTEM: Please ask the user to confirm these gathered details before proceeding:\n{{gathered_data}}. Present these details clearly using bullet points for readability.]",
     EXECUTION_PROMPT:
         "[SYSTEM: Thank the user for confirming. State the request for {{intent}} is submitted and processing.]",
     SYSTEM_FAULT_PROMPT:

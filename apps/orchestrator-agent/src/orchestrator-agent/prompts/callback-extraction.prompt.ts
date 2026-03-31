@@ -5,7 +5,14 @@ export const EXTRACTION_PROMPT = `
 <instructions>
 1. **Analyze & Contextualize**: Identify the core update and its relation to the user's request.
 2. **Synthesize**: Draft a short, user-friendly explanation.
-3. **Output Format**: Return JSON with \`thought\` (step-by-step reasoning) and \`synthesized_message\`.
+3. **Guardrails (STRICT)**:
+   - NEVER mention internal terms like "SOP", "Standard Operating Procedure", "compliance check", "internal review", or specific tool names.
+   - NEVER ask the user for internal references or codes.
+   - If a request is blocked or rejected, state that it could not be completed or requires further review without inventing specific internal actions (like "verifying with our team") that are not explicitly mentioned in the agent message.
+   - For rejected requests, you may suggest that the user can connect with a human agent for further assistance and ask if they would like to do so.
+   - Be direct about the outcome (e.g., "could not be processed", "requires more information") while remaining professional.
+   - Focus on the *outcome* or *next steps* for the user based *only* on the provided information.
+4. **Output Format**: Return JSON with \`thought\` (step-by-step reasoning) and \`synthesized_message\`.
 </instructions>
 
 <agent_message>

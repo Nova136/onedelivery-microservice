@@ -87,10 +87,15 @@ export const createRoutingNode = (deps: RoutingDependencies) => {
                         )
                         .trim();
 
-                const checkResponse = (await llmWithFallback.invoke([
-                    { role: "system", content: systemPrompt },
-                    { role: "user", content: userData },
-                ])) as any;
+                const checkResponse = (await llmWithFallback.invoke(
+                    [
+                        { role: "system", content: systemPrompt },
+                        { role: "user", content: userData },
+                    ],
+                    {
+                        runName: "RoutingConfirmation",
+                    },
+                )) as any;
                 logger.log(
                     `Routing Confirmation Reasoning: ${checkResponse.thought}`,
                 );

@@ -36,7 +36,14 @@ export const createSopHandlerNode = (deps: SopHandlerDependencies) => {
         const intent = state.current_intent;
         let sop = state.current_sop;
 
-        // Fetch SOP if not present and intent is specific
+        // Fetch SOP if not present or if intent has changed
+        if (sop && intent && sop.intentCode !== intent) {
+            logger.debug(
+                `Intent mismatch: current_intent=${intent}, sop.intentCode=${sop.intentCode}. Clearing SOP.`,
+            );
+            sop = null;
+        }
+
         if (
             !sop &&
             intent &&
@@ -59,10 +66,13 @@ export const createSopHandlerNode = (deps: SopHandlerDependencies) => {
 
         // Use sliding window for context
         const contextMessages = getSlidingWindowMessages(state.messages, 5);
-        
+
         // Isolate the specific query for this intent if available from the router
-        const currentIntentObj = state.decomposed_intents[state.current_intent_index];
-        const query = currentIntentObj?.query || (state.messages[state.messages.length - 1].content as string);
+        const currentIntentObj =
+            state.decomposed_intents[state.current_intent_index];
+        const query =
+            currentIntentObj?.query ||
+            (state.messages[state.messages.length - 1].content as string);
 
         // Replace the last message in the context window with the isolated query
         // This prevents the SOP agent from getting confused by multi-intent messages
@@ -72,14 +82,17 @@ export const createSopHandlerNode = (deps: SopHandlerDependencies) => {
                 // We recreate it to ensure it's a fresh instance with just the isolated query
                 contextMessages[contextMessages.length - 1] = {
                     ...lastMsg,
-                    content: query
+                    content: query,
                 } as any;
             }
         }
 
         const userContext =
             state.user_orders.length > 0
-                ? promptShield.wrapUntrustedData("user_orders", formatOrders(state.user_orders))
+                ? promptShield.wrapUntrustedData(
+                      "user_orders",
+                      formatOrders(state.user_orders),
+                  )
                 : "No recent orders found.";
         const summaryContext = state.summary
             ? promptShield.wrapUntrustedData("session_summary", state.summary)
@@ -117,7 +130,11 @@ export const createSopHandlerNode = (deps: SopHandlerDependencies) => {
                     : z.string();
 
             const dynamicSopResponseSchema = z.object({
-                thought: z.string().describe("Step-by-step reasoning for the current state and actions."),
+                thought: z
+                    .string()
+                    .describe(
+                        "Step-by-step reasoning for the current state and actions.",
+                    ),
                 extracted_data: dynamicExtractedDataSchema,
                 missing_fields: z
                     .array(z.string())
@@ -164,22 +181,44 @@ export const createSopHandlerNode = (deps: SopHandlerDependencies) => {
                         fallbacks: [structuredModelFallback],
                     });
                 // Split prompt into system instructions and user data to avoid role confusion
-                const systemPrompt = SOP_AGENT_PROMPT.split("<input>")[0].trim() + "\n\n" + SOP_AGENT_PROMPT.split("</input>")[1].trim();
-                const userData = `<input>${SOP_AGENT_PROMPT.split("<input>")[1].split("</input>")[0]}</input>`
-                    .replace("{{requiredData}}", JSON.stringify(sop.requiredData))
-                    .replace("{{current_intent}}", intent || "Unknown")
-                    .replace("{{current_intent}}", intent || "Unknown")
-                    .replace("{{user_context}}", userContext)
-                    .replace("{{summary}}", summaryContext)
-                    .replace("{{gathered_data}}", JSON.stringify(state.order_states))
-                    .replace("{{missing_data}}", JSON.stringify(missingData))
-                    .replace("{{is_awaiting_confirmation}}", state.is_awaiting_confirmation.toString()).trim();
+                const systemPrompt =
+                    SOP_AGENT_PROMPT.split("<input>")[0].trim() +
+                    "\n\n" +
+                    SOP_AGENT_PROMPT.split("</input>")[1].trim();
+                const userData =
+                    `<input>${SOP_AGENT_PROMPT.split("<input>")[1].split("</input>")[0]}</input>`
+                        .replace(
+                            "{{requiredData}}",
+                            JSON.stringify(sop.requiredData),
+                        )
+                        .replace("{{current_intent}}", intent || "Unknown")
+                        .replace("{{current_intent}}", intent || "Unknown")
+                        .replace("{{user_context}}", userContext)
+                        .replace("{{summary}}", summaryContext)
+                        .replace(
+                            "{{gathered_data}}",
+                            JSON.stringify(state.order_states),
+                        )
+                        .replace(
+                            "{{missing_data}}",
+                            JSON.stringify(missingData),
+                        )
+                        .replace(
+                            "{{is_awaiting_confirmation}}",
+                            state.is_awaiting_confirmation.toString(),
+                        )
+                        .trim();
 
-                agentOutput = await structuredModelWithFallbacks.invoke([
-                    { role: "system", content: systemPrompt },
-                    { role: "user", content: userData },
-                    ...contextMessages,
-                ]);
+                agentOutput = await structuredModelWithFallbacks.invoke(
+                    [
+                        { role: "system", content: systemPrompt },
+                        { role: "user", content: userData },
+                        ...contextMessages,
+                    ],
+                    {
+                        runName: "SopHandler",
+                    },
+                );
                 logger.log(`SOP Agent Reasoning: ${agentOutput.thought}`);
                 logger.debug(
                     `SOP Agent State: ${JSON.stringify({
@@ -207,7 +246,7 @@ export const createSopHandlerNode = (deps: SopHandlerDependencies) => {
                 ...agentOutput.extracted_data,
             };
             let finalResponse = "";
-            
+
             // Use LLM-identified missing fields for conditional logic support
             const missingFields = agentOutput.missing_fields || [];
 
@@ -262,11 +301,16 @@ export const createSopHandlerNode = (deps: SopHandlerDependencies) => {
 
                     if (executionResult.partial_responses) {
                         return {
-                            partial_responses: executionResult.partial_responses,
+                            partial_responses:
+                                executionResult.partial_responses,
                             current_intent: intent,
                             current_sop: sop,
-                            order_states: executionResult.updatedOrderStates || updatedOrderStates,
-                            is_awaiting_confirmation: executionResult.is_awaiting_confirmation ?? false,
+                            order_states:
+                                executionResult.updatedOrderStates ||
+                                updatedOrderStates,
+                            is_awaiting_confirmation:
+                                executionResult.is_awaiting_confirmation ??
+                                false,
                             retrieved_context: sop ? [JSON.stringify(sop)] : [],
                         };
                     }
@@ -283,7 +327,7 @@ export const createSopHandlerNode = (deps: SopHandlerDependencies) => {
                 partial_responses: [finalResponse],
                 current_intent: isComplete ? null : intent,
                 current_sop: isComplete ? null : sop,
-                order_states: updatedOrderStates,
+                order_states: isComplete ? null : updatedOrderStates,
                 is_awaiting_confirmation:
                     missingFields.length === 0 && !isConfirmed,
                 retrieved_context: sop ? [JSON.stringify(sop)] : [],

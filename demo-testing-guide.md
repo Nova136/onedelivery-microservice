@@ -99,6 +99,11 @@ These tests verify the `SopHandlerNode`'s ability to gather required information
 - **Test Input Example:** "Actually, never mind. How can I pay with cash?"
 - **Expected Behavior:** The agent successfully breaks out of the refund flow and explains that Cash on Delivery is accepted for orders under $50.
 
+### The LLM Bailout (Context Switch - Step 3)
+
+- **Test Input Example:** "Cancel order FD-0000-000005 please, I don't want it anymore."
+- **Expected Behavior:** The agent successfully changed into the cancellation workflow.
+
 ---
 
 ## 5. Refund SOP Validations

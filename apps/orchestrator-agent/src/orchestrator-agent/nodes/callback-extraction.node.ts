@@ -13,13 +13,16 @@ export interface CallbackExtractionDependencies {
 
 const logger = new Logger("CallbackExtractionNode");
 
-export const createCallbackExtractionNode = (deps: CallbackExtractionDependencies) => {
+export const createCallbackExtractionNode = (
+    deps: CallbackExtractionDependencies,
+) => {
     return async (state: AgentCallbackStateType) => {
         const { llm, llmFallback, promptShield } = deps;
 
         if (!state.is_safe) {
             return {
-                synthesized_message: "An update was received from our delivery team.",
+                synthesized_message:
+                    "An update was received from our delivery team.",
             };
         }
 
@@ -35,22 +38,34 @@ export const createCallbackExtractionNode = (deps: CallbackExtractionDependencie
         });
 
         try {
-            const wrappedMessage = promptShield.wrapUntrustedData("agent_message", state.redacted_message);
-            
-            // Split prompt into system instructions and user data to avoid role confusion
-            const systemPrompt = EXTRACTION_PROMPT.split("<agent_message>")[0].trim();
-            const userData = `<agent_message>${EXTRACTION_PROMPT.split("<agent_message>")[1]}`.replace("{{message}}", wrappedMessage).trim();
+            const wrappedMessage = promptShield.wrapUntrustedData(
+                "agent_message",
+                state.redacted_message,
+            );
 
-            const response = await llmWithFallback.invoke([
+            // Split prompt into system instructions and user data to avoid role confusion
+            const systemPrompt =
+                EXTRACTION_PROMPT.split("<agent_message>")[0].trim();
+            const userData =
+                `<agent_message>${EXTRACTION_PROMPT.split("<agent_message>")[1]}`
+                    .replace("{{message}}", wrappedMessage)
+                    .trim();
+
+            const response = await llmWithFallback.invoke(
+                [
+                    {
+                        role: "system",
+                        content: systemPrompt,
+                    },
+                    {
+                        role: "user",
+                        content: userData,
+                    },
+                ],
                 {
-                    role: "system",
-                    content: systemPrompt,
+                    runName: "CallbackExtraction",
                 },
-                {
-                    role: "user",
-                    content: userData,
-                },
-            ]);
+            );
 
             logger.log(`Callback Extraction Reasoning: ${response.thought}`);
             return {
@@ -59,7 +74,8 @@ export const createCallbackExtractionNode = (deps: CallbackExtractionDependencie
         } catch (e) {
             logger.error("Failed to extract data from callback:", e);
             return {
-                synthesized_message: "An update was received from our delivery team.",
+                synthesized_message:
+                    "An update was received from our delivery team.",
             };
         }
     };

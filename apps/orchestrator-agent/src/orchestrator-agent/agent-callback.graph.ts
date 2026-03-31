@@ -1,9 +1,5 @@
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
-import {
-    StateGraph,
-    START,
-    END,
-} from "@langchain/langgraph";
+import { StateGraph, START, END } from "@langchain/langgraph";
 import { OutputEvaluatorService } from "../modules/output-evaluator/output-evaluator.service";
 import { PiiRedactionService } from "../modules/pii-redaction/pii-redaction.service";
 import { PromptShieldService } from "../modules/prompt-shield/prompt-shield.service";
@@ -49,5 +45,7 @@ export function createAgentCallbackGraph(services: CallbackGraphServices) {
         .addEdge("extraction", "evaluation")
         .addEdge("evaluation", END);
 
-    return workflow.compile();
+    return workflow.compile({
+        name: "AgentCallbackGraph",
+    });
 }

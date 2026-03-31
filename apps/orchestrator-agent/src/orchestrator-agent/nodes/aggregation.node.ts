@@ -59,17 +59,27 @@ export const createAggregationNode = (deps: AggregationDependencies) => {
                 });
 
                 // Split prompt into system instructions and user data to avoid role confusion
-                const systemPrompt = AGGREGATOR_PROMPT.split("<input>")[0].trim();
-                const userData = `<input>${AGGREGATOR_PROMPT.split("<input>")[1]}`
-                    .replace("{{partial_responses}}", partialsText)
-                    .replace("{{gathered_data}}", JSON.stringify(state.order_states || {}))
-                    .replace("{{user_query}}", userQuery)
-                    .trim();
+                const systemPrompt =
+                    AGGREGATOR_PROMPT.split("<input>")[0].trim();
+                const userData =
+                    `<input>${AGGREGATOR_PROMPT.split("<input>")[1]}`
+                        .replace("{{partial_responses}}", partialsText)
+                        .replace(
+                            "{{gathered_data}}",
+                            JSON.stringify(state.order_states || {}),
+                        )
+                        .replace("{{user_query}}", userQuery)
+                        .trim();
 
-                const response = (await llmWithFallback.invoke([
-                    { role: "system", content: systemPrompt },
-                    { role: "user", content: userData },
-                ])) as any;
+                const response = (await llmWithFallback.invoke(
+                    [
+                        { role: "system", content: systemPrompt },
+                        { role: "user", content: userData },
+                    ],
+                    {
+                        runName: "Aggregator",
+                    },
+                )) as any;
                 logger.log(`Aggregation Reasoning: ${response.thought}`);
                 finalResponse = response.final_response;
             } catch (e) {
