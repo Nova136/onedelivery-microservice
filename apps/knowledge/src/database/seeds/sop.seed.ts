@@ -43,7 +43,7 @@ export default class SopSeeder implements Seeder {
                         name: "items",
                         type: "array",
                         description:
-                            "An array of objects containing the name and quantity of an affected item. Only require this if the category is missing_item, quality_issue, or wrong_item.",
+                            "An array of objects containing the name and quantity of an affected item. Only require this if the category is missing_item, wrong_item, or quality_issue.",
                         itemsSchema: [
                             {
                                 name: "name",
@@ -54,7 +54,7 @@ export default class SopSeeder implements Seeder {
                                 name: "quantity",
                                 type: "number",
                                 description:
-                                    "The quantity of this specific item affected.",
+                                    "The quantity of this specific item affected. This must be lower than or equal to the quantity ordered for this item. Only required if the category is missing_item, wrong_item, or quality_issue.",
                             },
                         ],
                     },

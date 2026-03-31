@@ -240,7 +240,7 @@ export class OrchestratorService {
                 `Agent update for session ${sessionId} failed safety check. Falling back to safe message.`,
             );
             result.synthesized_message =
-                "We received an update regarding your request, but our system is currently verifying the details. Please check back shortly.";
+                "Your request has been updated. Please check your order details for the most current information.";
         }
 
         this.logger.log(

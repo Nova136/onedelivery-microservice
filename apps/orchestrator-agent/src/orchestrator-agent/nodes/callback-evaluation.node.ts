@@ -5,7 +5,9 @@ export interface CallbackEvaluationDependencies {
     outputEvaluator: OutputEvaluatorService;
 }
 
-export const createCallbackEvaluationNode = (deps: CallbackEvaluationDependencies) => {
+export const createCallbackEvaluationNode = (
+    deps: CallbackEvaluationDependencies,
+) => {
     return async (state: AgentCallbackStateType) => {
         const { outputEvaluator } = deps;
 
@@ -15,7 +17,7 @@ export const createCallbackEvaluationNode = (deps: CallbackEvaluationDependencie
 
         const evaluation = await outputEvaluator.evaluateAgentUpdate(
             state.synthesized_message || "",
-            `Summary: ${state.summary}`
+            `Original Update: ${state.redacted_message}\nSummary: ${state.summary}`,
         );
 
         return {

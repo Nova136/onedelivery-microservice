@@ -37,14 +37,23 @@ export async function executeSopTool(
         // Confused Deputy Defense: Validate order ownership
         if (parsedArgs && (parsedArgs as any).orderId) {
             const orderId = (parsedArgs as any).orderId;
-            const userOwnsOrder = state.user_orders.some(o => o.orderId === orderId);
+            const userOwnsOrder = state.user_orders.some(
+                (o) => o.orderId === orderId,
+            );
             if (!userOwnsOrder) {
-                logger.warn(`Confused Deputy Attack Prevented: User ${state.user_id} attempted to access unowned order ${orderId}`);
+                logger.warn(
+                    `Confused Deputy Attack Prevented: User ${state.user_id} attempted to access unowned order ${orderId}`,
+                );
                 return {
                     success: false,
                     messages: [],
-                    partial_responses: ["I'm sorry, but I couldn't find that order in your account. Please provide a valid order ID."],
-                    updatedOrderStates: { ...updatedOrderStates, orderId: null }, // clear the invalid order ID
+                    partial_responses: [
+                        "I'm sorry, but I couldn't find that order in your account. Please provide a valid order ID.",
+                    ],
+                    updatedOrderStates: {
+                        ...updatedOrderStates,
+                        orderId: null,
+                    }, // clear the invalid order ID
                     is_awaiting_confirmation: false,
                 };
             }
@@ -57,11 +66,15 @@ export async function executeSopTool(
             userId: state.user_id,
             sessionId: state.session_id,
         };
-        
+
         try {
             await tool.invoke(args);
             logger.log(`Completion tool ${tool.name} triggered.`);
-            messages.push(new SystemMessage(`SYSTEM_ACTION: Tool ${tool.name} executed successfully with intent ${intent}.`));
+            messages.push(
+                new SystemMessage(
+                    `SYSTEM_ACTION: Tool ${tool.name} executed successfully with intent ${intent}.`,
+                ),
+            );
             return { success: true, messages };
         } catch (toolError) {
             logger.error(`Tool execution error for ${tool.name}:`, toolError);
