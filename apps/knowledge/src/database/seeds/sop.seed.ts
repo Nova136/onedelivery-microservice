@@ -14,7 +14,7 @@ export default class SopSeeder implements Seeder {
             {
                 intentCode: "REQUEST_REFUND",
                 agentOwner: "orchestrator",
-                title: "Asking for money back for missing or wrong items or quality issue or late delivery.",
+                title: "Cancel an order and process its automatic refund. Use this for any request to cancel, even if a refund is mentioned for the same order.",
                 requiredData: [
                     {
                         name: "orderId",
@@ -125,7 +125,7 @@ export default class SopSeeder implements Seeder {
             {
                 intentCode: "CANCEL_ORDER",
                 agentOwner: "orchestrator",
-                title: "Cancelling an ongoing order.",
+                title: "Cancel an order and process its automatic refund. Use this for any request to cancel, even if a refund is mentioned for the same order.",
                 requiredData: [
                     {
                         name: "orderId",

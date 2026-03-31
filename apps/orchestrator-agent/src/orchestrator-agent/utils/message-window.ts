@@ -1,4 +1,4 @@
-import { BaseMessage, HumanMessage, AIMessage } from "@langchain/core/messages";
+import { BaseMessage, HumanMessage } from "@langchain/core/messages";
 
 /**
  * Returns a sliding window of messages, ensuring we keep full conversation turns (Human + AI).

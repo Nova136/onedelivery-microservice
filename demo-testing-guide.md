@@ -47,7 +47,7 @@ These tests verify that the `SemanticRouterService` correctly classifies user in
 - **Test Input Example:** "My food is cold again, I'm so done with this app. Let me speak to a manager."
 - **Expected Behavior:** The agent immediately transfers the user to a human support agent without attempting further AI resolution.
 
-### End Session Intent (Failed - Insertion for Incident failed)
+### End Session Intent
 
 - **Test Input Example:** "Thanks for your help, goodbye."
 - **Expected Behavior:** Routed to the End Session handler. Returns a polite closing message.
@@ -58,7 +58,7 @@ These tests verify that the `SemanticRouterService` correctly classifies user in
 
 These tests verify the system's ability to handle multiple requests in a single message.
 
-### Mixed Intent Request (Failed)
+### Mixed Intent Request
 
 - **Test Input Example:** "What are your delivery hours? Also, cancel my order FD-0000-000002 right now! It is too slow"
 - **Expected Behavior:** The agent prioritizes the cancellation request over the FAQ, and successfully cancels the order (since FD-0000-000002 is in the CREATED status).

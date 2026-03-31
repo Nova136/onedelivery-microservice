@@ -1,5 +1,4 @@
 import { Annotation, MessagesAnnotation } from "@langchain/langgraph";
-import { BaseMessage } from "@langchain/core/messages";
 
 /**
  * The graph state MUST include the following properties:
@@ -66,9 +65,13 @@ export const OrchestratorState = Annotation.Root({
     reducer: (x, y) => y ?? x,
     default: () => true,
   }),
-  retrieved_context: Annotation<string>({
-    reducer: (x, y) => y ?? x,
-    default: () => "",
+  retrieved_context: Annotation<string[]>({
+    reducer: (x, y) => {
+      if (y === null) return [];
+      if (!y) return x;
+      return [...x, ...y];
+    },
+    default: () => [],
   }),
   has_truncated_intents: Annotation<boolean>({
     reducer: (x, y) => y ?? x,
@@ -85,6 +88,10 @@ export const OrchestratorState = Annotation.Root({
   session_id: Annotation<string>({
     reducer: (x, y) => y ?? x,
     default: () => "",
+  }),
+  is_human_managed: Annotation<boolean>({
+    reducer: (x, y) => y ?? x,
+    default: () => false,
   }),
 });
 

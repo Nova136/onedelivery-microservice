@@ -1,4 +1,5 @@
 export * from "./end-chat-session.tool";
+export * from "./escalate-to-human.tool";
 export * from "./route-to-logistics.tool";
 export * from "./route-to-resolution.tool";
 export * from "./search-faq.tool";

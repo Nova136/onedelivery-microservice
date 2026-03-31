@@ -17,6 +17,7 @@ import {
 import { CommonService } from "@libs/modules/common/common.service";
 import { ClientProxy } from "@nestjs/microservices";
 import { Inject } from "@nestjs/common";
+import { EscalateChatSessionPayload } from "./interface/payload/escalate-chat-session-payload.interface";
 
 export class MemoryClientService {
     constructor(
@@ -107,6 +108,19 @@ export class MemoryClientService {
             this.userClient,
             { cmd: "user.chat.updateSummary" },
             { id: sessionId, summary, lastSummarizedSequence },
+        );
+    }
+
+    async escalateSession(userId: string, sessionId: string): Promise<void> {
+        const payload: EscalateChatSessionPayload = {
+            userId,
+            sessionId,
+        };
+
+        return await this.commonService.sendViaRMQ<void>(
+            this.userClient,
+            { cmd: "user.chat.escalateSession" },
+            payload,
         );
     }
 

@@ -7,6 +7,7 @@ import { EXTRACTION_PROMPT } from "../prompts/callback-extraction.prompt";
 
 export interface CallbackExtractionDependencies {
     llm: BaseChatModel;
+    llmFallback: BaseChatModel;
     promptShield: PromptShieldService;
 }
 
@@ -14,7 +15,7 @@ const logger = new Logger("CallbackExtractionNode");
 
 export const createCallbackExtractionNode = (deps: CallbackExtractionDependencies) => {
     return async (state: AgentCallbackStateType) => {
-        const { llm, promptShield } = deps;
+        const { llm, llmFallback, promptShield } = deps;
 
         if (!state.is_safe) {
             return {
@@ -28,13 +29,26 @@ export const createCallbackExtractionNode = (deps: CallbackExtractionDependencie
         });
 
         const structuredLlm = llm.withStructuredOutput(schema);
+        const structuredFallback = llmFallback.withStructuredOutput(schema);
+        const llmWithFallback = structuredLlm.withFallbacks({
+            fallbacks: [structuredFallback],
+        });
 
         try {
             const wrappedMessage = promptShield.wrapUntrustedData("agent_message", state.redacted_message);
-            const response = await structuredLlm.invoke([
+            
+            // Split prompt into system instructions and user data to avoid role confusion
+            const systemPrompt = EXTRACTION_PROMPT.split("<agent_message>")[0].trim();
+            const userData = `<agent_message>${EXTRACTION_PROMPT.split("<agent_message>")[1]}`.replace("{{message}}", wrappedMessage).trim();
+
+            const response = await llmWithFallback.invoke([
                 {
                     role: "system",
-                    content: EXTRACTION_PROMPT.replace("{{message}}", wrappedMessage),
+                    content: systemPrompt,
+                },
+                {
+                    role: "user",
+                    content: userData,
                 },
             ]);
 

@@ -173,6 +173,16 @@ export class ChatService {
         });
     }
 
+    async escalateChatSession(
+        userId: string,
+        sessionId: string,
+    ): Promise<void> {
+        await this.chatSessionRepo.update(
+            { id: sessionId, userId },
+            { status: "ESCALATED" },
+        );
+    }
+
     async endChatSession(userId: string, sessionId: string): Promise<void> {
         await this.chatSessionRepo.update(
             { id: sessionId, userId },

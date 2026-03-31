@@ -9,14 +9,12 @@ import { MemoryClientModule } from "../modules/clients/memory-client/memory-clie
 import { MemoryClientService } from "../modules/clients/memory-client/memory-client.service";
 import { OrderClientModule } from "../modules/clients/order-client/order-client.module";
 import { OrderClientService } from "../modules/clients/order-client/order-client.service";
-import { InputValidatorModule } from "../modules/input-validator/input-validator.module";
-import { InputValidatorService } from "../modules/input-validator/input-validator.service";
 import { OutputEvaluatorModule } from "../modules/output-evaluator/output-evaluator.module";
 import { OutputEvaluatorService } from "../modules/output-evaluator/output-evaluator.service";
 import { PiiRedactionModule } from "../modules/pii-redaction/pii-redaction.module";
 import { PiiRedactionService } from "../modules/pii-redaction/pii-redaction.service";
-import { SemanticRouterModule } from "../modules/semantic-router/semantic-router.module";
-import { SemanticRouterService } from "../modules/semantic-router/semantic-router.service";
+import { IntentClassifierModule } from "../modules/intent-classifier/intent-classifier.module";
+import { IntentClassifierService } from "../modules/intent-classifier/intent-classifier.service";
 import { SummarizerModule } from "../modules/summarizer/summarizer.module";
 import { SummarizerService } from "../modules/summarizer/summarizer.service";
 import { PromptShieldModule } from "../modules/prompt-shield/prompt-shield.module";
@@ -29,13 +27,13 @@ import { OrchestratorController } from "./orchestrator.controller";
 import { OrchestratorService } from "./orchestrator.service";
 import * as tools from "./tools";
 import { SessionController } from "./session.controller";
+import { InputValidatorModule } from "../modules/input-validator/input-validator.module";
 
 @Global()
 @Module({
     imports: [
         PiiRedactionModule,
-        InputValidatorModule,
-        SemanticRouterModule,
+        IntentClassifierModule,
         OutputEvaluatorModule,
         KnowledgeClientModule,
         OrderClientModule,
@@ -43,6 +41,7 @@ import { SessionController } from "./session.controller";
         MemoryClientModule,
         SummarizerModule,
         PromptShieldModule,
+        InputValidatorModule,
     ],
     controllers: [OrchestratorController, SessionController],
     providers: [
@@ -61,11 +60,22 @@ import { SessionController } from "./session.controller";
                     temperature: 0,
                 });
 
+                const callbackModel = new ChatOpenAI({
+                    modelName: "gpt-5.4-mini",
+                    openAIApiKey: process.env.OPENAI_API_KEY,
+                    temperature: 0,
+                    metadata: {
+                        environment: "production",
+                        component: "agent-callback",
+                    },
+                });
+
                 return createAgentCallbackGraph({
                     piiService,
                     promptShield,
                     outputEvaluator,
-                    llm: geminiFlash,
+                    llm: callbackModel,
+                    llmFallback: geminiFlash,
                 });
             },
             inject: [
@@ -77,8 +87,7 @@ import { SessionController } from "./session.controller";
         {
             provide: "ORCHESTRATOR_GRAPH",
             useFactory: async (
-                piiService: PiiRedactionService,
-                semanticRouter: SemanticRouterService,
+                intentClassifier: IntentClassifierService,
                 outputEvaluator: OutputEvaluatorService,
                 orderService: OrderClientService,
                 summarizer: SummarizerService,
@@ -155,6 +164,7 @@ import { SessionController } from "./session.controller";
                     agentsClient,
                     memoryService,
                 );
+                const escalateTool = tools.createEscalateToHumanTool(memoryService);
                 const logisticsTool =
                     tools.createRouteToLogisticsTool(agentsClient);
                 const resolutionTool =
@@ -165,7 +175,7 @@ import { SessionController } from "./session.controller";
 
                 return createOrchestratorGraph(
                     {
-                        semanticRouter,
+                        intentClassifier,
                         outputEvaluator,
                         orderService,
                         summarizer,
@@ -183,6 +193,7 @@ import { SessionController } from "./session.controller";
                         aggregationModelFallback: geminiFlash,
                         tools: [
                             endChatTool,
+                            escalateTool,
                             logisticsTool,
                             resolutionTool,
                             faqTool,
@@ -193,8 +204,7 @@ import { SessionController } from "./session.controller";
                 );
             },
             inject: [
-                PiiRedactionService,
-                SemanticRouterService,
+                IntentClassifierService,
                 OutputEvaluatorService,
                 OrderClientService,
                 SummarizerService,
@@ -205,6 +215,10 @@ import { SessionController } from "./session.controller";
             ],
         },
     ],
-    exports: [OrchestratorService, "ORCHESTRATOR_GRAPH", "AGENT_CALLBACK_GRAPH"],
+    exports: [
+        OrchestratorService,
+        "ORCHESTRATOR_GRAPH",
+        "AGENT_CALLBACK_GRAPH",
+    ],
 })
 export class OrchestratorModule {}

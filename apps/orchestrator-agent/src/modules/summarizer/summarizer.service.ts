@@ -1,8 +1,8 @@
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { ChatOpenAI } from "@langchain/openai";
-import { BaseMessage, HumanMessage, AIMessage, ToolMessage } from "@langchain/core/messages";
-import { Injectable, Optional } from "@nestjs/common";
+import { BaseMessage } from "@langchain/core/messages";
+import { Injectable } from "@nestjs/common";
 
 const SUMMARIZER_PROMPT = `
 <role>Conversation Summarizer.</role>
@@ -50,29 +50,17 @@ export class SummarizerService {
     async summarize(messages: BaseMessage[], existingSummary: string = ""): Promise<string> {
         if (messages.length === 0) return existingSummary;
 
-        const summarizerPrompt = SUMMARIZER_PROMPT
-            .replace("{{existing_summary}}", existingSummary || "No existing summary.");
+        // Split prompt into system instructions and user data to avoid role confusion
+        const systemPrompt = SUMMARIZER_PROMPT.split("<existing_summary>")[0].trim() + "\n\n" + SUMMARIZER_PROMPT.split("</existing_summary>")[1].trim();
+        const userData = `<existing_summary>${SUMMARIZER_PROMPT.split("<existing_summary>")[1].split("</existing_summary>")[0]}</existing_summary>`
+            .replace("{{existing_summary}}", existingSummary || "No existing summary.").trim();
 
         const response = await this.model.invoke([
-            { role: "system", content: summarizerPrompt },
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userData },
             ...messages
         ]);
 
         return response.content as string;
-    }
-
-    /**
-     * Formats messages into a transcript string for summarization if needed.
-     */
-    private formatTranscript(messages: BaseMessage[]): string {
-        return messages
-            .map((msg) => {
-                let role = "System";
-                if (msg instanceof HumanMessage) role = "User";
-                else if (msg instanceof AIMessage) role = "AI";
-                else if (msg instanceof ToolMessage) role = "Tool";
-                return `${role}: ${msg.content}`;
-            })
-            .join("\n");
     }
 }

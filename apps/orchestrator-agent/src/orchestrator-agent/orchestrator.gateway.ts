@@ -28,11 +28,11 @@ export class OrchestratorGateway
 
     constructor(private readonly orchestratorService: OrchestratorService) {}
 
-    afterInit(server: Server) {
+    afterInit(_server: Server) {
         this.logger.log("WebSocket Initialized");
     }
 
-    handleConnection(client: Socket, ...args: any[]) {
+    handleConnection(client: Socket, ..._args: any[]) {
         const sessionId = client.handshake.query.sessionId as string;
         if (sessionId) {
             client.join(sessionId);
@@ -45,11 +45,14 @@ export class OrchestratorGateway
         this.logger.log(`Client disconnected: ${client.id}`);
     }
 
-    sendAgentUpdate(sessionId: string, messageContent: string) {
-        this.server.to(sessionId).emit("message", {
-            type: "AGENT_UPDATE",
-            message: messageContent,
-        });
+    sendAgentUpdate(sessionId: string, messageContent: string | null) {
+        if (messageContent) {
+            this.logger.log(`Emitting AGENT_UPDATE to session ${sessionId}`);
+            this.server.to(sessionId).emit("message", {
+                type: "AGENT_UPDATE",
+                message: messageContent,
+            });
+        }
     }
 
     @SubscribeMessage("message")
@@ -72,10 +75,12 @@ export class OrchestratorGateway
                     message,
                 );
 
-                this.server.to(sessionId).emit("message", {
-                    type: "CHAT_RESPONSE",
-                    message: result.response,
-                });
+                if (result.response) {
+                    this.server.to(sessionId).emit("message", {
+                        type: "CHAT_RESPONSE",
+                        message: result.response,
+                    });
+                }
             }
         } catch (error) {
             this.logger.error(`WebSocket Message Error: ${error}`);

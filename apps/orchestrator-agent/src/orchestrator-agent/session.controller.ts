@@ -1,4 +1,4 @@
-import { Post, Body, UseGuards, Controller, Logger } from "@nestjs/common";
+import { Post, Body, UseGuards, Controller } from "@nestjs/common";
 import {
     ApiBearerAuth,
     ApiOperation,
@@ -19,8 +19,6 @@ import { MemoryClientService } from "../modules/clients/memory-client/memory-cli
 @ApiTags("Session")
 @Controller("orchestrator-agent")
 export class SessionController {
-    private readonly logger = new Logger(SessionController.name);
-
     constructor(private readonly memoryService: MemoryClientService) {}
 
     @Post("get-history-listing")

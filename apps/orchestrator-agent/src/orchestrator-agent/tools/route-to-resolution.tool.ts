@@ -74,12 +74,12 @@ export function createRouteToResolutionTool(
     return tool(
         async (payload: ResolutionPayload) => {
             try {
-                const reply = await agentsClient.send("resolution", {
+                agentsClient.send("resolution", {
                     userId: payload.userId,
                     sessionId: payload.sessionId,
                     message: JSON.stringify(payload),
                 });
-                return reply;
+                return "Request submitted to Resolution Agent.";
             } catch (err) {
                 const msg = err instanceof Error ? err.message : String(err);
                 throw new Error(`System Error: Resolution Agent unreachable. ${msg}`);

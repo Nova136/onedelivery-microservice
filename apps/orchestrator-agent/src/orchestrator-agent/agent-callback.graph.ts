@@ -15,6 +15,7 @@ export interface CallbackGraphServices {
     promptShield: PromptShieldService;
     outputEvaluator: OutputEvaluatorService;
     llm: BaseChatModel;
+    llmFallback: BaseChatModel;
 }
 
 /**
@@ -33,6 +34,7 @@ export function createAgentCallbackGraph(services: CallbackGraphServices) {
             "extraction",
             nodes.createCallbackExtractionNode({
                 llm: services.llm,
+                llmFallback: services.llmFallback,
                 promptShield: services.promptShield,
             }),
         )

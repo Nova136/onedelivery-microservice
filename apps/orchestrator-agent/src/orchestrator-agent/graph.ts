@@ -9,9 +9,8 @@ import {
 } from "@langchain/langgraph";
 import { KnowledgeClientService } from "../modules/clients/knowledge-client/knowledge-client.service";
 import { OrderClientService } from "../modules/clients/order-client/order-client.service";
-import { InputValidatorService } from "../modules/input-validator/input-validator.service";
 import { OutputEvaluatorService } from "../modules/output-evaluator/output-evaluator.service";
-import { SemanticRouterService } from "../modules/semantic-router/semantic-router.service";
+import { IntentClassifierService } from "../modules/intent-classifier/intent-classifier.service";
 import { SummarizerService } from "../modules/summarizer/summarizer.service";
 import { PromptShieldService } from "../modules/prompt-shield/prompt-shield.service";
 import * as nodes from "./nodes";
@@ -19,7 +18,7 @@ import { OrchestratorState, OrchestratorStateType } from "./state";
 
 // Define Services Interface
 export interface GraphServices {
-    semanticRouter: SemanticRouterService;
+    intentClassifier: IntentClassifierService;
     outputEvaluator: OutputEvaluatorService;
     orderService: OrderClientService;
     summarizer: SummarizerService;
@@ -96,6 +95,9 @@ export function createOrchestratorGraph(
             if (intentCode === "reset") {
                 return new Send("reset_handler", payload);
             }
+            if (intentCode === "unclear") {
+                return new Send("clarification", payload);
+            }
             return new Send("sop_handler", payload);
         });
 
@@ -113,7 +115,7 @@ export function createOrchestratorGraph(
         .addNode(
             "routing",
             nodes.createRoutingNode({
-                semanticRouter: services.semanticRouter,
+                intentClassifier: services.intentClassifier,
                 llm: services.routingModel,
                 llmFallback: services.routingModelFallback,
                 knowledgeClient: services.knowledgeClient,
@@ -130,6 +132,7 @@ export function createOrchestratorGraph(
         )
         .addNode("end_session", nodes.createEndSessionNode(services.tools))
         .addNode("reset_handler", nodes.createResetHandlerNode())
+        .addNode("clarification", nodes.createClarificationNode())
         .addNode(
             "sop_handler",
             nodes.createSopHandlerNode({
@@ -167,7 +170,7 @@ export function createOrchestratorGraph(
                 summarizer: services.summarizer,
             }),
         )
-        .addNode("escalation", nodes.createEscalationNode())
+        .addNode("escalation", nodes.createEscalationNode(services.tools))
         .addEdge(START, "pre_processing")
         .addConditionalEdges("pre_processing", routeAfterPreProcessing, {
             routing: "routing",
@@ -179,10 +182,12 @@ export function createOrchestratorGraph(
             "escalation",
             "end_session",
             "reset_handler",
+            "clarification",
         ])
         .addEdge("informational_handler", "aggregation")
         .addEdge("end_session", "aggregation")
         .addEdge("reset_handler", "aggregation")
+        .addEdge("clarification", "aggregation")
         .addEdge("sop_handler", "aggregation")
         .addEdge("escalation", "aggregation")
         .addEdge("aggregation", "output_evaluation")

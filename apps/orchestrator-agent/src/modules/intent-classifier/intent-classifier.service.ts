@@ -7,8 +7,8 @@ import { formatOrders } from "../../orchestrator-agent/utils/format-orders";
 import { getSlidingWindowMessages } from "../../orchestrator-agent/utils/message-window";
 import { KnowledgeClientService } from "../clients/knowledge-client/knowledge-client.service";
 
-const SEMANTIC_ROUTER_PROMPT = `
-<role>OneDelivery Semantic Router.</role>
+const INTENT_CLASSIFIER_PROMPT = `
+<role>OneDelivery Intent Classifier.</role>
 <task>Classify user requests into relevant intents for specialized handling.</task>
 
 <chain_of_thought>
@@ -81,11 +81,14 @@ Current Active Task: {{current_task}}
 7. **Entity-Aware Instructions**: If multiple actions are requested for the same entity (e.g., 'cancel and refund order A'), group them into a single intent if one SOP (like 'CANCEL_ORDER') naturally covers both. Only decompose into multiple intents if the actions apply to different entities (e.g., 'cancel order A and refund order B') or are logically unrelated.
 8. **Follow Examples**: Use the logic demonstrated in the <examples> section to decide when to group actions into a single intent versus when to decompose them.
 9. **Output**: Return ONLY a JSON object containing a 'thought' string and a 'results' array of objects with 'intent', 'query', and 'confidence'.
+10. **Include Context**: When extracting the 'query', ensure you include any relevant context, reasons, or justifications provided by the user (e.g., 'cancel my order because it is too slow' instead of just 'cancel my order'). This is critical for downstream slot filling.
 </instructions>
 `;
 
 const routerOutputSchema = z.object({
-    thought: z.string().describe("Step-by-step reasoning for the classification."),
+    thought: z
+        .string()
+        .describe("Step-by-step reasoning for the classification."),
     results: z
         .array(
             z.object({
@@ -97,13 +100,15 @@ const routerOutputSchema = z.object({
                 query: z
                     .string()
                     .describe(
-                        "The specific part of the user's message that corresponds to this intent.",
+                        "The specific part of the user's message that corresponds to this intent, including any relevant context, reasons, or justifications provided by the user.",
                     ),
                 confidence: z
                     .number()
                     .min(0)
                     .max(1)
-                    .describe("Confidence score from 0 to 1 for this classification."),
+                    .describe(
+                        "Confidence score from 0 to 1 for this classification.",
+                    ),
             }),
         )
         .describe(
@@ -112,8 +117,8 @@ const routerOutputSchema = z.object({
 });
 
 @Injectable()
-export class SemanticRouterService {
-    private readonly logger = new Logger(SemanticRouterService.name);
+export class IntentClassifierService {
+    private readonly logger = new Logger(IntentClassifierService.name);
     private model: any;
 
     constructor(private readonly knowledgeClient: KnowledgeClientService) {
@@ -123,7 +128,7 @@ export class SemanticRouterService {
             temperature: 0,
             metadata: {
                 environment: "production",
-                component: "semantic-router",
+                component: "intent-classifier",
             },
             tags: ["production", "routing"],
         });
@@ -153,22 +158,21 @@ export class SemanticRouterService {
         currentTask: string = "None",
     ): Promise<{
         intents: string[];
-        decomposed: Array<{ intent: string; query: string; confidence?: number }>;
+        decomposed: Array<{
+            intent: string;
+            query: string;
+            confidence?: number;
+        }>;
     }> {
         this.logger.log("Classifying user intent...");
-        const lastMessageContent = messages[messages.length - 1].content as string;
+        const lastMessageContent = messages[messages.length - 1]
+            .content as string;
 
         // Build dynamic intents from SOPs
         const sops = await this.knowledgeClient.listOrchestratorSops();
         const dynamicIntents = sops
             .map((sop) => {
-                let description = sop.title;
-                if (sop.intentCode === "CANCEL_ORDER") {
-                    description = "Cancel an order and process its automatic refund. Use this for any request to cancel, even if a refund is mentioned for the same order.";
-                } else if (sop.intentCode === "REQUEST_REFUND") {
-                    description = "Process a refund for an order that is NOT being cancelled (e.g., quality issues, missing items). Use this only when the user is NOT asking to cancel the same order. DO NOT use this if the user is also asking to cancel the order.";
-                }
-                return `- ${sop.intentCode}: ${sop.title} - ${description}`;
+                return `- ${sop.intentCode}: ${sop.title}`;
             })
             .join("\n");
 
@@ -184,23 +188,24 @@ export class SemanticRouterService {
             ? `<summary>\n${summary}\n</summary>`
             : "No previous conversation summary.";
 
-        const prompt = SEMANTIC_ROUTER_PROMPT.replace(
-            "{{dynamic_intents}}",
-            dynamicIntents,
-        )
-            .replace("{{summary}}", summaryContext)
-            .replace("{{user_orders}}", userOrdersContext)
-            .replace("{{current_task}}", currentTask);
-
         // Split prompt into system instructions and user data to avoid role confusion
-        const systemPrompt = SEMANTIC_ROUTER_PROMPT.split("<context>")[0].trim() + "\n\n" + SEMANTIC_ROUTER_PROMPT.split("</instructions>")[0].split("<instructions>")[1].trim();
-        const userData = `<context>${SEMANTIC_ROUTER_PROMPT.split("<context>")[1].split("</context>")[0]}</context>`
-            .replace("{{dynamic_intents}}", dynamicIntents)
-            .replace("{{summary}}", summaryContext)
-            .replace("{{user_orders}}", userOrdersContext)
-            .replace("{{current_task}}", currentTask).trim();
+        const systemPrompt = (
+            INTENT_CLASSIFIER_PROMPT.split("<input>")[0].trim() +
+            "\n\n" +
+            INTENT_CLASSIFIER_PROMPT.split("</input>")[1].trim()
+        ).replace("{{dynamic_intents}}", dynamicIntents);
+        const userData =
+            `<input>${INTENT_CLASSIFIER_PROMPT.split("<input>")[1].split("</input>")[0]}</input>`
+                .replace("{{summary}}", summaryContext)
+                .replace("{{user_orders}}", userOrdersContext)
+                .replace("{{current_task}}", currentTask)
+                .trim();
 
-        let decomposed: Array<{ intent: string; query: string; confidence?: number }> = [];
+        let decomposed: Array<{
+            intent: string;
+            query: string;
+            confidence?: number;
+        }> = [];
         try {
             const response = await this.model.invoke([
                 {
@@ -274,14 +279,25 @@ export class SemanticRouterService {
         this.logger.log(`Identified Intents: ${intents.join(", ")}`);
 
         // Handle low confidence or 'unclear' intent
-        const highestConfidence = Math.max(...validatedDecomposed.map(d => d.confidence || 0));
-        const isUnclear = intents.includes("unclear") || highestConfidence < 0.6;
+        const highestConfidence = Math.max(
+            ...validatedDecomposed.map((d) => d.confidence || 0),
+        );
+        const isUnclear =
+            intents.includes("unclear") || highestConfidence < 0.6;
 
         if (isUnclear) {
-            this.logger.warn(`Intent is unclear or confidence is low (${highestConfidence}). Routing to clarification.`);
+            this.logger.warn(
+                `Intent is unclear or confidence is low (${highestConfidence}). Routing to clarification.`,
+            );
             return {
                 intents: ["unclear"],
-                decomposed: [{ intent: "unclear", query: lastMessageContent, confidence: highestConfidence }],
+                decomposed: [
+                    {
+                        intent: "unclear",
+                        query: lastMessageContent,
+                        confidence: highestConfidence,
+                    },
+                ],
             };
         }
 

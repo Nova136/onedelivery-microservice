@@ -1,4 +1,4 @@
-import { AIMessage, HumanMessage } from "@langchain/core/messages";
+import { AIMessage } from "@langchain/core/messages";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { Logger } from "@nestjs/common";
 import { z } from "zod";
@@ -26,11 +26,6 @@ export const createSelfCorrectionNode = (deps: SelfCorrectionDependencies) => {
         const issues =
             state.last_evaluation?.issues?.join(", ") || "Unknown issues";
 
-        const prompt = SELF_CORRECTION_PROMPT.replace("{{context}}", context)
-            .replace("{{input}}", input)
-            .replace("{{output}}", output)
-            .replace("{{issues}}", issues);
-
         let correctedResponse = "";
         try {
             const schema = z.object({
@@ -46,8 +41,17 @@ export const createSelfCorrectionNode = (deps: SelfCorrectionDependencies) => {
                 fallbacks: [structuredFallback],
             });
 
+            // Split prompt into system instructions and user data to avoid role confusion
+            const systemPrompt = SELF_CORRECTION_PROMPT.split("<input>")[0].trim() + "\n\n" + SELF_CORRECTION_PROMPT.split("</input>")[1].trim();
+            const userData = `<input>${SELF_CORRECTION_PROMPT.split("<input>")[1].split("</input>")[0]}</input>`
+                .replace("{{context}}", context)
+                .replace("{{input}}", input)
+                .replace("{{output}}", output)
+                .replace("{{issues}}", issues).trim();
+
             const response = (await llmWithFallback.invoke([
-                { role: "system", content: prompt },
+                { role: "system", content: systemPrompt },
+                { role: "user", content: userData },
             ])) as any;
             logger.log(`Self-Correction Reasoning: ${response.thought}`);
             correctedResponse = response.corrected_response;

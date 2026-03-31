@@ -1,6 +1,5 @@
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { StructuredTool } from "@langchain/core/tools";
-import { SystemMessage } from "@langchain/core/messages";
 import { Logger } from "@nestjs/common";
 import { z } from "zod";
 import { KnowledgeClientService } from "../../modules/clients/knowledge-client/knowledge-client.service";
@@ -78,25 +77,6 @@ export const createSopHandlerNode = (deps: SopHandlerDependencies) => {
             }
         }
 
-        // Handle Multi-Intent Guidance
-        let multiIntentGuidance = "";
-        let updatedMultiIntentAcknowledged = state.multi_intent_acknowledged;
-        if (
-            state.decomposed_intents.length >= 2 &&
-            !state.multi_intent_acknowledged
-        ) {
-            const otherIntents = state.decomposed_intents
-                .filter((i) => i.intent !== intent)
-                .map((i) => i.intent);
-            const allIntents = [intent, ...otherIntents];
-            multiIntentGuidance =
-                DIALOGUE_PROMPTS.MULTI_INTENT_GUIDANCE.replace(
-                    "{{intents}}",
-                    `${allIntents.slice(0, -1).join(", ")} and ${allIntents.slice(-1)}`,
-                ).replace("{{currentIntent}}", intent || "");
-            updatedMultiIntentAcknowledged = true;
-        }
-
         const userContext =
             state.user_orders.length > 0
                 ? promptShield.wrapUntrustedData("user_orders", formatOrders(state.user_orders))
@@ -121,9 +101,6 @@ export const createSopHandlerNode = (deps: SopHandlerDependencies) => {
             );
 
             const relevantTools = [...helperTools, ...handoffTools];
-            const toolDescriptions = relevantTools
-                .map((t) => `${t.name}: ${t.description}`)
-                .join("\n");
 
             // 2. Derive Dynamic Schema based on SOP
             const dynamicExtractedDataSchema = buildZodSchema(
@@ -175,24 +152,6 @@ export const createSopHandlerNode = (deps: SopHandlerDependencies) => {
             });
 
             // 3. Unified Agent Call
-            const agentPrompt = SOP_AGENT_PROMPT.replace(
-                "{{requiredData}}",
-                JSON.stringify(sop.requiredData),
-            )
-                .replace("{{current_intent}}", intent || "Unknown")
-                .replace("{{current_intent}}", intent || "Unknown")
-                .replace("{{user_context}}", userContext)
-                .replace("{{summary}}", summaryContext)
-                .replace(
-                    "{{gathered_data}}",
-                    JSON.stringify(state.order_states),
-                )
-                .replace("{{missing_data}}", JSON.stringify(missingData))
-                .replace(
-                    "{{is_awaiting_confirmation}}",
-                    state.is_awaiting_confirmation.toString(),
-                );
-
             let agentOutput: any;
             try {
                 const structuredModel = llm.withStructuredOutput(
@@ -204,8 +163,21 @@ export const createSopHandlerNode = (deps: SopHandlerDependencies) => {
                     structuredModel.withFallbacks({
                         fallbacks: [structuredModelFallback],
                     });
+                // Split prompt into system instructions and user data to avoid role confusion
+                const systemPrompt = SOP_AGENT_PROMPT.split("<input>")[0].trim() + "\n\n" + SOP_AGENT_PROMPT.split("</input>")[1].trim();
+                const userData = `<input>${SOP_AGENT_PROMPT.split("<input>")[1].split("</input>")[0]}</input>`
+                    .replace("{{requiredData}}", JSON.stringify(sop.requiredData))
+                    .replace("{{current_intent}}", intent || "Unknown")
+                    .replace("{{current_intent}}", intent || "Unknown")
+                    .replace("{{user_context}}", userContext)
+                    .replace("{{summary}}", summaryContext)
+                    .replace("{{gathered_data}}", JSON.stringify(state.order_states))
+                    .replace("{{missing_data}}", JSON.stringify(missingData))
+                    .replace("{{is_awaiting_confirmation}}", state.is_awaiting_confirmation.toString()).trim();
+
                 agentOutput = await structuredModelWithFallbacks.invoke([
-                    { role: "system", content: agentPrompt },
+                    { role: "system", content: systemPrompt },
+                    { role: "user", content: userData },
                     ...contextMessages,
                 ]);
                 logger.log(`SOP Agent Reasoning: ${agentOutput.thought}`);
@@ -286,7 +258,6 @@ export const createSopHandlerNode = (deps: SopHandlerDependencies) => {
                         state,
                         intent || "",
                         updatedOrderStates,
-                        updatedMultiIntentAcknowledged
                     );
 
                     if (executionResult.partial_responses) {
@@ -296,7 +267,6 @@ export const createSopHandlerNode = (deps: SopHandlerDependencies) => {
                             current_sop: sop,
                             order_states: executionResult.updatedOrderStates || updatedOrderStates,
                             is_awaiting_confirmation: executionResult.is_awaiting_confirmation ?? false,
-                            multi_intent_acknowledged: executionResult.multi_intent_acknowledged ?? updatedMultiIntentAcknowledged,
                             retrieved_context: sop ? [JSON.stringify(sop)] : [],
                         };
                     }
@@ -310,13 +280,12 @@ export const createSopHandlerNode = (deps: SopHandlerDependencies) => {
 
             return {
                 messages,
-                partial_responses: [multiIntentGuidance + finalResponse],
+                partial_responses: [finalResponse],
                 current_intent: isComplete ? null : intent,
                 current_sop: isComplete ? null : sop,
                 order_states: updatedOrderStates,
                 is_awaiting_confirmation:
                     missingFields.length === 0 && !isConfirmed,
-                multi_intent_acknowledged: updatedMultiIntentAcknowledged,
                 retrieved_context: sop ? [JSON.stringify(sop)] : [],
             };
         }
