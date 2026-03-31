@@ -1,29 +1,29 @@
-# ---- build stage ----
-FROM node:24-alpine AS builder
 
-WORKDIR /app
-
-COPY package*.json ./
-RUN npm ci
-
-COPY . .
-
-ARG SERVICE_NAME
-RUN npx nest build ${SERVICE_NAME}
-
-# ---- runtime stage ----
 FROM node:24-alpine
-
-WORKDIR /app
-
-COPY package*.json ./
-RUN npm ci --omit=dev
-
-COPY --from=builder /app/dist ./dist
 
 ARG SERVICE_NAME
 ARG EXPOSE_PORT
 
+WORKDIR /workspace
+
+RUN apk add --no-cache make g++ python3
+
+RUN apk update
+
+RUN apk upgrade
+
+RUN npm install -g npm@latest
+
+COPY . .
+RUN rm -rf package-lock.json .env
+
+RUN npm install --legacy-peer-deps && npm install -g @nestjs/cli
+
+# Clear npm cache
+RUN npm cache clean --force
+
+RUN nest build ${SERVICE_NAME}
+
 ENV SERVICE_NAME=${SERVICE_NAME}
 EXPOSE ${EXPOSE_PORT}
-CMD ["sh", "-c", "node ./dist/apps/$SERVICE_NAME/main.js"]
+CMD [ "node", "./dist/apps/$SERVICE_NAME/main.js" ]
