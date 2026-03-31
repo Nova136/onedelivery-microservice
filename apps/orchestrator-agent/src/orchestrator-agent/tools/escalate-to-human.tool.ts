@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { tool, StructuredTool } from "@langchain/core/tools";
+import { MemoryClientService } from "../../modules/clients/memory-client/memory-client.service";
 
 const escalateSchema = z.object({
     userId: z
@@ -19,16 +20,27 @@ const escalateSchema = z.object({
         ),
 });
 
-export function createEscalateToHumanTool(): StructuredTool {
+export function createEscalateToHumanTool(
+    memoryService: MemoryClientService,
+): StructuredTool {
     return tool(
-        async (_payload: {
+        async (payload: {
             userId: string;
             sessionId: string;
             message: string;
         }) => {
-            // TODO: Implement actual routing to human agent queue (e.g. ticketing system,
-            // live chat handoff, or CRM escalation). This is a planned future feature.
-            return "I understand this situation needs personal attention. I'm escalating your case to our support team now — a human agent will review your conversation and follow up with you shortly.";
+            try {
+                // Update the session status to escalated in the database
+                await memoryService.escalateSession(
+                    payload.userId,
+                    payload.sessionId,
+                );
+                return "I understand this situation needs personal attention. I'm escalating your case to our support team now — a human agent will review your conversation and follow up with you shortly.";
+            } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                console.error(`Escalate to Human Error: ${msg}`);
+                return "I'm trying to connect you with a human agent, but we are experiencing technical difficulties. Please hold on.";
+            }
         },
         {
             name: "Escalate_To_Human",

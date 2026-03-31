@@ -37,14 +37,12 @@ Awaiting Confirmation: {{is_awaiting_confirmation}}
 `;
 
 export const DIALOGUE_PROMPTS = {
-    MULTI_INTENT_GUIDANCE:
-        "[SYSTEM: Acknowledge multiple requests ({{intents}}). State we will handle them sequentially, starting with {{currentIntent}}.]\n\n",
     FALLBACK_RESPONSE:
         "[SYSTEM: Politely state uncertainty about the request and ask for clarification.]",
     MISSING_DATA_PROMPT:
-        "[SYSTEM: Ask the user to provide missing info for {{intent}}: {{missing_fields}}.]",
+        "[SYSTEM: Please ask the user to provide the following information needed for their {{intent}} request: {{missing_fields}}. Use natural language for the field names and avoid robotic lists.]",
     CONFIRMATION_PROMPT:
-        "[SYSTEM: Ask the user to confirm these gathered details before proceeding:\n{{gathered_data}}]",
+        "[SYSTEM: Please ask the user to confirm these gathered details before proceeding:\n{{gathered_data}}. Present these details naturally, not as a raw list.]",
     EXECUTION_PROMPT:
         "[SYSTEM: Thank the user for confirming. State the request for {{intent}} is submitted and processing.]",
     SYSTEM_FAULT_PROMPT:

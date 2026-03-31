@@ -20,9 +20,8 @@ export const createOutputEvaluationNode = (
 
         const lastMessage = state.messages[state.messages.length - 1];
         const output = lastMessage.content as string;
-        const input =
-            (state.messages[state.messages.length - 2]?.content as string) ||
-            "";
+        const lastHumanMessage = [...state.messages].reverse().find(m => m instanceof HumanMessage);
+        const input = (lastHumanMessage?.content as string) || "";
 
         // Include recent chat history in the context for better evaluation
         const recentMessages = getSlidingWindowMessages(state.messages, 5);

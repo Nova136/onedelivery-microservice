@@ -17,36 +17,29 @@ export const createAggregationNode = (deps: AggregationDependencies) => {
         logger.log(`Aggregating responses for session ${state.session_id}`);
         const { llm, llmFallback } = deps;
 
-        let updatedMessages = [...state.messages];
+        let newMessages = [];
         let isAwaitingConfirmation = state.is_awaiting_confirmation;
-        let partialResponses = state.partial_responses;
 
         const partials = state.partial_responses || [];
         if (partials.length === 0) {
-            const lastMessage = updatedMessages[updatedMessages.length - 1];
+            const lastMessage = state.messages[state.messages.length - 1];
             if (!(lastMessage instanceof AIMessage && lastMessage.content)) {
-                updatedMessages.push(
+                newMessages.push(
                     new AIMessage(
                         "I'm sorry, I'm not sure how to help with that. Could you please rephrase your request?",
                     ),
                 );
             }
-            partialResponses = null;
         } else {
             // Aggregate multiple partials using LLM
             const userQuery =
-                ([...updatedMessages]
+                ([...state.messages]
                     .reverse()
                     .find((m) => m instanceof HumanMessage)
                     ?.content as string) || "Unknown query";
             const partialsText = partials
                 .map((p, i) => `Response ${i + 1}:\n${p}`)
                 .join("\n\n---\n\n");
-
-            const prompt = AGGREGATOR_PROMPT.replace(
-                "{{partial_responses}}",
-                partialsText,
-            ).replace("{{user_query}}", userQuery);
 
             let finalResponse = "";
             try {
@@ -65,8 +58,17 @@ export const createAggregationNode = (deps: AggregationDependencies) => {
                     fallbacks: [structuredFallback],
                 });
 
+                // Split prompt into system instructions and user data to avoid role confusion
+                const systemPrompt = AGGREGATOR_PROMPT.split("<input>")[0].trim();
+                const userData = `<input>${AGGREGATOR_PROMPT.split("<input>")[1]}`
+                    .replace("{{partial_responses}}", partialsText)
+                    .replace("{{gathered_data}}", JSON.stringify(state.order_states || {}))
+                    .replace("{{user_query}}", userQuery)
+                    .trim();
+
                 const response = (await llmWithFallback.invoke([
-                    { role: "system", content: prompt },
+                    { role: "system", content: systemPrompt },
+                    { role: "user", content: userData },
                 ])) as any;
                 logger.log(`Aggregation Reasoning: ${response.thought}`);
                 finalResponse = response.final_response;
@@ -81,12 +83,11 @@ export const createAggregationNode = (deps: AggregationDependencies) => {
                     "\n\nI apologize, but I noticed you have several requests. I've addressed the first few above. Would you like to proceed with your remaining questions?";
                 isAwaitingConfirmation = true;
             }
-            updatedMessages.push(new AIMessage(finalResponse));
-            partialResponses = null;
+            newMessages.push(new AIMessage(finalResponse));
         }
 
         return {
-            messages: updatedMessages,
+            messages: newMessages,
             partial_responses: null,
             is_awaiting_confirmation: isAwaitingConfirmation,
             decomposed_intents: [],

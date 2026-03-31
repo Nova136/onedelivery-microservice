@@ -1,4 +1,4 @@
-import { HumanMessage, AIMessage } from "@langchain/core/messages";
+import { HumanMessage } from "@langchain/core/messages";
 import { OrchestratorStateType } from "../state";
 import { OrderClientService } from "../../modules/clients/order-client/order-client.service";
 import { Logger } from "@nestjs/common";

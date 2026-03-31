@@ -43,12 +43,12 @@ export function createRouteToLogisticsTool(
     return tool(
         async (payload: LogisticsPayload) => {
             try {
-                const reply = await agentsClient.send("logistic", {
+                agentsClient.send("logistic", {
                     userId: payload.userId,
                     sessionId: payload.sessionId,
                     message: JSON.stringify(payload),
                 });
-                return reply;
+                return "Request submitted to Logistics Agent.";
             } catch (err) {
                 const msg = err instanceof Error ? err.message : String(err);
                 throw new Error(`System Error: Logistics Agent unreachable. ${msg}`);

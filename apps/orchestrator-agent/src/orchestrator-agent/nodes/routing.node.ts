@@ -2,13 +2,13 @@ import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { Logger } from "@nestjs/common";
 import { z } from "zod";
 import { KnowledgeClientService } from "../../modules/clients/knowledge-client/knowledge-client.service";
-import { SemanticRouterService } from "../../modules/semantic-router/semantic-router.service";
+import { IntentClassifierService } from "../../modules/intent-classifier/intent-classifier.service";
 import { OrchestratorStateType } from "../state";
 import { getSlidingWindowMessages } from "../utils/message-window";
 import { ROUTING_PROMPTS } from "../prompts/routing.prompt";
 
 export interface RoutingDependencies {
-    semanticRouter: SemanticRouterService;
+    intentClassifier: IntentClassifierService;
     llm: BaseChatModel;
     llmFallback: BaseChatModel;
     knowledgeClient: KnowledgeClientService;
@@ -19,18 +19,14 @@ const logger = new Logger("RoutingNode");
 export const createRoutingNode = (deps: RoutingDependencies) => {
     return async (state: OrchestratorStateType) => {
         logger.log(`Processing state for session ${state.session_id}`);
-        const { semanticRouter, llm, llmFallback, knowledgeClient } = deps;
+        const { intentClassifier, llm, llmFallback, knowledgeClient } = deps;
 
         // Use sliding window for context
         const contextMessages = getSlidingWindowMessages(state.messages, 3); // Routing needs less context
 
-        // 1. Semantic Routing (Intent Classification)
-        const lastMessage = state.messages[state.messages.length - 1];
-        const content = lastMessage.content as string;
-
+        // 1. Intent Classification
         let isAwaitingConfirmation = state.is_awaiting_confirmation;
         let remainingIntents = state.remaining_intents;
-        let hasTruncated = state.has_truncated_intents;
 
         const sopIntents = knowledgeClient
             .listOrchestratorSops()
@@ -61,11 +57,6 @@ export const createRoutingNode = (deps: RoutingDependencies) => {
         // 1b. Handle Continuation if we were awaiting confirmation
         if (isAwaitingConfirmation && remainingIntents.length > 0) {
             // Use LLM to check if the user said "yes" to proceed
-            const checkPrompt = ROUTING_PROMPTS.CHECK_PROMPT.replace(
-                "{{content}}",
-                content,
-            );
-
             let wantsToProceed = false;
             try {
                 const schema = z.object({
@@ -81,8 +72,13 @@ export const createRoutingNode = (deps: RoutingDependencies) => {
                     fallbacks: [structuredFallback],
                 });
 
+                // Split prompt into system instructions and user data to avoid role confusion
+                const systemPrompt = ROUTING_PROMPTS.CHECK_PROMPT.split("<input>")[0].trim() + "\n\n" + ROUTING_PROMPTS.CHECK_PROMPT.split("</input>")[1].trim();
+                const userData = `<input>${ROUTING_PROMPTS.CHECK_PROMPT.split("<input>")[1].split("</input>")[0]}</input>`.replace("{{content}}", state.messages[state.messages.length - 1].content.toString()).trim();
+
                 const checkResponse = (await llmWithFallback.invoke([
-                    { role: "system", content: checkPrompt },
+                    { role: "system", content: systemPrompt },
+                    { role: "user", content: userData },
                 ])) as any;
                 logger.log(
                     `Routing Confirmation Reasoning: ${checkResponse.thought}`,
@@ -115,12 +111,11 @@ export const createRoutingNode = (deps: RoutingDependencies) => {
                 // but continue to normal classification below
                 isAwaitingConfirmation = false;
                 remainingIntents = [];
-                hasTruncated = false;
             }
         }
 
         const currentTask = state.current_intent || "None";
-        const { intents, decomposed } = await semanticRouter.classifyIntents(
+        const { decomposed } = await intentClassifier.classifyIntents(
             contextMessages,
             state.summary,
             state.user_orders,

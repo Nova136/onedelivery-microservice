@@ -12,7 +12,6 @@ export interface ToolExecutionResult {
     finalResponse?: string;
     updatedOrderStates?: any;
     is_awaiting_confirmation?: boolean;
-    multi_intent_acknowledged?: boolean;
     partial_responses?: string[];
 }
 
@@ -22,7 +21,6 @@ export async function executeSopTool(
     state: OrchestratorStateType,
     intent: string,
     updatedOrderStates: any,
-    updatedMultiIntentAcknowledged: boolean,
 ): Promise<ToolExecutionResult> {
     const messages: any[] = [];
     let finalResponse: string | undefined;
@@ -48,7 +46,6 @@ export async function executeSopTool(
                     partial_responses: ["I'm sorry, but I couldn't find that order in your account. Please provide a valid order ID."],
                     updatedOrderStates: { ...updatedOrderStates, orderId: null }, // clear the invalid order ID
                     is_awaiting_confirmation: false,
-                    multi_intent_acknowledged: updatedMultiIntentAcknowledged,
                 };
             }
         }

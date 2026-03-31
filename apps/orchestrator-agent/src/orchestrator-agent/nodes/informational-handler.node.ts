@@ -1,4 +1,4 @@
-import { AIMessage } from "@langchain/core/messages";
+import { AIMessage, SystemMessage } from "@langchain/core/messages";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { StructuredTool } from "@langchain/core/tools";
 import { Logger } from "@nestjs/common";
@@ -59,11 +59,14 @@ export const createInformationalHandlerNode = (
             }
 
             let toolResult: any;
+            const systemMessages: SystemMessage[] = [];
             try {
                 toolResult = await faqTool.invoke({ query });
+                systemMessages.push(new SystemMessage(`SYSTEM_ACTION: Tool Search_FAQ executed successfully.`));
             } catch (e) {
                 logger.error("FAQ Tool execution error:", e);
                 toolResult = "System Error: Knowledge Microservice unreachable. STRICT RULE: Tell the user you are experiencing technical difficulties and ask them to visit the FAQ page or try again later.";
+                systemMessages.push(new SystemMessage(`SYSTEM_ACTION: Tool Search_FAQ failed.`));
             }
 
             let finalResponseContent: string;
@@ -78,12 +81,18 @@ export const createInformationalHandlerNode = (
                     fallbacks: [structuredFallback],
                 });
 
+                const systemPrompt = FAQ_SUMMARIZER_PROMPT.split("<input>")[0].trim() + "\n\n" + FAQ_SUMMARIZER_PROMPT.split("</input>")[1].trim();
+                const userData = `<input>${FAQ_SUMMARIZER_PROMPT.split("<input>")[1].split("</input>")[0]}</input>`
+                    .replace("{{query}}", query)
+                    .replace("{{results}}", JSON.stringify(toolResult))
+                    .trim();
+
                 const finalResponse = (await llmWithFallback.invoke([
-                    { role: "system", content: FAQ_SUMMARIZER_PROMPT },
+                    { role: "system", content: systemPrompt },
                     ...contextMessages,
                     {
                         role: "user",
-                        content: `FAQ Search Results for "${query}":\n${JSON.stringify(toolResult)}`,
+                        content: userData,
                     },
                 ])) as any;
                 logger.log(`FAQ Handler Reasoning: ${finalResponse.thought}`);
@@ -95,6 +104,7 @@ export const createInformationalHandlerNode = (
             }
 
             return {
+                messages: systemMessages,
                 partial_responses: [finalResponseContent],
                 retrieved_context: [JSON.stringify(toolResult)],
             };
@@ -110,13 +120,6 @@ export const createInformationalHandlerNode = (
 
             const sessionContext = `<session_context>\nUser ID: ${state.user_id}\nSession ID: ${state.session_id}\n</session_context>`;
 
-            const systemPrompt = GENERAL_HANDLER_PROMPT.replace(
-                "{{userContext}}",
-                userContext,
-            )
-                .replace("{{summaryContext}}", summaryContext)
-                .replace("{{sessionContext}}", sessionContext);
-
             let responseContent: string;
             try {
                 const schema = z.object({
@@ -129,8 +132,16 @@ export const createInformationalHandlerNode = (
                     fallbacks: [structuredFallback],
                 });
 
+                // Split prompt into system instructions and user data to avoid role confusion
+                const systemPrompt = GENERAL_HANDLER_PROMPT.split("<context>")[0].trim() + "\n\n" + GENERAL_HANDLER_PROMPT.split("</context>")[1].trim();
+                const userData = `<context>${GENERAL_HANDLER_PROMPT.split("<context>")[1].split("</context>")[0]}</context>`
+                    .replace("{{userContext}}", userContext)
+                    .replace("{{summaryContext}}", summaryContext)
+                    .replace("{{sessionContext}}", sessionContext).trim();
+
                 const response = (await llmWithFallback.invoke([
                     { role: "system", content: systemPrompt },
+                    { role: "user", content: userData },
                     ...contextMessages,
                 ])) as any;
                 logger.log(`General Handler Reasoning: ${response.thought}`);
