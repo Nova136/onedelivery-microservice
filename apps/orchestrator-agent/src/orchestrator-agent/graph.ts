@@ -13,23 +13,28 @@ import { InputValidatorService } from "../modules/input-validator/input-validato
 import { OutputEvaluatorService } from "../modules/output-evaluator/output-evaluator.service";
 import { SemanticRouterService } from "../modules/semantic-router/semantic-router.service";
 import { SummarizerService } from "../modules/summarizer/summarizer.service";
+import { PromptShieldService } from "../modules/prompt-shield/prompt-shield.service";
 import * as nodes from "./nodes";
 import { OrchestratorState, OrchestratorStateType } from "./state";
 
 // Define Services Interface
 export interface GraphServices {
-    inputValidator: InputValidatorService;
     semanticRouter: SemanticRouterService;
     outputEvaluator: OutputEvaluatorService;
     orderService: OrderClientService;
     summarizer: SummarizerService;
     knowledgeClient: KnowledgeClientService;
+    promptShield: PromptShieldService;
     sopModel: BaseChatModel;
     sopModelFallback: BaseChatModel;
     infoModel: BaseChatModel;
+    infoModelFallback: BaseChatModel;
     routingModel: BaseChatModel;
+    routingModelFallback: BaseChatModel;
     correctionModel: BaseChatModel;
+    correctionModelFallback: BaseChatModel;
     aggregationModel: BaseChatModel;
+    aggregationModelFallback: BaseChatModel;
     tools: StructuredTool[];
 }
 
@@ -102,7 +107,6 @@ export function createOrchestratorGraph(
         .addNode(
             "pre_processing",
             nodes.createPreProcessingNode({
-                inputValidator: services.inputValidator,
                 orderService: services.orderService,
             }),
         )
@@ -111,6 +115,7 @@ export function createOrchestratorGraph(
             nodes.createRoutingNode({
                 semanticRouter: services.semanticRouter,
                 llm: services.routingModel,
+                llmFallback: services.routingModelFallback,
                 knowledgeClient: services.knowledgeClient,
             }),
         )
@@ -118,7 +123,9 @@ export function createOrchestratorGraph(
             "informational_handler",
             nodes.createInformationalHandlerNode({
                 llm: services.infoModel,
+                llmFallback: services.infoModelFallback,
                 tools: services.tools,
+                promptShield: services.promptShield,
             }),
         )
         .addNode("end_session", nodes.createEndSessionNode(services.tools))
@@ -130,24 +137,28 @@ export function createOrchestratorGraph(
                 llmFallback: services.sopModelFallback,
                 tools: services.tools,
                 knowledgeClient: services.knowledgeClient,
+                promptShield: services.promptShield,
             }),
         )
         .addNode(
             "aggregation",
             nodes.createAggregationNode({
                 llm: services.aggregationModel,
+                llmFallback: services.aggregationModelFallback,
             }),
         )
         .addNode(
             "output_evaluation",
             nodes.createOutputEvaluationNode({
                 outputEvaluator: services.outputEvaluator,
+                promptShield: services.promptShield,
             }),
         )
         .addNode(
             "self_correction",
             nodes.createSelfCorrectionNode({
                 llm: services.correctionModel,
+                llmFallback: services.correctionModelFallback,
             }),
         )
         .addNode(
@@ -160,7 +171,7 @@ export function createOrchestratorGraph(
         .addEdge(START, "pre_processing")
         .addConditionalEdges("pre_processing", routeAfterPreProcessing, {
             routing: "routing",
-            aggregation: "aggregation",
+            summarization: "summarization",
         })
         .addConditionalEdges("routing", routeByIntent, [
             "informational_handler",

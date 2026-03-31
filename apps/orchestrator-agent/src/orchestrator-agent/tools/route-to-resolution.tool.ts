@@ -41,11 +41,17 @@ const resolutionSchema = z.object({
         .string()
         .optional()
         .describe("The order ID. REQUIRED if action is 'request_refund'."),
-    issueCategory: z
+    issueIntent: z
         .enum(["missing_item", "wrong_item", "quality_issue", "late_delivery"])
         .optional()
         .describe(
             "Categorize the problem. REQUIRED if action is 'request_refund'.",
+        ),
+    description: z
+        .string()
+        .optional()
+        .describe(
+            "A detailed description of the specific problem with the order (e.g., 'the pizza was cold' or 'the seal was broken'). CRITICAL: Do not use the user's intent to get a refund as the description; if the user only says 'I want a refund', this field should remain null until they explain WHY.",
         ),
     items: z
         .array(
@@ -76,7 +82,7 @@ export function createRouteToResolutionTool(
                 return reply;
             } catch (err) {
                 const msg = err instanceof Error ? err.message : String(err);
-                return `System Error: Resolution Agent unreachable. ${msg}`;
+                throw new Error(`System Error: Resolution Agent unreachable. ${msg}`);
             }
         },
         {

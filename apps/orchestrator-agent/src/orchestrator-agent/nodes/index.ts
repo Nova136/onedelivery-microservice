@@ -9,3 +9,6 @@ export * from "./escalation.node";
 export * from "./output-evaluation.node";
 export * from "./self-correction.node";
 export * from "./aggregation.node";
+export * from "./callback-pre-processing.node";
+export * from "./callback-extraction.node";
+export * from "./callback-evaluation.node";

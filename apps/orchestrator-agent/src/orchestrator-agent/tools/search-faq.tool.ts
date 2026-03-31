@@ -37,8 +37,7 @@ export function createSearchFaqTool(
                 return `### SEARCH RESULTS ###\n${formattedFaqs}`.trim();
             } catch (err) {
                 const msg = err instanceof Error ? err.message : String(err);
-                // 4. Give the LLM instructions on how to handle the crash gracefully
-                return `System Error: Knowledge Microservice unreachable. ${msg}. STRICT RULE: Tell the user you are experiencing technical difficulties and ask if them to visit the FAQ page.`;
+                throw new Error(`System Error: Knowledge Microservice unreachable. ${msg}`);
             }
         },
         {

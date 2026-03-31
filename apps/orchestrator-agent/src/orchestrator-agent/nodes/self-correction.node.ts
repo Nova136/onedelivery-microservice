@@ -1,37 +1,13 @@
 import { AIMessage, HumanMessage } from "@langchain/core/messages";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { Logger } from "@nestjs/common";
+import { z } from "zod";
 import { OrchestratorStateType } from "../state";
-
-const SELF_CORRECTION_PROMPT = `
-<role>Self-Correction Agent for OneDelivery.</role>
-
-<context>
-{{context}}
-</context>
-
-<user_input>
-{{input}}
-</user_input>
-
-<ai_response_to_correct>
-{{output}}
-</ai_response_to_correct>
-
-<evaluation_issues>
-{{issues}}
-</evaluation_issues>
-
-<instructions>
-1. **Analyze**: Review the issues identified in the AI response.
-2. **Correct**: Generate a corrected, accurate, and safe response that addresses the user's input while adhering to OneDelivery's guidelines.
-3. **Hallucination Prevention**: If the AI response claims an action was performed (e.g., "order canceled") but the context does not confirm it, DO NOT hallucinate success. Instead, explain that the action is still in progress or requires further steps.
-4. **Output**: Return ONLY the corrected response text. Do not include any other text, explanations, or markdown formatting.
-</instructions>
-`;
+import { SELF_CORRECTION_PROMPT } from "../prompts/self-correction.prompt";
 
 export interface SelfCorrectionDependencies {
     llm: BaseChatModel;
+    llmFallback: BaseChatModel;
 }
 
 const logger = new Logger("SelfCorrectionNode");
@@ -39,7 +15,7 @@ const logger = new Logger("SelfCorrectionNode");
 export const createSelfCorrectionNode = (deps: SelfCorrectionDependencies) => {
     return async (state: OrchestratorStateType) => {
         logger.log(`Self-correcting output for session ${state.session_id}`);
-        const { llm } = deps;
+        const { llm, llmFallback } = deps;
 
         const lastMessage = state.messages[state.messages.length - 1];
         const output = lastMessage.content as string;
@@ -57,10 +33,24 @@ export const createSelfCorrectionNode = (deps: SelfCorrectionDependencies) => {
 
         let correctedResponse = "";
         try {
-            const response = await llm.invoke([
+            const schema = z.object({
+                thought: z.string().describe("Reasoning for the correction"),
+                corrected_response: z
+                    .string()
+                    .describe("The corrected response text"),
+            });
+            const structuredLlm = llm.withStructuredOutput(schema);
+            const structuredFallback =
+                llmFallback.withStructuredOutput(schema);
+            const llmWithFallback = structuredLlm.withFallbacks({
+                fallbacks: [structuredFallback],
+            });
+
+            const response = (await llmWithFallback.invoke([
                 { role: "system", content: prompt },
-            ]);
-            correctedResponse = response.content.toString().trim();
+            ])) as any;
+            logger.log(`Self-Correction Reasoning: ${response.thought}`);
+            correctedResponse = response.corrected_response;
         } catch (e) {
             logger.error("All models failed for SelfCorrection:", e);
             // If both fail, keep the original output but maybe redact it or just let it be

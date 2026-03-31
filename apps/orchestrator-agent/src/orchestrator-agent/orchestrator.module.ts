@@ -19,8 +19,11 @@ import { SemanticRouterModule } from "../modules/semantic-router/semantic-router
 import { SemanticRouterService } from "../modules/semantic-router/semantic-router.service";
 import { SummarizerModule } from "../modules/summarizer/summarizer.module";
 import { SummarizerService } from "../modules/summarizer/summarizer.service";
+import { PromptShieldModule } from "../modules/prompt-shield/prompt-shield.module";
+import { PromptShieldService } from "../modules/prompt-shield/prompt-shield.service";
 import { createCheckpointer } from "./checkpointer";
 import { createOrchestratorGraph } from "./graph";
+import { createAgentCallbackGraph } from "./agent-callback.graph";
 import { OrchestratorGateway } from "./orchestrator.gateway";
 import { OrchestratorController } from "./orchestrator.controller";
 import { OrchestratorService } from "./orchestrator.service";
@@ -39,16 +42,42 @@ import { SessionController } from "./session.controller";
         AgentsClientModule,
         MemoryClientModule,
         SummarizerModule,
+        PromptShieldModule,
     ],
     controllers: [OrchestratorController, SessionController],
     providers: [
         OrchestratorService,
         OrchestratorGateway,
         {
+            provide: "AGENT_CALLBACK_GRAPH",
+            useFactory: async (
+                piiService: PiiRedactionService,
+                outputEvaluator: OutputEvaluatorService,
+                promptShield: PromptShieldService,
+            ) => {
+                const geminiFlash = new ChatGoogleGenerativeAI({
+                    model: "gemini-3-flash-preview",
+                    apiKey: process.env.GEMINI_API_KEY,
+                    temperature: 0,
+                });
+
+                return createAgentCallbackGraph({
+                    piiService,
+                    promptShield,
+                    outputEvaluator,
+                    llm: geminiFlash,
+                });
+            },
+            inject: [
+                PiiRedactionService,
+                OutputEvaluatorService,
+                PromptShieldService,
+            ],
+        },
+        {
             provide: "ORCHESTRATOR_GRAPH",
             useFactory: async (
                 piiService: PiiRedactionService,
-                inputValidator: InputValidatorService,
                 semanticRouter: SemanticRouterService,
                 outputEvaluator: OutputEvaluatorService,
                 orderService: OrderClientService,
@@ -56,6 +85,7 @@ import { SessionController } from "./session.controller";
                 knowledgeClient: KnowledgeClientService,
                 agentsClient: AgentsClientService,
                 memoryService: MemoryClientService,
+                promptShield: PromptShieldService,
             ) => {
                 const checkpointer = await createCheckpointer();
 
@@ -81,12 +111,6 @@ import { SessionController } from "./session.controller";
                     },
                 });
 
-                const sopModelFallback = new ChatGoogleGenerativeAI({
-                    model: "gemini-3.1-pro-preview",
-                    apiKey: process.env.GEMINI_API_KEY,
-                    temperature: 0,
-                });
-
                 const infoModel = new ChatOpenAI({
                     modelName: "gpt-5.4-mini",
                     openAIApiKey: process.env.OPENAI_API_KEY,
@@ -95,7 +119,7 @@ import { SessionController } from "./session.controller";
                         environment: "production",
                         component: "info-handler",
                     },
-                }).withFallbacks({ fallbacks: [geminiFlash] });
+                });
 
                 const routingModel = new ChatOpenAI({
                     modelName: "gpt-5.4-mini",
@@ -105,7 +129,7 @@ import { SessionController } from "./session.controller";
                         environment: "production",
                         component: "routing-node",
                     },
-                }).withFallbacks({ fallbacks: [geminiFlash] });
+                });
 
                 const correctionModel = new ChatOpenAI({
                     modelName: "gpt-5.4",
@@ -115,7 +139,7 @@ import { SessionController } from "./session.controller";
                         environment: "production",
                         component: "self-correction",
                     },
-                }).withFallbacks({ fallbacks: [geminiPro] });
+                });
 
                 const aggregationModel = new ChatOpenAI({
                     modelName: "gpt-5.4-mini",
@@ -125,7 +149,7 @@ import { SessionController } from "./session.controller";
                         environment: "production",
                         component: "post-processing",
                     },
-                }).withFallbacks({ fallbacks: [geminiFlash] });
+                });
 
                 const endChatTool = tools.createEndChatSessionTool(
                     agentsClient,
@@ -141,18 +165,22 @@ import { SessionController } from "./session.controller";
 
                 return createOrchestratorGraph(
                     {
-                        inputValidator,
                         semanticRouter,
                         outputEvaluator,
                         orderService,
                         summarizer,
                         knowledgeClient,
+                        promptShield,
                         sopModel: sopModel,
-                        sopModelFallback: sopModelFallback,
-                        infoModel: infoModel as any,
-                        routingModel: routingModel as any,
-                        correctionModel: correctionModel as any,
-                        aggregationModel: aggregationModel as any,
+                        sopModelFallback: geminiPro,
+                        infoModel: infoModel,
+                        infoModelFallback: geminiFlash,
+                        routingModel: routingModel,
+                        routingModelFallback: geminiFlash,
+                        correctionModel: correctionModel,
+                        correctionModelFallback: geminiPro,
+                        aggregationModel: aggregationModel,
+                        aggregationModelFallback: geminiFlash,
                         tools: [
                             endChatTool,
                             logisticsTool,
@@ -166,7 +194,6 @@ import { SessionController } from "./session.controller";
             },
             inject: [
                 PiiRedactionService,
-                InputValidatorService,
                 SemanticRouterService,
                 OutputEvaluatorService,
                 OrderClientService,
@@ -174,9 +201,10 @@ import { SessionController } from "./session.controller";
                 KnowledgeClientService,
                 AgentsClientService,
                 MemoryClientService,
+                PromptShieldService,
             ],
         },
     ],
-    exports: [OrchestratorService, "ORCHESTRATOR_GRAPH"],
+    exports: [OrchestratorService, "ORCHESTRATOR_GRAPH", "AGENT_CALLBACK_GRAPH"],
 })
 export class OrchestratorModule {}

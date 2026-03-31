@@ -25,7 +25,19 @@ export default class SopSeeder implements Seeder {
                         name: "issueCategory",
                         type: "string",
                         description:
-                            "Categorize the problem: 'missing_item', 'wrong_item', 'quality_issue', or 'late_delivery'.",
+                            "Categorize the problem: 'missing_item', 'wrong_item', 'quality_issue', or 'late_delivery'. If the user's description matches multiple categories, choose the one that best fits the main issue.",
+                        enum: [
+                            "missing_item",
+                            "wrong_item",
+                            "quality_issue",
+                            "late_delivery",
+                        ],
+                    },
+                    {
+                        name: "description",
+                        type: "string",
+                        description:
+                            "The user's description of the issue in their own words.",
                     },
                     {
                         name: "items",

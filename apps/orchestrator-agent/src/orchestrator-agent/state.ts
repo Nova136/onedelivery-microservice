@@ -66,6 +66,10 @@ export const OrchestratorState = Annotation.Root({
     reducer: (x, y) => y ?? x,
     default: () => true,
   }),
+  retrieved_context: Annotation<string>({
+    reducer: (x, y) => y ?? x,
+    default: () => "",
+  }),
   has_truncated_intents: Annotation<boolean>({
     reducer: (x, y) => y ?? x,
     default: () => false,
