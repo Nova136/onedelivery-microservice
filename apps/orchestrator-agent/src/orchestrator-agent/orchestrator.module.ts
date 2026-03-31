@@ -16,7 +16,6 @@ import { PiiRedactionService } from "../modules/pii-redaction/pii-redaction.serv
 import { IntentClassifierModule } from "../modules/intent-classifier/intent-classifier.module";
 import { IntentClassifierService } from "../modules/intent-classifier/intent-classifier.service";
 import { SummarizerModule } from "../modules/summarizer/summarizer.module";
-import { SummarizerService } from "../modules/summarizer/summarizer.service";
 import { PromptShieldModule } from "../modules/prompt-shield/prompt-shield.module";
 import { PromptShieldService } from "../modules/prompt-shield/prompt-shield.service";
 import { createCheckpointer } from "./checkpointer";
@@ -90,7 +89,6 @@ import { InputValidatorModule } from "../modules/input-validator/input-validator
                 intentClassifier: IntentClassifierService,
                 outputEvaluator: OutputEvaluatorService,
                 orderService: OrderClientService,
-                summarizer: SummarizerService,
                 knowledgeClient: KnowledgeClientService,
                 agentsClient: AgentsClientService,
                 memoryService: MemoryClientService,
@@ -164,7 +162,8 @@ import { InputValidatorModule } from "../modules/input-validator/input-validator
                     agentsClient,
                     memoryService,
                 );
-                const escalateTool = tools.createEscalateToHumanTool(memoryService);
+                const escalateTool =
+                    tools.createEscalateToHumanTool(memoryService);
                 const logisticsTool =
                     tools.createRouteToLogisticsTool(agentsClient);
                 const resolutionTool =
@@ -178,7 +177,6 @@ import { InputValidatorModule } from "../modules/input-validator/input-validator
                         intentClassifier,
                         outputEvaluator,
                         orderService,
-                        summarizer,
                         knowledgeClient,
                         promptShield,
                         sopModel: sopModel,
@@ -207,7 +205,6 @@ import { InputValidatorModule } from "../modules/input-validator/input-validator
                 IntentClassifierService,
                 OutputEvaluatorService,
                 OrderClientService,
-                SummarizerService,
                 KnowledgeClientService,
                 AgentsClientService,
                 MemoryClientService,

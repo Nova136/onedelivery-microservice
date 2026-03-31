@@ -73,8 +73,19 @@ export const createRoutingNode = (deps: RoutingDependencies) => {
                 });
 
                 // Split prompt into system instructions and user data to avoid role confusion
-                const systemPrompt = ROUTING_PROMPTS.CHECK_PROMPT.split("<input>")[0].trim() + "\n\n" + ROUTING_PROMPTS.CHECK_PROMPT.split("</input>")[1].trim();
-                const userData = `<input>${ROUTING_PROMPTS.CHECK_PROMPT.split("<input>")[1].split("</input>")[0]}</input>`.replace("{{content}}", state.messages[state.messages.length - 1].content.toString()).trim();
+                const systemPrompt =
+                    ROUTING_PROMPTS.CHECK_PROMPT.split("<input>")[0].trim() +
+                    "\n\n" +
+                    ROUTING_PROMPTS.CHECK_PROMPT.split("</input>")[1].trim();
+                const userData =
+                    `<input>${ROUTING_PROMPTS.CHECK_PROMPT.split("<input>")[1].split("</input>")[0]}</input>`
+                        .replace(
+                            "{{content}}",
+                            state.messages[
+                                state.messages.length - 1
+                            ].content.toString(),
+                        )
+                        .trim();
 
                 const checkResponse = (await llmWithFallback.invoke([
                     { role: "system", content: systemPrompt },
@@ -126,10 +137,27 @@ export const createRoutingNode = (deps: RoutingDependencies) => {
         const staticHighPriority = [
             "reset",
             "escalate",
+            "confirmation",
             "faq",
             "general",
             "end_session",
         ];
+
+        // Handle stray confirmations (user says "yes" but we didn't ask anything)
+        const validatedDecomposed = decomposed.map((d) => {
+            if (
+                d.intent === "confirmation" &&
+                !isAwaitingConfirmation &&
+                !state.current_intent
+            ) {
+                logger.warn(
+                    "Stray confirmation detected. Routing to 'general' for clarification.",
+                );
+                return { ...d, intent: "general" };
+            }
+            return d;
+        });
+
         const staticLowPriority = [
             "reset",
             "escalate",
@@ -145,7 +173,7 @@ export const createRoutingNode = (deps: RoutingDependencies) => {
         ];
 
         // Sort decomposed intents based on priority
-        const sortedDecomposed = [...decomposed].sort((a, b) => {
+        const sortedDecomposed = [...validatedDecomposed].sort((a, b) => {
             const indexA = priorityOrder.indexOf(a.intent);
             const indexB = priorityOrder.indexOf(b.intent);
             return (

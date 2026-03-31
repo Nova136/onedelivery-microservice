@@ -21,6 +21,7 @@ Write reasoning in the \`thought\` field.
 
 <intents>
 {{dynamic_intents}}
+- confirmation: User explicitly confirms details, agrees to a proposal, or says 'yes' to a question asked by the assistant.
 - reset: User explicitly asks to cancel, start over, or drop the topic.
 - faq: Specific informational questions about OneDelivery policies/services ("how-to", "what is").
 - escalate: Requests for human agent, extreme frustration, legal threats, or security concerns.
@@ -58,7 +59,7 @@ Write reasoning in the \`thought\` field.
    {
      "thought": "The user is confirming the current 'CANCEL_ORDER' task.",
      "results": [
-       {"intent": "CANCEL_ORDER", "query": "Yes, please proceed", "confidence": 0.95}
+       {"intent": "confirmation", "query": "Yes, please proceed", "confidence": 0.98}
      ]
    }
 </examples>
@@ -72,7 +73,7 @@ Current Active Task: {{current_task}}
 </input>
 
 <instructions>
-1. **Task Continuation**: If the user provides info for the "Current Active Task", use that task's intent. Do NOT switch to 'general'/'faq' if answering a previous question.
+1. **Task Continuation**: If the user provides info for the "Current Active Task", use that task's intent. However, if the user is simply confirming or saying "yes" to proceed with the current task, use the 'confirmation' intent. Do NOT switch to 'general'/'faq' if answering a previous question.
 2. **Intent Identification**: Use the intents above (SOP ID or static intent).
 3. **Prioritize**: Order intents by relevance.
 4. **Escalation Priority**: If legal threats/extreme frustration, use ONLY 'escalate'.
@@ -250,6 +251,7 @@ export class IntentClassifierService {
             "end_session",
             "reset",
             "unclear",
+            "confirmation",
         ];
         const validIntents = [...new Set([...sopIntents, ...staticIntents])];
 

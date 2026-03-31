@@ -1,9 +1,14 @@
 import { Injectable, Inject, Logger } from "@nestjs/common";
-import { HumanMessage } from "@langchain/core/messages";
+import {
+    HumanMessage,
+    AIMessage,
+    SystemMessage,
+} from "@langchain/core/messages";
 import { MemoryClientService } from "../modules/clients/memory-client/memory-client.service";
 import { PiiRedactionService } from "../modules/pii-redaction/pii-redaction.service";
 import { PromptShieldService } from "../modules/prompt-shield/prompt-shield.service";
 import { InputValidatorService } from "../modules/input-validator/input-validator.service";
+import { SummarizerService } from "../modules/summarizer/summarizer.service";
 
 @Injectable()
 export class OrchestratorService {
@@ -16,6 +21,7 @@ export class OrchestratorService {
         private readonly piiService: PiiRedactionService,
         private readonly promptShield: PromptShieldService,
         private readonly inputValidator: InputValidatorService,
+        private readonly summarizer: SummarizerService,
     ) {}
 
     /**
@@ -114,14 +120,14 @@ export class OrchestratorService {
             lastAIMessage,
         );
 
-        // Update session summary
-        if (result.summary && result.summary !== session.summary) {
-            await this.memoryService.updateSessionSummary(
-                session.id,
-                result.summary,
-                0,
-            );
-        }
+        // Trigger background summarization to reduce latency
+        this.triggerBackgroundSummarization(
+            userId,
+            session.id,
+            [...result.messages],
+            session.summary,
+            result.current_intent || "None",
+        );
 
         return {
             sessionId: session.id,
@@ -131,6 +137,44 @@ export class OrchestratorService {
             order_states: result.order_states,
             user_orders: result.user_orders,
         };
+    }
+
+    /**
+     * Triggers summarization in the background to avoid blocking the user response
+     */
+    private triggerBackgroundSummarization(
+        _userId: string,
+        sessionId: string,
+        messages: any[],
+        existingSummary: string,
+        currentTask: string,
+    ) {
+        // We don't await this to keep the response fast
+        this.summarizer
+            .summarize(messages, existingSummary, currentTask)
+            .then(async (newSummary) => {
+                if (newSummary && newSummary !== existingSummary) {
+                    this.logger.log(
+                        `Background summary updated for session ${sessionId}`,
+                    );
+                    await this.memoryService.updateSessionSummary(
+                        sessionId,
+                        newSummary,
+                        0,
+                    );
+                    // Update graph state so the next user turn has the fresh summary
+                    await this.graph.updateState(
+                        { configurable: { thread_id: sessionId } },
+                        { summary: newSummary },
+                    );
+                }
+            })
+            .catch((e) => {
+                this.logger.error(
+                    `Background summarization failed for session ${sessionId}:`,
+                    e,
+                );
+            });
     }
 
     /**
@@ -173,6 +217,16 @@ export class OrchestratorService {
 
         // 2. Get current state for context
         const state = await this.getSessionState(sessionId);
+
+        // Save incoming agent message to history
+        const systemMessage = new SystemMessage(message);
+        await this.memoryService.saveHistory(
+            userId,
+            sessionId,
+            session.messages?.length || 0,
+            systemMessage,
+        );
+
         const result = await this.callbackGraph.invoke(
             {
                 agent_message: message,
@@ -196,6 +250,29 @@ export class OrchestratorService {
 
         this.logger.log(
             `Final Callback Response for session ${sessionId}: ${result.synthesized_message}`,
+        );
+
+        // Save synthesized message to history
+        const aiMessage = new AIMessage(result.synthesized_message);
+        await this.memoryService.saveHistory(
+            userId,
+            sessionId,
+            (session.messages?.length || 0) + 1,
+            aiMessage,
+        );
+
+        // Update summary after agent callback in background to keep context fresh
+        const updatedMessages = [
+            ...(session.messages || []),
+            systemMessage,
+            aiMessage,
+        ];
+        this.triggerBackgroundSummarization(
+            userId,
+            sessionId,
+            updatedMessages,
+            session.summary,
+            state.current_intent || "None",
         );
 
         return {

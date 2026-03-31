@@ -11,7 +11,6 @@ import { KnowledgeClientService } from "../modules/clients/knowledge-client/know
 import { OrderClientService } from "../modules/clients/order-client/order-client.service";
 import { OutputEvaluatorService } from "../modules/output-evaluator/output-evaluator.service";
 import { IntentClassifierService } from "../modules/intent-classifier/intent-classifier.service";
-import { SummarizerService } from "../modules/summarizer/summarizer.service";
 import { PromptShieldService } from "../modules/prompt-shield/prompt-shield.service";
 import * as nodes from "./nodes";
 import { OrchestratorState, OrchestratorStateType } from "./state";
@@ -21,7 +20,6 @@ export interface GraphServices {
     intentClassifier: IntentClassifierService;
     outputEvaluator: OutputEvaluatorService;
     orderService: OrderClientService;
-    summarizer: SummarizerService;
     knowledgeClient: KnowledgeClientService;
     promptShield: PromptShieldService;
     sopModel: BaseChatModel;
@@ -58,14 +56,6 @@ export function createOrchestratorGraph(
      * Router for Intent Branching (Parallel Processing)
      */
     async function routeByIntent(state: OrchestratorStateType) {
-        const sops = await services.knowledgeClient.listOrchestratorSops();
-        const sopIntents = sops.map((s) => s.intentCode);
-
-        // If we have a sticky intent, route directly to it
-        if (state.current_intent && sopIntents.includes(state.current_intent)) {
-            return "sop_handler";
-        }
-
         // Otherwise, use decomposed_intents to map to handlers
         if (
             !state.decomposed_intents ||
@@ -79,7 +69,10 @@ export function createOrchestratorGraph(
 
             const payload = {
                 ...state,
-                current_intent: intentCode,
+                current_intent:
+                    intentCode === "confirmation" && state.current_intent
+                        ? state.current_intent
+                        : intentCode,
                 current_intent_index: index,
             };
 
@@ -97,6 +90,9 @@ export function createOrchestratorGraph(
             }
             if (intentCode === "unclear") {
                 return new Send("clarification", payload);
+            }
+            if (intentCode === "confirmation") {
+                return new Send("sop_handler", payload);
             }
             return new Send("sop_handler", payload);
         });
@@ -164,12 +160,7 @@ export function createOrchestratorGraph(
                 llmFallback: services.correctionModelFallback,
             }),
         )
-        .addNode(
-            "summarization",
-            nodes.createSummarizationNode({
-                summarizer: services.summarizer,
-            }),
-        )
+        .addNode("summarization", nodes.createSummarizationNode())
         .addNode("escalation", nodes.createEscalationNode(services.tools))
         .addEdge(START, "pre_processing")
         .addConditionalEdges("pre_processing", routeAfterPreProcessing, {
