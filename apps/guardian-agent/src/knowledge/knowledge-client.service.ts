@@ -7,8 +7,13 @@ export interface SearchInternalSopPayload {
     requestingAgent: string;
 }
 
-export interface QueryResult {
-    reply: string;
+export interface SopResult {
+    intentCode: string;
+    agentOwner: string;
+    title: string;
+    requiredData: unknown[];
+    workflowSteps: string[];
+    permittedTools: string[];
 }
 
 @Injectable()
@@ -20,8 +25,17 @@ export class KnowledgeClientService {
 
     async searchInternalSop(payload: SearchInternalSopPayload): Promise<string> {
         const result = await firstValueFrom(
-            this.knowledgeClient.send<QueryResult>("sop", payload),
+            this.knowledgeClient.send<SopResult>("sop", payload),
         );
-        return result?.reply ?? "No response from agent.";
+        if (!result?.title) return "";
+        return [
+            `Title: ${result.title}`,
+            `Steps:\n${result.workflowSteps.join("\n")}`,
+            result.permittedTools.length
+                ? `Permitted Tools: ${result.permittedTools.join(", ")}`
+                : "",
+        ]
+            .filter(Boolean)
+            .join("\n\n");
     }
 }

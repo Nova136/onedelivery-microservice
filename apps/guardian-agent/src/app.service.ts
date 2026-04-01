@@ -446,8 +446,14 @@ ${SELF_PROTECTION_CLAUSE}`;
         }
 
         // ── Guardrail 4 (gate path): SOP unavailability → fail-closed ────
+        const gateIntentCode =
+            toolName === "Execute_Refund"
+                ? "EXECUTE_REFUND_GATE"
+                : toolName === "Execute_Cancellation_And_Refund"
+                  ? "EXECUTE_CANCELLATION_AND_REFUND_GATE"
+                  : "VERIFICATION";
         const sopContext = await this.fetchSop(
-            "VERIFICATION",
+            gateIntentCode,
             "guardian_agent",
         );
         if (!sopContext) {
