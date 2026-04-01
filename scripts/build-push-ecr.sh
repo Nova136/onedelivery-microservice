@@ -121,3 +121,40 @@ else
   echo "  Status: all succeeded"
 fi
 echo "============================================="
+
+# ---------------------------------------------------------------------------
+# Force-redeploy ECS services so Fargate pulls the new :latest image.
+# Without this, ECS may reuse the cached image layer even after a new push.
+# ---------------------------------------------------------------------------
+DEPLOYED=()
+DEPLOY_FAILED=()
+
+for name in "${SERVICES[@]}"; do
+  name=$(echo "$name" | tr -d '[:space:]')
+  [[ -z "$name" ]] && continue
+
+  echo "==> [$name] Force-redeploying ECS service..."
+  if AWS_PROFILE=$AWS_PROFILE aws ecs update-service \
+      --cluster onedelivery-cluster \
+      --service "$name" \
+      --force-new-deployment \
+      --region "$AWS_REGION" \
+      --no-cli-pager \
+      --query 'service.serviceName' \
+      --output text > /dev/null 2>&1; then
+    echo "==> [$name] Redeployment triggered."
+    DEPLOYED+=("$name")
+  else
+    echo "WARN: [$name] ECS service not found or redeploy failed — skipping."
+    DEPLOY_FAILED+=("$name")
+  fi
+done
+
+echo ""
+echo "============================================="
+echo "  ECS redeploy triggered for: ${DEPLOYED[*]:-none}"
+if [[ ${#DEPLOY_FAILED[@]} -gt 0 ]]; then
+  echo "  Skipped (no ECS service): ${DEPLOY_FAILED[*]}"
+fi
+echo "  Services will be live in ~2-3 minutes."
+echo "============================================="
