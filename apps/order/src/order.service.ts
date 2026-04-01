@@ -11,6 +11,8 @@ import {
     AuditLogResponse,
     LogIncidentRequest,
     LogIncidentResponse,
+    PaymentOrderResponse,
+    PaymentRefundResponse,
 } from "@libs/utils/rabbitmq-interfaces";
 import { CreateOrderDto, CreateOrderWithPaymentResultDto } from "./core/dto";
 import {
@@ -21,9 +23,9 @@ import {
 
 /** Min time (ms) the order must stay in the current logistics step before the next advance. */
 const LOGISTICS_STEP_MIN_MS: Record<PriorityOption, number> = {
-    [PriorityOption.FAST]: 15 * 60 * 1000,
-    [PriorityOption.STANDARD]: 25 * 60 * 1000,
-    [PriorityOption.ECONOMY]: 35 * 60 * 1000,
+    [PriorityOption.FAST]: 1 * 60 * 1000,
+    [PriorityOption.STANDARD]: 2 * 60 * 1000,
+    [PriorityOption.ECONOMY]: 3 * 60 * 1000,
 };
 
 @Injectable()
@@ -283,6 +285,25 @@ export class OrderService {
     }
 
     async cancel(orderId: string) {
+
+         let paymentResult =
+            await this.commonService.sendViaRMQ<PaymentOrderResponse>(
+                this.paymentClient,
+                { cmd: "payment.getByOrder" },
+                { orderId: order.id, },
+            );
+
+        let refundResult =
+            await this.commonService.sendViaRMQ<PaymentRefundResponse>(
+                this.paymentClient,
+                { cmd: "payment.refund"},
+                {
+                    payment: paymentResult.paymentId,
+                    account: paymentResult.amount,
+                    reason: "cancel order",
+                },
+            );
+
         const order = await this.orderRepo.findOne({
             where: { id: orderId },
             relations: ["items"],
@@ -292,6 +313,8 @@ export class OrderService {
         }
         order.status = OrderStatus.CANCELLED;
         order.updatedAt = new Date();
+        order.totalRefundValue = refundResult.amount;
+        order.refundStatus = refundResult.status;
         return this.orderRepo.save(order);
     }
 
