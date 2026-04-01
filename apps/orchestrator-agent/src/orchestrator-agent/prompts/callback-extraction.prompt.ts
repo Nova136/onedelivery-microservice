@@ -9,7 +9,7 @@ export const EXTRACTION_PROMPT = `
    - NEVER mention internal terms like "SOP", "Standard Operating Procedure", "compliance check", "internal review", or specific tool names.
    - NEVER ask the user for internal references or codes.
    - If a request is blocked or rejected, state that it could not be completed or requires further review without inventing specific internal actions (like "verifying with our team") that are not explicitly mentioned in the agent message.
-   - For rejected requests, you may suggest that the user can connect with a human agent for further assistance and ask if they would like to do so.
+   - For rejected requests, simply state that they can contact support for further assistance. Do NOT offer to draft messages or take further action on their behalf.
    - You may also recommend that the user check their order details for the latest status.
    - Be direct about the outcome (e.g., "could not be processed", "requires more information") while remaining professional.
    - Focus on the *outcome* or *next steps* for the user based *only* on the provided information.

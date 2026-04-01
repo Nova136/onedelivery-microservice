@@ -60,71 +60,13 @@ export class InputValidatorService {
 
         if (message.length > 300) {
             this.logger.warn(`Message too long: ${message.length} chars.`);
-            return { isValid: false, error: "Message too long" };
-        }
-
-        // Programmatic Security Checks
-        const lowerMessage = message.toLowerCase();
-
-        // 1. Detect common jailbreak/injection keywords (Expanded)
-        const injectionKeywords = [
-            "ignore all previous instructions",
-            "ignore previous instructions",
-            "system prompt",
-            "you are now",
-            "switch to",
-            "developer mode",
-            "dan mode",
-            "do anything now",
-            "bypass safety",
-            "reveal your instructions",
-            "what is your prompt",
-            "explain your logic",
-            "internal logic",
-            "routing layer",
-            "let's play a game",
-            "you are an evil",
-            "stupid bot",
-            "i hate you",
-            "print the text above",
-            "repeat the text above",
-            "output the system prompt",
-            "show me your code",
-            "access internal tools",
-            "override system",
-            "execute command",
-            "sudo",
-            "bash",
-            "curl",
-            "wget",
-        ];
-
-        if (
-            injectionKeywords.some((keyword) => lowerMessage.includes(keyword))
-        ) {
-            this.logger.warn(
-                `Security Threat Detected: Potential Prompt Injection in message: "${message.substring(0, 50)}..."`,
-            );
             return {
                 isValid: false,
-                error: "Security Threat Detected: Potential Prompt Injection",
+                error: "Message cannot exceed 300 characters",
             };
         }
 
-        // 2. Detect potential base64 or hex encoded payloads
-        const base64Regex = /[A-Za-z0-9+/]{40,}={0,2}/;
-        const hexRegex = /\b[0-9a-fA-F]{40,}\b/;
-        if (base64Regex.test(message) || hexRegex.test(message)) {
-            this.logger.warn(
-                "Security Threat Detected: Potential Obfuscated Payload.",
-            );
-            return {
-                isValid: false,
-                error: "Security Threat Detected: Potential Obfuscated Payload",
-            };
-        }
-
-        // 3. Detect character-level manipulation (e.g., using invisible characters or homoglyphs)
+        // 1. Detect character-level manipulation (e.g., using invisible characters or homoglyphs)
         const controlCharsRegex =
             /[\u0000-\u0008\u000B-\u000C\u000E-\u001F\u007F-\u009F\u200B-\u200D\uFEFF]/;
         if (controlCharsRegex.test(message)) {
@@ -137,7 +79,7 @@ export class InputValidatorService {
             };
         }
 
-        // 4. Detect excessive repetition (DoS mitigation)
+        // 2. Detect excessive repetition (DoS mitigation)
         const repetitionRegex = /(.)\1{20,}/;
         if (repetitionRegex.test(message)) {
             this.logger.warn(
@@ -149,7 +91,7 @@ export class InputValidatorService {
             };
         }
 
-        // Use LLM for content validation
+        // Use LLM for semantic content validation (Harmful content, complex jailbreaks)
         try {
             const response = await this.model.invoke([
                 {

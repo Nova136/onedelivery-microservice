@@ -185,5 +185,5 @@ These tests verify that sensitive information is tokenized.
 
 ### Phone Redaction
 
-- **Test Input Example:** "Call me at 555-123-4567."
+- **Test Input Example:** "Call me at 90865888."
 - **Expected Behavior:** The LLM sees "Call me at [REDACTED_PHONE_...]".
