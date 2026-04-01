@@ -33,6 +33,26 @@ resource "aws_iam_role" "ecs_task" {
     }]
   })
 }
+
+# Required for ECS Exec (aws ecs execute-command) and SSM port forwarding
+resource "aws_iam_role_policy" "ecs_task_exec_ssm" {
+  name = "${local.name}-ecs-exec"
+  role = aws_iam_role.ecs_task.name
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = [
+        "ssmmessages:CreateControlChannel",
+        "ssmmessages:CreateDataChannel",
+        "ssmmessages:OpenControlChannel",
+        "ssmmessages:OpenDataChannel"
+      ]
+      Resource = "*"
+    }]
+  })
+}
+
 # execute-api:ManageConnections is granted in lambda.tf when enable_websocket = true
 
 resource "aws_security_group" "ecs_tasks" {
