@@ -111,7 +111,12 @@
         "typeorm": "^0.3.28",
         "tsx": "^4.21.0",
         "ws": "^8.20.0",
-        "zod": "^3.0.0"
+        "zod": "^3.0.0",
+        "@nestjs/platform-socket.io": "^11.1.17",
+        "@nestjs/websockets": "^11.1.17",
+        "socket.io": "^4.8.3",
+        "socket.io-client": "^4.8.3",
+        "uuid": "^11.1.0"
     },
     "devDependencies": {
         "@swc/cli": "^0.8.0",
@@ -136,6 +141,8 @@
         "tsconfig-paths": "^4.2.0",
         "typeorm-extension": "^2.2.0",
         "typeorm-naming-strategies": "^4.1.0",
-        "typescript": "^5.0.0"
+        "typescript": "^5.0.0",
+        "@types/uuid": "^10.0.0"
+
     }
 }
