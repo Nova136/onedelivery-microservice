@@ -151,6 +151,12 @@ export const createSopHandlerNode = (deps: SopHandlerDependencies) => {
                     .describe(
                         "Whether all required information (including conditional ones) has been gathered and confirmed, and the request is ready for execution.",
                     ),
+                clarification_message: z
+                    .string()
+                    .nullable()
+                    .describe(
+                        "A natural language message to the user when information is missing or invalid. Use this to politely explain WHY data is being requested (e.g., 'That order ID doesn't match our records' or 'You only ordered 1 Laksa, but requested a refund for 2').",
+                    ),
                 requested_tool: z
                     .object({
                         name: toolNameSchema.describe(
@@ -272,6 +278,8 @@ export const createSopHandlerNode = (deps: SopHandlerDependencies) => {
                     "{{gathered_data}}",
                     gatheredDataSummary,
                 );
+            } else if (agentOutput.clarification_message) {
+                finalResponse = agentOutput.clarification_message;
             } else if (missingFields.length > 0) {
                 finalResponse = DIALOGUE_PROMPTS.MISSING_DATA_PROMPT.replace(
                     "{{intent}}",
