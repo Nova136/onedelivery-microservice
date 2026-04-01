@@ -127,7 +127,7 @@ resource "aws_ecs_task_definition" "service" {
         { name = "DATABASE_URL", value = "postgresql://${var.db_username}:${var.db_password}@${aws_db_instance.postgres.address}:${aws_db_instance.postgres.port}/${var.db_name}" },
         { name = "JWT_SECRET", value = "REDACTED_JWT_SECRET" },
         { name = "RABBITMQ_URL", value = "amqps://grdulrnl:REDACTED_CLOUDAMQP_PASSWORD@armadillo.rmq.cloudamqp.com:5671/grdulrnl" },
-        { name = "CORS_ORIGIN", value = "*" },
+        { name = "CORS_ORIGIN", value = join(",", distinct(concat(["http://localhost:5173"], var.cors_allowed_origins))) },
         { name = "DB_HOST", value = aws_db_instance.postgres.address },
         { name = "DB_PORT", value = tostring(aws_db_instance.postgres.port) },
         { name = "DB_NAME", value = var.db_name },

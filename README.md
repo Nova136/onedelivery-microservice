@@ -227,7 +227,7 @@ After this, pushing to `main` (or running the workflow manually) will build the 
 - Add persistence (DB) and shared DTOs per service.
 - Wire in **Order & Logistics** and **Resolution & Refund** agents from the practice module.
 
-## Updating ECS Variable
+## Updating ECS Variable via terraform
 
 Update new variable on ./infrastructure/ecs.tf
 Then execute the update
@@ -250,3 +250,50 @@ routing_note = "API Gateway -> ALB:80 -> path-based to ECS (/order, /logistics, 
 vpc_id = "vpc-0xxxxxxxxxxxxxxxxx"
 websocket_management_endpoint = "https://18gvmx3hn7.execute-api.ap-southeast-1.amazonaws.com/prod"
 websocket_url = "wss://18gvmx3hn7.execute-api.ap-southeast-1.amazonaws.com/prod"
+
+
+
+## Connecting to RDS via ECS Exec
+
+The RDS instance is in a private subnet (not publicly accessible). Use ECS Exec to connect through a running ECS task.
+
+**Prerequisites:** Install the [SSM Session Manager plugin](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html):
+```bash
+brew install session-manager-plugin
+```
+
+**Step 1 — Enable ECS Exec on the service (one-time per service):**
+```bash
+export AWS_PROFILE=onedelivery
+aws ecs update-service \
+  --cluster onedelivery-cluster \
+  --service user \
+  --enable-execute-command \
+  --force-new-deployment \
+  --region ap-southeast-1
+```
+
+**Step 2 — Get the running task ID:**
+```bash
+aws ecs list-tasks --cluster onedelivery-cluster --service-name user \
+  --region ap-southeast-1 --query 'taskArns[0]' --output text
+```
+
+**Step 3 — Exec into the container:**
+```bash
+aws ecs execute-command \
+  --cluster onedelivery-cluster \
+  --task <TASK_ID> \
+  --container user \
+  --interactive \
+  --command "/bin/sh" \
+  --region ap-southeast-1
+```
+
+**Step 4 — Inside the shell, install psql and connect:**
+```sh
+apk add --no-cache postgresql-client
+psql "postgresql://postgres:<DB_PASSWORD>@onedelivery-postgres.chqkmym8y08l.ap-southeast-1.rds.amazonaws.com:5432/onedelivery?sslmode=require"
+```
+
+> Credentials are in `.env.cloud`. Replace `<TASK_ID>` with the value from Step 2.
