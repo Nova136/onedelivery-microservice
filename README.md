@@ -253,16 +253,16 @@ websocket_url = "wss://18gvmx3hn7.execute-api.ap-southeast-1.amazonaws.com/prod"
 
 
 
-## Connecting to RDS via ECS Exec
+## Connecting to RDS
 
-The RDS instance is in a private subnet (not publicly accessible). Use ECS Exec to connect through a running ECS task.
+The RDS instance is in a private subnet (not publicly accessible). Both methods below tunnel through a running ECS task — no bastion host or public RDS exposure needed.
 
 **Prerequisites:** Install the [SSM Session Manager plugin](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html):
 ```bash
 brew install session-manager-plugin
 ```
 
-**Step 1 — Enable ECS Exec on the service (one-time per service):**
+**Step 1 — Enable ECS Exec on the service (one-time):**
 ```bash
 export AWS_PROFILE=onedelivery
 aws ecs update-service \
@@ -272,6 +272,10 @@ aws ecs update-service \
   --force-new-deployment \
   --region ap-southeast-1
 ```
+
+---
+
+### Option A — psql in the container (CLI)
 
 **Step 2 — Get the running task ID:**
 ```bash
@@ -295,5 +299,37 @@ aws ecs execute-command \
 apk add --no-cache postgresql-client
 psql "postgresql://postgres:<DB_PASSWORD>@onedelivery-postgres.chqkmym8y08l.ap-southeast-1.rds.amazonaws.com:5432/onedelivery?sslmode=require"
 ```
+
+---
+
+### Option B — pgAdmin or any GUI (automated tunnel script)
+
+Run the script — it auto-detects the task ID and runtime ID, then opens the tunnel:
+
+```bash
+export AWS_PROFILE=onedelivery
+./scripts/rds-tunnel.sh
+```
+
+Optional arguments:
+```bash
+# Custom service or local port
+./scripts/rds-tunnel.sh user 5433
+```
+
+Once the tunnel is open, connect pgAdmin to:
+
+| Field    | Value         |
+|----------|---------------|
+| Host     | `localhost`   |
+| Port     | `5433`        |
+| Database | `onedelivery` |
+| Username | `postgres`    |
+| Password | *(see `.env.cloud`)* |
+| SSL mode | `Require`     |
+
+Press `Ctrl+C` in the tunnel terminal when done.
+
+---
 
 > Credentials are in `.env.cloud`. Replace `<TASK_ID>` with the value from Step 2.
