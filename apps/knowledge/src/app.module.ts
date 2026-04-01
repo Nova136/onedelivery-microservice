@@ -1,9 +1,7 @@
 import { Module } from "@nestjs/common";
-import { APP_GUARD } from "@nestjs/core";
 import { ConfigModule } from "@nestjs/config";
 import { PassportModule } from "@nestjs/passport";
 import { TypeOrmModule } from "@nestjs/typeorm";
-import { RolesGuard } from "@libs/utils/guards/roles.guard";
 import { HealthModule } from "@libs/modules/health-check/health-check.module";
 import { ClientAuthGuard } from "@libs/utils/guards/auth.guard";
 import { KnowledgeModule } from "./knowledge.module";

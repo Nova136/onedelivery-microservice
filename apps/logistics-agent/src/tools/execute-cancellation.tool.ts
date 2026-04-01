@@ -14,7 +14,6 @@ const executeCancellationSchema = z
 
 export function createExecuteCancellationTool(
     orderClient: OrderClientService,
-    resolutionClient: ResolutionClientService
 ): StructuredTool {
     return tool(
         async ({ orderId }: { orderId: string }) => {
