@@ -168,8 +168,9 @@ resource "aws_ecs_service" "service" {
   name            = each.key
   cluster         = aws_ecs_cluster.main.id
   task_definition = aws_ecs_task_definition.service[each.key].arn
-  desired_count   = var.ecs_desired_count
-  launch_type     = "FARGATE"
+  desired_count           = var.ecs_desired_count
+  launch_type             = "FARGATE"
+  enable_execute_command  = true
 
   network_configuration {
     subnets = [
