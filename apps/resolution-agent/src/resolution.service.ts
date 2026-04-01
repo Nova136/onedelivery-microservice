@@ -179,7 +179,7 @@ Before you use a tool or return your final answer, you MUST enclose your interna
 
         let result =
             (finalMessage?.content as string) ||
-            "REJECTED: Agent failed to reach a conclusion.";
+            "REJECTED: We were unable to process your refund request at this time. Please contact our support team for assistance.";
 
         result = result
             .replace(/<thinking>[\s\S]*?<\/thinking>/g, "")
@@ -257,7 +257,7 @@ Before you use a tool or return your final answer, you MUST enclose your interna
 
         const finalResult = (retryMessage?.content as string)
             ?.replace(/<thinking>[\s\S]*?<\/thinking>/g, "")
-            .trim() || "REJECTED: Agent failed to correct response after Guardian feedback.";
+            .trim() || "REJECTED: Your refund request could not be completed at this time. Please contact our support team for further assistance.";
 
         this.logger.log(`[${userId}] Guardian Retry Result: "${finalResult}"`);
         return this.finalizeReply(payload, finalResult, orderId);
