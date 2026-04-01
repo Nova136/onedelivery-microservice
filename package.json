@@ -55,7 +55,9 @@
         "test-resolution-agent": "npx ts-node -r tsconfig-paths/register --transpile-only apps/resolution-agent/scripts/langsmith-eval.ts",
         "test:e2e": "jest --testMatch \"**/+(*.)+(e2e-test).+(ts)\" --forceExit --json --outputFile ./e2e-test-report.json",
         "test:coverage": "jest --testMatch \"**/+(*.)+(e2e-test).+(ts)\" --forceExit --coverage --coverageDirectory=./coverage",
-        "test:unit": "jest --testMatch \"**/+(*.)+(spec).+(ts)\" --forceExit --json --outputFile ./unit-test-report.json"
+        "test:unit": "jest --testMatch \"**/+(*.)+(spec).+(ts)\" --forceExit --json --outputFile ./unit-test-report.json",
+        "generate-anygen": "node ./presentation/generate-anygen.js ./presentation/content.md ./presentation/onedelivery-anygen.pptx"
+
     },
     "dependencies": {
         "@aws-sdk/client-apigatewaymanagementapi": "^3.1016.0",
