@@ -73,3 +73,7 @@ enable_websocket = true
 # Enforced at connect time (rejects with close code 4001) and per message.
 # Only relevant when enable_websocket = true.
 ws_rate_limit_per_minute = 20
+
+
+cors_allowed_origins=["https://nova136.github.io/onedelivery-frontend"]     
+    

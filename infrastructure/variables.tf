@@ -119,6 +119,12 @@ variable "ws_rate_limit_per_minute" {
   default     = 20
 }
 
+variable "cors_allowed_origins" {
+  description = "List of origins allowed by API Gateway CORS (e.g. frontend URLs). http://localhost:5173 is always included."
+  type        = list(string)
+  default     = []
+}
+
 variable "vpc_cidr" {
   description = "CIDR block for the VPC. When reusing an existing VPC, this must match its actual CIDR (for example 172.16.94.0/24)."
   type        = string
