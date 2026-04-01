@@ -1,9 +1,7 @@
 import { Module } from "@nestjs/common";
-import { APP_GUARD } from "@nestjs/core";
 import { ConfigModule } from "@nestjs/config";
 import { PassportModule } from "@nestjs/passport";
 import { TypeOrmModule } from "@nestjs/typeorm";
-import { RolesGuard } from "@libs/utils/guards/roles.guard";
 import { HealthModule } from "@libs/modules/health-check/health-check.module";
 import { ClientAuthGuard } from "@libs/utils/guards/auth.guard";
 import { KnowledgeModule } from "./knowledge.module";
@@ -26,7 +24,7 @@ import { SnakeNamingStrategy } from "typeorm-naming-strategies";
             url:
                 process.env.DATABASE_URL ??
                 "postgresql://postgres:postgres@localhost:5432/onedelivery",
-            schema: "logistics",
+            schema: "knowledge",
             entities: [Faq, Sop],
             synchronize: true,
             ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false,

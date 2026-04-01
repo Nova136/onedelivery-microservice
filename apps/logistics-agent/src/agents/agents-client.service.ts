@@ -4,7 +4,12 @@ import { firstValueFrom } from "rxjs";
 import { AGENT_CHAT_PATTERN } from "@libs/modules/generic/enum/agent-chat.pattern";
 import { AgentChatPayload } from "@libs/modules/generic/interface/agent-chat-payload.interface";
 
-export type AgentName = "resolution" | "qa" | "guardian" | "logistic";
+export type AgentName =
+    | "orchestrator"
+    | "resolution"
+    | "qa"
+    | "guardian"
+    | "logistic";
 
 export interface AgentChatResult {
     reply: string;
@@ -13,6 +18,8 @@ export interface AgentChatResult {
 @Injectable()
 export class AgentsClientService {
     constructor(
+        @Inject("ORCHESTRATOR_AGENT")
+        private readonly orchestratorClient: ClientProxy,
         @Inject("GUARDIAN_AGENT") private readonly guardianClient: ClientProxy,
     ) {}
 
@@ -20,6 +27,8 @@ export class AgentsClientService {
         switch (agent) {
             case "guardian":
                 return this.guardianClient;
+            case "orchestrator":
+                return this.orchestratorClient;
             default:
                 throw new Error(`Unknown agent: ${agent}`);
         }

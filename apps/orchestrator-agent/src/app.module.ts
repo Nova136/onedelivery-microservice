@@ -1,31 +1,17 @@
 import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
-import { HttpModule } from "@nestjs/axios";
-import { OrchestratorAgentController } from "./orchestrator-agent.controller";
-import { OrchestratorAgentService } from "./orchestrator-agent.service";
-import { MemoryModule } from "./modules/memory/memory.module";
-
-import { ModerationModule } from "./modules/moderation/moderation.module";
-import { PrivacyModule } from "./modules/privacy/privacy.module";
-import { McpToolRegistryModule } from "./modules/mcp/mcp-tool-registry.module";
-import { SemanticRouterModule } from "./modules/semantic-router/semantic-router.module";
-import { SpecializedAgentsModule } from "./modules/specialized-agents/specialized-agents.module";
-import { WebsocketCallbackModule } from "./modules/websocket/websocket-callback.module";
 import { HealthModule } from "@libs/modules/health-check/health-check.module";
+import { OrchestratorModule } from "./orchestrator-agent/orchestrator.module";
 
 @Module({
     imports: [
-        ConfigModule.forRoot({ isGlobal: true }),
         HealthModule,
-        MemoryModule,
-        ModerationModule,
-        PrivacyModule,
-        McpToolRegistryModule,
-        SemanticRouterModule,
-        SpecializedAgentsModule,
-        WebsocketCallbackModule,
+        ConfigModule.forRoot({
+            isGlobal: true,
+        }),
+        OrchestratorModule,
     ],
-    controllers: [OrchestratorAgentController],
-    providers: [OrchestratorAgentService],
+    controllers: [],
+    providers: [],
 })
 export class AppModule {}
