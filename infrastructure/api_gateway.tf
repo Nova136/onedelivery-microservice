@@ -22,7 +22,9 @@ resource "aws_apigatewayv2_api" "main" {
   }
 }
 
-# Integration: forward all traffic directly to the ALB public DNS (no VPC Link)
+# Integration: forward all traffic directly to the ALB public DNS (no VPC Link).
+# request_parameters overwrite:path is required — without it API GW forwards to
+# the root "/" of the integration URI instead of the original request path.
 resource "aws_apigatewayv2_integration" "alb" {
   count                  = var.enable_alb ? 1 : 0
   api_id                 = aws_apigatewayv2_api.main[0].id
@@ -30,6 +32,10 @@ resource "aws_apigatewayv2_integration" "alb" {
   integration_uri        = "http://${aws_lb.main[0].dns_name}"
   integration_method     = "ANY"
   payload_format_version = "1.0"
+
+  request_parameters = {
+    "overwrite:path" = "$request.path"
+  }
 }
 
 # Explicit methods only — OPTIONS is intentionally excluded so API Gateway's
