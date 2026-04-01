@@ -29,7 +29,7 @@ import { SnakeNamingStrategy } from "typeorm-naming-strategies";
                 "postgresql://postgres:postgres@localhost:5432/onedelivery",
             schema: "logistics",
             entities: [Delivery, DeliveryTracking, Product],
-            synchronize: process.env.NODE_ENV !== "production",
+            synchronize: true,
             ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false,
             namingStrategy: new SnakeNamingStrategy(),
         }),
