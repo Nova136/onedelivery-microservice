@@ -49,6 +49,11 @@ export class ResolutionService {
         const { userId, sessionId, message } = payload;
         this.logger.log(`[${userId}] Starting refund process...`);
 
+        let orderId: string | undefined;
+        try {
+            orderId = (JSON.parse(message) as { orderId?: string }).orderId;
+        } catch { /* non-JSON payload — orderId stays undefined */ }
+
         let sopContext = "No SOP found.";
         try {
             const rawSop = await this.knowledgeClient.searchInternalSop({
@@ -66,6 +71,7 @@ ${rawSop.workflowSteps.join("\n")}
             return this.finalizeReply(
                 payload,
                 "REJECTED: Internal database error while fetching Resolution rules.",
+                orderId,
             );
         }
 
@@ -74,7 +80,7 @@ ${rawSop.workflowSteps.join("\n")}
             this.logger.log(
                 `[${userId}] Preflight reject — returning without agent loop.`,
             );
-            return this.finalizeReply(payload, preflightReject);
+            return this.finalizeReply(payload, preflightReject, orderId);
         }
 
         const basePrompt = resolutionPromptBase
@@ -173,7 +179,7 @@ Before you use a tool or return your final answer, you MUST enclose your interna
 
         let result =
             (finalMessage?.content as string) ||
-            "REJECTED: Agent failed to reach a conclusion.";
+            "REJECTED: We were unable to process your refund request at this time. Please contact our support team for assistance.";
 
         result = result
             .replace(/<thinking>[\s\S]*?<\/thinking>/g, "")
@@ -182,7 +188,7 @@ Before you use a tool or return your final answer, you MUST enclose your interna
         this.logger.log(`[${userId}] Final Result (pre-guardian): "${result}"`);
 
         if (this.shouldSkipResolutionGuardianVerification(result)) {
-            return this.finalizeReply(payload, result);
+            return this.finalizeReply(payload, result, orderId);
         }
 
         const verificationMessage = `${GUARDIAN_VERIFY_PREFIX} resolution response against SOP before it is returned to the system. Original request: "${message}". Proposed resolution: "${result}". Confirm it is accurate and follows policy.`;
@@ -199,7 +205,7 @@ Before you use a tool or return your final answer, you MUST enclose your interna
 
         if (!guardianReply.startsWith("FEEDBACK: ")) {
             this.logger.log(`[${userId}] Guardian verified result.`);
-            return this.finalizeReply(payload, result);
+            return this.finalizeReply(payload, result, orderId);
         }
 
         // Guardian found issues — inject feedback and let the agent correct itself
@@ -251,22 +257,58 @@ Before you use a tool or return your final answer, you MUST enclose your interna
 
         const finalResult = (retryMessage?.content as string)
             ?.replace(/<thinking>[\s\S]*?<\/thinking>/g, "")
-            .trim() || "REJECTED: Agent failed to correct response after Guardian feedback.";
+            .trim() || "REJECTED: Your refund request could not be completed at this time. Please contact our support team for further assistance.";
 
         this.logger.log(`[${userId}] Guardian Retry Result: "${finalResult}"`);
-        return this.finalizeReply(payload, finalResult);
+        return this.finalizeReply(payload, finalResult, orderId);
     }
 
     /**
-     * Return the string to the RMQ caller and push the same reply to the orchestrator (e.g. WebSocket). No DB.
+     * Wrap the agent result in a structured JSON response, notify the orchestrator, and return the JSON string.
      */
-    private finalizeReply(payload: AgentChatPayload, message: string): string {
+    private finalizeReply(payload: AgentChatPayload, message: string, orderId?: string): string {
+        const structured = this.buildStructuredResponse(message, orderId);
+        const structuredStr = JSON.stringify(structured);
         this.agentsClient.notifyOrchestrator({
             userId: payload.userId,
             sessionId: payload.sessionId,
-            message,
+            message: structuredStr,
         });
-        return message;
+        return structuredStr;
+    }
+
+    /**
+     * Parse the LLM plain-text result into a structured object.
+     * Falls back gracefully if the LLM already returned JSON.
+     */
+    private buildStructuredResponse(
+        message: string,
+        orderId?: string,
+    ): Record<string, unknown> {
+        // If the LLM already returned valid JSON with a status field, merge orderId in.
+        try {
+            const parsed = JSON.parse(message) as Record<string, unknown>;
+            if (typeof parsed.status === "string") {
+                return { orderId: orderId ?? null, ...parsed };
+            }
+        } catch { /* not JSON — fall through to plain-text parsing */ }
+
+        if (message.startsWith("SUCCESS:")) {
+            const amountMatch = message.match(/\$(\d+(?:\.\d+)?)/);
+            return {
+                orderId: orderId ?? null,
+                status: "SUCCESS",
+                amount: amountMatch ? parseFloat(amountMatch[1]) : null,
+                summary: message,
+            };
+        }
+
+        return {
+            orderId: orderId ?? null,
+            status: "REJECTED",
+            reason: message.replace(/^REJECTED:\s*/i, "").trim(),
+            summary: message,
+        };
     }
 
     /**
