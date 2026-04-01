@@ -6,6 +6,7 @@ import {
     ChatSavePayload,
     ChatSessionDTO,
     EndChatSessionPayload,
+    EscalateChatSessionPayload,
     GetChatSessionsPayload,
     UpdateChatSessionPayload,
     UpdateSummaryPayload,
@@ -55,6 +56,16 @@ export class ChatController {
         @Payload() payload: UpdateSummaryPayload,
     ): Promise<void> {
         await this.chatService.updateSummary(payload);
+    }
+
+    @MessagePattern({ cmd: "user.chat.escalateSession" })
+    async escalateSession(
+        @Payload() payload: EscalateChatSessionPayload,
+    ): Promise<void> {
+        await this.chatService.escalateChatSession(
+            payload.userId,
+            payload.sessionId,
+        );
     }
 
     @MessagePattern({ cmd: "user.chat.endSession" })

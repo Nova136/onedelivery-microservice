@@ -1,11 +1,16 @@
 import { Injectable, Logger } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import { ChatOpenAI } from "@langchain/openai";
 import {
     ChatPromptTemplate,
     MessagesPlaceholder,
 } from "@langchain/core/prompts";
 import { StructuredTool } from "@langchain/core/tools";
-import { ToolMessage, BaseMessage, SystemMessage } from "@langchain/core/messages";
+import {
+    ToolMessage,
+    BaseMessage,
+    SystemMessage,
+} from "@langchain/core/messages";
 import {
     ExecuteLogisticsTaskDto,
     LogisticsAction,
@@ -17,7 +22,10 @@ import { createGetOrderDetailsTool } from "./tools/get-order-details.tool";
 import { createExecuteCancellationTool } from "./tools/execute-cancellation.tool";
 import { OrderClientService } from "./agents/order-client.service";
 import { LOGISTICS_AGENT_PROMPT } from "./prompt/logistics-agent.prompt";
-import { GUARDIAN_VERIFY_PREFIX, GUARDIAN_GATE_PREFIX } from "@libs/modules/generic/enum/agent-chat.pattern";
+import {
+    GUARDIAN_VERIFY_PREFIX,
+    GUARDIAN_GATE_PREFIX,
+} from "@libs/modules/generic/enum/agent-chat.pattern";
 import { traceable } from "langsmith/traceable";
 
 @Injectable()
@@ -31,6 +39,7 @@ export class LogisticsAgentService {
         private knowledgeClient: KnowledgeClientService,
         private agentsClient: AgentsClientService,
         private orderClient: OrderClientService,
+        private configService: ConfigService,
     ) {
         // 1. Initialize the LLM (Temperature 0 is crucial for backend math agents!)
         this.llm = new ChatOpenAI({
@@ -132,15 +141,25 @@ export class LogisticsAgentService {
 
                     if (selectedTool) {
                         // Pre-execution gate: Guardian approves Execute_Cancellation_And_Refund before it fires.
-                        if (toolCall.name === "Execute_Cancellation_And_Refund") {
+                        if (
+                            toolCall.name === "Execute_Cancellation_And_Refund"
+                        ) {
                             const gateMessage = `${GUARDIAN_GATE_PREFIX} action: Tool=Execute_Cancellation_And_Refund, orderId="${toolCall.args.orderId}". Confirm this cancellation and refund action is SOP-compliant before execution.`;
-                            const gateReply = await this.agentsClient.send("guardian", {
-                                userId: payload.userId,
-                                sessionId: `${payload.sessionId}-gate`,
-                                message: gateMessage,
-                            });
-                            if (typeof gateReply === "string" && gateReply.startsWith("BLOCKED:")) {
-                                this.logger.warn(`[${payload.userId}] Guardian blocked Execute_Cancellation_And_Refund: ${gateReply}`);
+                            const gateReply = await this.agentsClient.send(
+                                "guardian",
+                                {
+                                    userId: payload.userId,
+                                    sessionId: `${payload.sessionId}-gate`,
+                                    message: gateMessage,
+                                },
+                            );
+                            if (
+                                typeof gateReply === "string" &&
+                                gateReply.startsWith("BLOCKED:")
+                            ) {
+                                this.logger.warn(
+                                    `[${payload.userId}] Guardian blocked Execute_Cancellation_And_Refund: ${gateReply}`,
+                                );
                                 scratchpad.push(
                                     new ToolMessage({
                                         content: `REJECTED: Guardian blocked this cancellation — ${gateReply.replace("BLOCKED: ", "")}`,
@@ -149,7 +168,9 @@ export class LogisticsAgentService {
                                 );
                                 continue;
                             }
-                            this.logger.log(`[${payload.userId}] Guardian approved Execute_Cancellation_And_Refund.`);
+                            this.logger.log(
+                                `[${payload.userId}] Guardian approved Execute_Cancellation_And_Refund.`,
+                            );
                         }
 
                         this.logger.log(
@@ -258,36 +279,62 @@ export class LogisticsAgentService {
                     for (const toolCall of response.tool_calls) {
                         const t = this.tools[toolCall.name];
                         if (!t) {
-                            scratchpad.push(new ToolMessage({ content: "Error: Tool not found", tool_call_id: toolCall.id }));
+                            scratchpad.push(
+                                new ToolMessage({
+                                    content: "Error: Tool not found",
+                                    tool_call_id: toolCall.id,
+                                }),
+                            );
                             continue;
                         }
-                        if (toolCall.name === "Execute_Cancellation_And_Refund") {
+                        if (
+                            toolCall.name === "Execute_Cancellation_And_Refund"
+                        ) {
                             const gateMessage = `${GUARDIAN_GATE_PREFIX} action: Tool=Execute_Cancellation_And_Refund, orderId="${toolCall.args.orderId}". Confirm this cancellation and refund action is SOP-compliant before execution.`;
-                            const gateReply = await this.agentsClient.send("guardian", {
-                                userId: payload.userId,
-                                sessionId: `${payload.sessionId}-gate`,
-                                message: gateMessage,
-                            });
-                            if (typeof gateReply === "string" && gateReply.startsWith("BLOCKED:")) {
-                                scratchpad.push(new ToolMessage({ content: `REJECTED: Guardian blocked this cancellation — ${gateReply.replace("BLOCKED: ", "")}`, tool_call_id: toolCall.id }));
+                            const gateReply = await this.agentsClient.send(
+                                "guardian",
+                                {
+                                    userId: payload.userId,
+                                    sessionId: `${payload.sessionId}-gate`,
+                                    message: gateMessage,
+                                },
+                            );
+                            if (
+                                typeof gateReply === "string" &&
+                                gateReply.startsWith("BLOCKED:")
+                            ) {
+                                scratchpad.push(
+                                    new ToolMessage({
+                                        content: `REJECTED: Guardian blocked this cancellation — ${gateReply.replace("BLOCKED: ", "")}`,
+                                        tool_call_id: toolCall.id,
+                                    }),
+                                );
                                 continue;
                             }
                         }
                         const toolOutput = await t.invoke(toolCall.args);
-                        scratchpad.push(new ToolMessage({ content: String(toolOutput), tool_call_id: toolCall.id }));
+                        scratchpad.push(
+                            new ToolMessage({
+                                content: String(toolOutput),
+                                tool_call_id: toolCall.id,
+                            }),
+                        );
                     }
                 }
 
-                finalResponseString = (retryMessage?.content as string)
-                    ?.replace(/<thinking>[\s\S]*?<\/thinking>/g, "")
-                    .trim() ||
+                finalResponseString =
+                    (retryMessage?.content as string)
+                        ?.replace(/<thinking>[\s\S]*?<\/thinking>/g, "")
+                        .trim() ||
                     "REJECTED: Agent failed to correct response after Guardian feedback.";
 
                 this.logger.log(
                     `[${payload.userId}] Guardian Retry Result: "${finalResponseString}"`,
                 );
             } else {
-                this.logger.log(`[${payload.userId}] Guardian verified result.`);
+                this.logger.log(
+                    `[${payload.userId}] Guardian verified result.`,
+                );
             }
         }
 
@@ -296,7 +343,23 @@ export class LogisticsAgentService {
         );
 
         // 8. Return the string straight back to the Orchestrator. No saving to DB!
+        this.agentsClient.send("orchestrator", {
+            userId: payload.userId,
+            sessionId: payload.sessionId,
+            message: finalResponseString,
+        });
         return finalResponseString;
+    }
+
+    async getOrders(): Promise<
+        Array<{ orderId: string; customerId: string; status: string }>
+    > {
+        const { orders } = await this.orderClient.listOrders();
+        return orders.map((o) => ({
+            orderId: o.orderId,
+            customerId: o.customerId,
+            status: o.status,
+        }));
     }
 
     /** Skip Guardian verification for system-level fallbacks that are not real LLM decisions. */
@@ -306,5 +369,22 @@ export class LogisticsAgentService {
             result.includes("timed out") ||
             result.includes("failed to provide a valid response")
         );
+    }
+    async updateOrderStatus(payload: ExecuteLogisticsTaskDto): Promise<string> {
+        this.logger.log(
+            `[${payload.userId}] Updating order status for order: ${payload.orderId}`,
+        );
+        if (!payload.orderId?.trim()) {
+            return "REJECTED: orderId is required to update order status.";
+        }
+        try {
+            return await this.orderClient.updateOrderStatus(payload.orderId);
+        } catch (err) {
+            const msg =
+                err instanceof Error
+                    ? err.message
+                    : "Unknown order service error";
+            return `REJECTED: ${msg}`;
+        }
     }
 }

@@ -21,6 +21,24 @@ export interface PaymentProcessResponse {
   message?: string;
 }
 
+export interface PaymentOrderResponse {
+    found: boolean;
+    paymentId: string;
+    orderId: string;
+    status: string;
+    amount: number;
+    refunds: {id: string; amount: number;}[];
+    message: string;
+}
+
+export interface PaymentRefundResponse {
+    refundId: string;
+    paymentId: string;
+    status: string;
+    amount: number;
+    message: string;
+}
+
 // Request payload for audit.log messages
 export interface AuditLogRequest {
   action: string;

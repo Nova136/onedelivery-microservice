@@ -4,7 +4,7 @@ import { ApiProperty } from "@nestjs/swagger";
 export class HandleIncomingMessageDto {
     @ApiProperty({
         description: "The unique ID of the user",
-        example: "79eb6c83-1851-466b-9d2f-b74aaa5d0f1c",
+        example: "83593ca4-b975-4fef-a521-4a2a8d72dd81",
     })
     userId!: string;
 

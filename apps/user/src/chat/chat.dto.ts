@@ -46,6 +46,11 @@ export interface UpdateSummaryPayload {
     lastSummarizedSequence: number;
 }
 
+export interface EscalateChatSessionPayload {
+    userId: string;
+    sessionId: string;
+}
+
 export interface EndChatSessionPayload {
     userId: string;
     sessionId: string;
