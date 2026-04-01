@@ -19,7 +19,8 @@ export default class SopSeeder implements Seeder {
                     {
                         name: "orderId",
                         type: "string",
-                        description: "The order ID.",
+                        description:
+                            "The order ID. Must match an ID in the user's order history.",
                     },
                     {
                         name: "issueCategory",
@@ -54,7 +55,7 @@ export default class SopSeeder implements Seeder {
                                 name: "quantity",
                                 type: "number",
                                 description:
-                                    "The quantity of this specific item affected. This must be lower than or equal to the quantity ordered for this item. Only required if the category is missing_item, wrong_item, or quality_issue.",
+                                    "The quantity of this specific item affected. Quantity must not exceed the ordered amount.",
                             },
                         ],
                     },
