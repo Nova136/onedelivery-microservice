@@ -25,13 +25,12 @@ Awaiting Confirmation: {{is_awaiting_confirmation}}
 </input>
 
 <instructions>
-1. **Extract & Verify**: Extract entities from the latest message relevant ONLY to the current intent. **CRITICAL**: Verify \`orderId\` and \`items\` against \`user_context\`. If invalid (contradicts context), set to \`null\`. If missing from context but explicitly provided by the user, you SHOULD extract them to avoid unnecessary clarification.
+1. **Extract & Verify**: Extract entities from the latest message relevant ONLY to the current intent. **CRITICAL**: Verify \`orderId\` and \`items\` against \`user_context\`. If invalid/missing from context, set to \`null\` to prompt clarification.
 2. **Validate**: Ensure values match \`enum\` or \`description\` constraints in \`requiredData\`. If invalid, set to \`null\`. For 'description' fields, extract the *reason* (e.g., "food was cold"), not the intent.
 3. **State Determination**:
    - \`is_confirmed\`: \`true\` ONLY if the user positively confirms the gathered details (e.g., "yes", "ok", "proceed").
    - \`is_complete\`: \`true\` ONLY if ALL required data is gathered AND confirmed.
    - \`missing_fields\`: Include all missing required fields. For conditional fields, include them unless the condition is explicitly NOT met. **CRITICAL**: Always include fields from 'Missing Data' unless definitively not required.
-   - \`clarification_message\`: If \`is_complete\` is \`false\`, provide a natural language message asking for the missing info. If data was provided but was **invalid** (set to \`null\` in step 1), explicitly explain the discrepancy to the user (e.g., "I couldn't find order FD-123 in your history").
 4. **Tool Request**: If \`is_complete\` is \`true\`, populate \`requested_tool\` with the tool and arguments. Otherwise, \`null\`.
 5. **Output Format**: Return JSON with \`thought\` (step-by-step reasoning on extraction, validation, state, and action) and the schema fields.
 </instructions>
