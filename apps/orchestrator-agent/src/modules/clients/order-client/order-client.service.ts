@@ -11,7 +11,6 @@ export class OrderClientService {
     ) {}
 
     async getRecentOrders(customerId: string): Promise<any> {
-        this.logger.log(`Fetching recent orders for customer ${customerId}`);
         const result = await firstValueFrom(
             this.client.send({ cmd: "order.getRecent" }, { customerId }),
         );
