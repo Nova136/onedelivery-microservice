@@ -21,6 +21,35 @@ resource "aws_iam_role_policy_attachment" "ecs_task_execution" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
+# Allow the task execution role to pull SecureString values from SSM Parameter Store
+# at container start time (before the app process begins).
+# ssm:GetParameters is required for the secrets[] block in the task definition.
+# kms:Decrypt is required because SecureString params are encrypted with a KMS key.
+resource "aws_iam_role_policy" "ecs_task_execution_ssm" {
+  name = "${local.name}-ecs-exec-ssm-secrets"
+  role = aws_iam_role.ecs_task_execution.name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "SSMGetSecrets"
+        Effect   = "Allow"
+        Action   = ["ssm:GetParameters", "ssm:GetParameter"]
+        Resource = local.ssm_secret_arns
+      },
+      {
+        Sid      = "KMSDecryptSecureString"
+        Effect   = "Allow"
+        Action   = ["kms:Decrypt"]
+        # Scoped to the AWS-managed SSM key for this region/account.
+        # Replace with a specific CMK ARN if you use a customer-managed key.
+        Resource = "arn:aws:kms:${var.aws_region}:${var.aws_account_id}:alias/aws/ssm"
+      }
+    ]
+  })
+}
+
 resource "aws_iam_role" "ecs_task" {
   name = "${local.name}-ecs-task"
 
@@ -144,15 +173,11 @@ resource "aws_ecs_task_definition" "service" {
     environment = concat(
       [
         { name = "NODE_ENV", value = "production" },
-        { name = "DATABASE_URL", value = "postgresql://${var.db_username}:${var.db_password}@${aws_db_instance.postgres.address}:${aws_db_instance.postgres.port}/${var.db_name}" },
-        { name = "JWT_SECRET", value = "REDACTED_JWT_SECRET" },
-        { name = "RABBITMQ_URL", value = "amqps://grdulrnl:REDACTED_CLOUDAMQP_PASSWORD@armadillo.rmq.cloudamqp.com:5671/grdulrnl" },
-        { name = "CORS_ORIGIN", value = join(",", distinct(concat(["http://localhost:5173"], var.cors_allowed_origins))) },
+        # Non-secret DB connection details (credentials are in SSM secrets block below)
         { name = "DB_HOST", value = aws_db_instance.postgres.address },
         { name = "DB_PORT", value = tostring(aws_db_instance.postgres.port) },
         { name = "DB_NAME", value = var.db_name },
         { name = "DB_USER", value = var.db_username },
-        { name = "DB_PASSWORD", value = var.db_password },
         # Inject the service-specific port env var so each NestJS app listens on the right port
         { name = local.service_port_envvars[each.key], value = tostring(local.service_ports[each.key]) },
       ],
@@ -162,6 +187,11 @@ resource "aws_ecs_task_definition" "service" {
         { name = "AWS_REGION", value = var.aws_region },
       ] : []
     )
+    # Secrets pulled from SSM Parameter Store by the execution role at container start.
+    # Values are injected as env vars inside the container but never logged or
+    # visible in the ECS console "Environment" tab.
+    secrets = local.container_secrets
+
     logConfiguration = {
       logDriver = "awslogs"
       options = {
