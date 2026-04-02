@@ -1,15 +1,29 @@
 FROM node:24-alpine
 
-WORKDIR /app
+WORKDIR /workspace
 
-# Copy repo (node_modules excluded by .dockerignore)
+# Consolidated into one layer to avoid redundant cache entries
+RUN apk add --no-cache make g++ python3 && apk update && apk upgrade && \
+    npm install -g npm@latest
+
+# Dependencies layer — shared by ALL services.
+# Kept separate from source copy so a source-only change doesn't re-run npm ci.
+COPY package*.json ./
+RUN npm ci --legacy-peer-deps && \
+    npm install @nestjs/cli --no-save --legacy-peer-deps
+
+# Source layer — shared by ALL services.
+# Any source change invalidates from here downward, but npm ci above stays cached.
 COPY . .
+RUN rm -rf .env
 
-# Install runtime deps only.
-RUN npm ci --omit=dev
-
+# Service-specific args are declared HERE (after all shared layers) so that
+# Docker BuildKit can cache and share everything above across all 12 services.
+# Previously these args were at the top, which forced a full cache miss per service.
 ARG SERVICE_NAME
 ARG EXPOSE_PORT
+
+RUN ./node_modules/.bin/nest build ${SERVICE_NAME}
 
 ENV SERVICE_NAME=${SERVICE_NAME}
 EXPOSE ${EXPOSE_PORT}

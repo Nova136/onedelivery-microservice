@@ -6,19 +6,23 @@
  *
  * Query string: ?token=<JWT>
  * JWT algorithm: HS256 (Node.js crypto — no external deps for verification)
+ *
+ * Secrets are injected as env vars by Terraform (sourced from SSM Parameter Store).
+ * This Lambda is inside the VPC (needs RDS) so it cannot reach the SSM API
+ * endpoint at runtime without a NAT gateway or VPC endpoint.
  */
 
-'use strict';
+import crypto from 'node:crypto';
+import pg from 'pg';
 
-const crypto = require('crypto');
-const { Client } = require('pg');
+const { Client } = pg;
 
 const JWT_SECRET    = process.env.JWT_SECRET;
+const DATABASE_URL  = process.env.DATABASE_URL;
 const ALLOWED_ROLES = (process.env.ALLOWED_ROLES || 'User,Admin').split(',');
 const RATE_LIMIT    = parseInt(process.env.RATE_LIMIT_PER_MINUTE || '20', 10);
-const DATABASE_URL  = process.env.DATABASE_URL;
 
-// ── JWT helpers (HS256, built-in crypto – no external deps) ───────────────────
+// ── JWT helpers (HS256, built-in crypto — no external deps) ───────────────────
 
 function b64urlDecode(s) {
   const b = s.replace(/-/g, '+').replace(/_/g, '/');
@@ -43,13 +47,18 @@ function verifyJwt(token) {
   return payload;
 }
 
+// Strip ?sslmode=* from DATABASE_URL — pg v8 now treats sslmode=require as
+// verify-full, overriding ssl.rejectUnauthorized=false. SSL is controlled
+// entirely via the ssl option below.
+const DB_URL = DATABASE_URL.replace(/([?&])sslmode=[^&]*/g, '$1').replace(/[?&]$/, '');
+
 // ── Rate limiting (PostgreSQL atomic increment, tumbling 1-minute window) ─────
 
 async function checkRateLimit(userId) {
   const window = String(Math.floor(Date.now() / 60000));
-  const expires = new Date(Date.now() + 120_000); // clean up after 2 minutes
+  const expires = new Date(Date.now() + 120_000);
 
-  const client = new Client({ connectionString: DATABASE_URL, ssl: { rejectUnauthorized: false } });
+  const client = new Client({ connectionString: DB_URL, ssl: { rejectUnauthorized: false } });
   await client.connect();
   try {
     const { rows } = await client.query(
@@ -81,7 +90,7 @@ function policy(principalId, effect, resource, context = {}) {
 
 // ── Handler ────────────────────────────────────────────────────────────────────
 
-exports.handler = async (event) => {
+export const handler = async (event) => {
   const token = event.queryStringParameters?.token;
   if (!token) return policy('anonymous', 'Deny', event.methodArn);
 

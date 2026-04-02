@@ -7,6 +7,10 @@ dotenv.config({ path: './.env' });
 
 export const db_config: TypeOrmModuleOptions & PostgresConnectionOptions = {
   type: process.env.DB_TYPE as any,
+  // RDS requires SSL. rejectUnauthorized=false skips CA verification because
+  // RDS uses an AWS-managed certificate chain not in the default Node.js trust
+  // store. Disabled locally (NODE_ENV != production) where Postgres has no SSL.
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
   replication: {
     master: {
       host: process.env.DB_HOST,

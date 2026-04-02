@@ -7,6 +7,7 @@ import { AgentsModule } from "./agents/agents.module";
 import { CommonModule } from "@libs/modules/common/common.module";
 import { OrderModule } from "./agents/order.module";
 import { KnowledgeModule } from "./agents/knowledge.module";
+import { HealthModule } from "@libs/modules/health-check/health-check.module";
 
 @Module({
     imports: [
@@ -15,6 +16,7 @@ import { KnowledgeModule } from "./agents/knowledge.module";
             isGlobal: true,
         }),
         HttpModule,
+        HealthModule,
         AgentsModule,
         KnowledgeModule,
         OrderModule,
