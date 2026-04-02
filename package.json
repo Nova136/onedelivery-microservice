@@ -43,9 +43,9 @@
         "seed-incident": "cd apps/incident && npm run seed:run",
         "seed-knowledge": "cd apps/knowledge && npm run seed:run",
         "nest-build-all": "concurrently \"nest build audit && cp .env dist/apps/audit\" \"nest build logistics && cp .env dist/apps/logistics\" \"nest build order && cp .env dist/apps/order\" \"nest build payment && cp .env dist/apps/payment\" \"nest build user && cp .env dist/apps/user\" \"nest build incident && cp .env dist/apps/incident\" \"nest build knowledge && cp .env dist/apps/knowledge\" \"nest build orchestrator-agent && cp .env dist/apps/orchestrator-agent\" \"nest build logistics-agent && cp .env dist/apps/logistics-agent\" \"nest build resolution-agent && cp .env dist/apps/resolution-agent\" \"nest build guardian-agent && cp .env dist/apps/guardian-agent\" \"nest build qa-agent && cp .env dist/apps/qa-agent\"",
-        "start-debug-docker": "npm install && npm run nest-build-all && docker-compose -f docker-compose.debug.yml up --build",
+        "start-debug-docker": "docker compose -f docker-compose.debug.yml up --build",
         "nest-build-all-shx": "concurrently \"nest build audit && shx cp .env dist/apps/audit\" \"nest build logistics && shx cp .env dist/apps/logistics\" \"nest build order && shx cp .env dist/apps/order\" \"nest build payment && shx cp .env dist/apps/payment\" \"nest build user && shx cp .env dist/apps/user\" \"nest build incident && shx cp .env dist/apps/incident\" \"nest build knowledge && shx cp .env dist/apps/knowledge\" \"nest build orchestrator-agent && shx cp .env dist/apps/orchestrator-agent\" \"nest build logistics-agent && shx cp .env dist/apps/logistics-agent\" \"nest build resolution-agent && shx cp .env dist/apps/resolution-agent\" \"nest build guardian-agent && shx cp .env dist/apps/guardian-agent\" \"nest build qa-agent && shx cp .env dist/apps/qa-agent\"",
-        "start-debug-docker-shx": "npm install && npm run nest-build-all-shx && docker-compose -f docker-compose.debug.yml up --build",
+        "start-debug-docker-shx": "docker compose -f docker-compose.debug.yml up --build",
         "stop-debug-docker": "docker-compose -f docker-compose.debug.yml down",
         "eval-all": "concurrently \"npm:test-*\"",
         "test-orchestrator-agent": "npx ts-node -r tsconfig-paths/register --transpile-only apps/orchestrator-agent/scripts/langsmith-eval.ts",
@@ -55,13 +55,16 @@
         "test-resolution-agent": "npx ts-node -r tsconfig-paths/register --transpile-only apps/resolution-agent/scripts/langsmith-eval.ts",
         "test:e2e": "jest --testMatch \"**/+(*.)+(e2e-test).+(ts)\" --forceExit --json --outputFile ./e2e-test-report.json",
         "test:coverage": "jest --testMatch \"**/+(*.)+(e2e-test).+(ts)\" --forceExit --coverage --coverageDirectory=./coverage",
-        "test:unit": "jest --testMatch \"**/+(*.)+(spec).+(ts)\" --forceExit --json --outputFile ./unit-test-report.json"
+        "test:unit": "jest --testMatch \"**/+(*.)+(spec).+(ts)\" --forceExit --json --outputFile ./unit-test-report.json",
+        "generate-anygen": "node ./presentation/generate-anygen.js ./presentation/content.md ./presentation/onedelivery-anygen.pptx"
+
     },
     "dependencies": {
         "@aws-sdk/client-apigatewaymanagementapi": "^3.1016.0",
         "@aws-sdk/client-s3": "^3.1016.0",
         "@aws-sdk/client-sns": "^3.1016.0",
         "@aws-sdk/client-sts": "^3.1016.0",
+        "@langchain/core": "^1.1.29",
         "@langchain/google-genai": "^2.1.26",
         "@langchain/langgraph-checkpoint-postgres": "^1.0.1",
         "@langchain/openai": "^1.2.11",
@@ -73,6 +76,7 @@
         "@nestjs/microservices": "^11.1.14",
         "@nestjs/passport": "^11.0.5",
         "@nestjs/platform-express": "^11.1.14",
+        "@nestjs/schedule": "^6.1.1",
         "@nestjs/swagger": "^11.2.6",
         "@nestjs/terminus": "^11.1.1",
         "@nestjs/testing": "^11.1.14",
@@ -81,7 +85,9 @@
         "@types/passport-jwt": "^4.0.1",
         "amqp-connection-manager": "^4.1.7",
         "amqplib": "^0.10.3",
+        "axios": "^1.3.1",
         "bcrypt": "^6.0.0",
+        "class-transformer": "^0.5.1",
         "class-validator": "^0.14.0",
         "compromise": "^14.15.0",
         "concurrently": "^7.5.0",
@@ -104,9 +110,17 @@
         "pgvector": "^0.2.1",
         "pino-http": "^11.0.0",
         "reflect-metadata": "^0.1.13",
+        "rxjs": "^7.2.0",
+        "swagger-ui-express": "^5.0.1",
+        "typeorm": "^0.3.28",
         "tsx": "^4.21.0",
         "ws": "^8.20.0",
-        "zod": "^3.0.0"
+        "zod": "^3.0.0",
+        "@nestjs/platform-socket.io": "^11.1.17",
+        "@nestjs/websockets": "^11.1.17",
+        "socket.io": "^4.8.3",
+        "socket.io-client": "^4.8.3",
+        "uuid": "^11.1.0"
     },
     "devDependencies": {
         "@swc/cli": "^0.8.0",
@@ -132,6 +146,8 @@
         "tsconfig-paths": "^4.2.0",
         "typeorm-extension": "^2.2.0",
         "typeorm-naming-strategies": "^4.1.0",
-        "typescript": "^5.0.0"
+        "typescript": "^5.0.0",
+        "@types/uuid": "^10.0.0"
+
     }
 }

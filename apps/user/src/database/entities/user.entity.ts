@@ -3,13 +3,13 @@ import {
     Column,
     CreateDateColumn,
     UpdateDateColumn,
-    PrimaryColumn,
+    PrimaryGeneratedColumn,
 } from "typeorm";
 import { Role } from "./role.enum";
 
 @Entity({ name: "user", schema: "users" })
 export class User {
-    @PrimaryColumn("uuid")
+    @PrimaryGeneratedColumn("uuid")
     id: string;
 
     @Column({ type: "varchar", length: 255, unique: true })

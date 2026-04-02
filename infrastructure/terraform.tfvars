@@ -32,7 +32,7 @@ postgres_backup_retention_period = 7  # Days; 0 disables automated backups
 
 # ── ECS Fargate ───────────────────────────────────────────────────────────────
 
-ecs_desired_count = 0   # Set to 1+ to start tasks; 0 avoids Fargate cost
+ecs_desired_count = 1  # Set to 1+ to start tasks; 0 avoids Fargate cost
 ecs_cpu           = 256 # CPU units per task (256 = 0.25 vCPU)
 ecs_memory_mb     = 512 # Memory per task in MB
 
@@ -73,3 +73,10 @@ enable_websocket = true
 # Enforced at connect time (rejects with close code 4001) and per message.
 # Only relevant when enable_websocket = true.
 ws_rate_limit_per_minute = 20
+
+
+cors_allowed_origins = ["https://nova136.github.io"]
+
+# ── AI / LLM secrets (written to SSM Parameter Store as SecureString) ─────────
+# openai_api_key is REQUIRED — set your actual key here or via TF_VAR_openai_api_key
+openai_api_key = "sk-REPLACE_ME"

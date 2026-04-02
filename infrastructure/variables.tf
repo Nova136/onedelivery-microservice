@@ -119,6 +119,39 @@ variable "ws_rate_limit_per_minute" {
   default     = 20
 }
 
+variable "openai_api_key" {
+  description = "OpenAI API key for all AI agent services (stored in SSM SecureString)"
+  type        = string
+  sensitive   = true
+}
+
+variable "langsmith_api_key" {
+  description = "LangSmith API key for tracing and evaluation (stored in SSM SecureString)"
+  type        = string
+  sensitive   = true
+  default     = "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"
+}
+
+variable "eval_langsmith_api_key" {
+  description = "LangSmith API key used by CI eval scripts (stored in SSM SecureString)"
+  type        = string
+  sensitive   = true
+  default     = "lsv2_pt_bae66a2ba73a44cb8dbdc763d17e493b_11c249b"
+}
+
+variable "gemini_api_key" {
+  description = "Google Gemini API key (stored in SSM SecureString)"
+  type        = string
+  sensitive   = true
+  default     = "123"
+}
+
+variable "cors_allowed_origins" {
+  description = "List of origins allowed by API Gateway CORS (e.g. frontend URLs). http://localhost:5173 is always included."
+  type        = list(string)
+  default     = []
+}
+
 variable "vpc_cidr" {
   description = "CIDR block for the VPC. When reusing an existing VPC, this must match its actual CIDR (for example 172.16.94.0/24)."
   type        = string

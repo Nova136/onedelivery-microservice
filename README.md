@@ -227,10 +227,109 @@ After this, pushing to `main` (or running the workflow manually) will build the 
 - Add persistence (DB) and shared DTOs per service.
 - Wire in **Order & Logistics** and **Resolution & Refund** agents from the practice module.
 
-## Updating ECS Variable
+## Updating ECS Variable via terraform
 
 Update new variable on ./infrastructure/ecs.tf
 Then execute the update
 export AWS_PROFILE=onedelivery
 terraform plan -out=tfplan  
 terraform apply tfplan
+
+account_id = "542829982577"
+alb_dns_name = "onedelivery-alb-870475991.ap-southeast-1.elb.amazonaws.com"
+alb_zone_id = "Z1LMS91P8CMLE5"
+api_gateway_id = "q08c0f2i55"
+api_gateway_invoke_url = "https://q08c0f2i55.execute-api.ap-southeast-1.amazonaws.com"
+ecs_cluster_arn = "arn:aws:ecs:ap-southeast-1:542829982577:cluster/onedelivery-cluster"
+ecs_cluster_name = "onedelivery-cluster"
+postgres_address = "onedelivery-postgres.chqkmym8y08l.ap-southeast-1.rds.amazonaws.com"
+postgres_endpoint = <sensitive>
+postgres_port = 5432
+region = "ap-southeast-1"
+routing_note = "API Gateway -> ALB:80 -> path-based to ECS (/order, /logistics, /payment, /audit, /user, /incident, /knowledge, /orchestrator-agent, /guardian-agent, /logistics-agent, /qa-agent). Use api_gateway_invoke_url as the API base URL."
+vpc_id = "vpc-01f4d46470a373bd0"
+websocket_management_endpoint = "https://18gvmx3hn7.execute-api.ap-southeast-1.amazonaws.com/prod"
+websocket_url = "wss://18gvmx3hn7.execute-api.ap-southeast-1.amazonaws.com/prod"
+
+
+
+## Connecting to RDS
+
+The RDS instance is in a private subnet (not publicly accessible). Both methods below tunnel through a running ECS task — no bastion host or public RDS exposure needed.
+
+**Prerequisites:** Install the [SSM Session Manager plugin](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html):
+```bash
+brew install session-manager-plugin
+```
+
+**Step 1 — Enable ECS Exec on the service (one-time):**
+```bash
+export AWS_PROFILE=onedelivery
+aws ecs update-service \
+  --cluster onedelivery-cluster \
+  --service user \
+  --enable-execute-command \
+  --force-new-deployment \
+  --region ap-southeast-1
+```
+
+---
+
+### Option A — psql in the container (CLI)
+
+**Step 2 — Get the running task ID:**
+```bash
+aws ecs list-tasks --cluster onedelivery-cluster --service-name user \
+  --region ap-southeast-1 --query 'taskArns[0]' --output text
+```
+
+**Step 3 — Exec into the container:**
+```bash
+aws ecs execute-command \
+  --cluster onedelivery-cluster \
+  --task <TASK_ID> \
+  --container user \
+  --interactive \
+  --command "/bin/sh" \
+  --region ap-southeast-1
+```
+
+**Step 4 — Inside the shell, install psql and connect:**
+```sh
+apk add --no-cache postgresql-client
+psql "postgresql://postgres:<DB_PASSWORD>@onedelivery-postgres.chqkmym8y08l.ap-southeast-1.rds.amazonaws.com:5432/onedelivery?sslmode=require"
+```
+
+---
+
+### Option B — pgAdmin or any GUI (automated tunnel script)
+
+Run the script — it auto-detects the task ID and runtime ID, then opens the tunnel:
+
+```bash
+export AWS_PROFILE=onedelivery
+./scripts/rds-tunnel.sh
+```
+
+Optional arguments:
+```bash
+# Custom service or local port
+./scripts/rds-tunnel.sh user 5433
+```
+
+Once the tunnel is open, connect pgAdmin to:
+
+| Field    | Value         |
+|----------|---------------|
+| Host     | `localhost`   |
+| Port     | `5433`        |
+| Database | `onedelivery` |
+| Username | `postgres`    |
+| Password | *(see `.env.cloud`)* |
+| SSL mode | `Require`     |
+
+Press `Ctrl+C` in the tunnel terminal when done.
+
+---
+
+> Credentials are in `.env.cloud`. Replace `<TASK_ID>` with the value from Step 2.

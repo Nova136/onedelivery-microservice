@@ -14,8 +14,16 @@ export async function createCheckpointer() {
   }
 
   try {
+    // Strip ?sslmode=* from URL — pg v8 treats sslmode=require as verify-full
+    // which overrides ssl.rejectUnauthorized=false. SSL is controlled via the
+    // ssl option below. No-op locally where DATABASE_URL has no sslmode.
+    const cleanUrl = connectionString
+      .replace(/([?&])sslmode=[^&]*/g, '$1')
+      .replace(/[?&]$/, '');
+
     const pool = new pg.Pool({
-      connectionString,
+      connectionString: cleanUrl,
+      ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
     });
 
     const checkpointer = new PostgresSaver(pool);
