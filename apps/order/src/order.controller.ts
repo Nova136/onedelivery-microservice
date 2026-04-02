@@ -168,7 +168,6 @@ export class OrderController {
 
     @MessagePattern({ cmd: "order.list" })
     async listOrders(@Payload() data: { customerId?: string }) {
-        console.log(`Listing orders for customer ${data.customerId}`);
         const orders = await this.orderService.listByCustomer(
             data.customerId ?? "",
         );
@@ -189,7 +188,6 @@ export class OrderController {
         const orders = await this.orderService.listRecent(
             data.customerId ?? "",
         );
-        console.log(orders);
         return {
             orders: orders.map((o) => ({
                 orderId: o.id,
@@ -232,7 +230,9 @@ export class OrderController {
                 orderId: data.orderId,
                 success: false,
                 message:
-                    err instanceof Error ? err.message : "Failed to update status",
+                    err instanceof Error
+                        ? err.message
+                        : "Failed to update status",
             };
         }
     }
