@@ -66,9 +66,11 @@ resource "aws_cloudwatch_log_group" "apigw" {
   retention_in_days = 7
 }
 
-# IAM role allowing API Gateway to push logs to CloudWatch
+# IAM role allowing API Gateway to push logs to CloudWatch.
+# This is an account-level setting shared by all API Gateways (HTTP + WebSocket).
+# Created whenever either API Gateway feature flag is enabled.
 resource "aws_iam_role" "apigw_cloudwatch" {
-  count = var.enable_alb ? 1 : 0
+  count = (var.enable_alb || var.enable_websocket) ? 1 : 0
   name  = "${local.name}-apigw-cw-role"
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -81,14 +83,14 @@ resource "aws_iam_role" "apigw_cloudwatch" {
 }
 
 resource "aws_iam_role_policy_attachment" "apigw_cloudwatch" {
-  count      = var.enable_alb ? 1 : 0
+  count      = (var.enable_alb || var.enable_websocket) ? 1 : 0
   role       = aws_iam_role.apigw_cloudwatch[0].name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs"
 }
 
 # Wire the IAM role into the account-level API Gateway settings
 resource "aws_api_gateway_account" "main" {
-  count               = var.enable_alb ? 1 : 0
+  count               = (var.enable_alb || var.enable_websocket) ? 1 : 0
   cloudwatch_role_arn = aws_iam_role.apigw_cloudwatch[0].arn
   depends_on          = [aws_iam_role_policy_attachment.apigw_cloudwatch]
 }

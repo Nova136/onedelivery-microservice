@@ -82,11 +82,10 @@ resource "aws_ssm_parameter" "database_url" {
   name        = "/${local.name}/DATABASE_URL"
   description = "Full PostgreSQL connection string (includes credentials)"
   type        = "SecureString"
-  value       = "postgresql://${var.db_username}:${var.db_password}@${aws_db_instance.postgres.address}:${aws_db_instance.postgres.port}/${var.db_name}?sslmode=require"
-
-  lifecycle {
-    ignore_changes = [value]
-  }
+  # No sslmode in the URL — pg v8 treats sslmode=require as verify-full, which
+  # overrides ssl.rejectUnauthorized=false in both TypeORM and direct pg clients.
+  # SSL is controlled by the application's ssl option (rejectUnauthorized: false).
+  value       = "postgresql://${var.db_username}:${var.db_password}@${aws_db_instance.postgres.address}:${aws_db_instance.postgres.port}/${var.db_name}"
 }
 
 resource "aws_ssm_parameter" "db_password" {
