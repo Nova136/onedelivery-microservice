@@ -1,6 +1,7 @@
 {
   "name": "onedelivery-ws-disconnect",
   "version": "1.0.0",
+  "type": "module",
   "dependencies": {
     "pg": "^8.13.3"
   }

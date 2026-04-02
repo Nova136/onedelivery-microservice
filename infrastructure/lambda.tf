@@ -30,6 +30,35 @@ resource "aws_iam_role_policy_attachment" "lambda_ws_vpc" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
 }
 
+# Allow Lambda to read the three secrets it needs from SSM Parameter Store
+resource "aws_iam_role_policy" "lambda_ws_ssm" {
+  count = var.enable_websocket ? 1 : 0
+  name  = "${local.name}-lambda-ws-ssm"
+  role  = aws_iam_role.lambda_ws[0].name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "SSMGetSecrets"
+        Effect = "Allow"
+        Action = ["ssm:GetParameter", "ssm:GetParameters"]
+        Resource = [
+          aws_ssm_parameter.database_url.arn,
+          aws_ssm_parameter.jwt_secret.arn,
+          aws_ssm_parameter.rabbitmq_url.arn,
+        ]
+      },
+      {
+        Sid      = "KMSDecryptSecureString"
+        Effect   = "Allow"
+        Action   = ["kms:Decrypt"]
+        Resource = "arn:aws:kms:${var.aws_region}:${var.aws_account_id}:alias/aws/ssm"
+      }
+    ]
+  })
+}
+
 # Allow the ECS task role to push messages back to WebSocket clients
 resource "aws_iam_role_policy" "ecs_task_ws_callback" {
   count = var.enable_websocket ? 1 : 0
@@ -59,7 +88,7 @@ resource "null_resource" "lambda_install" {
 
   triggers = {
     package_json = filemd5("${path.module}/lambda/${each.key}/package.json")
-    index_js     = filemd5("${path.module}/lambda/${each.key}/index.js")
+    index_mjs    = filemd5("${path.module}/lambda/${each.key}/index.mjs")
   }
 
   provisioner "local-exec" {
@@ -81,14 +110,25 @@ data "archive_file" "lambda" {
 # ──────────────────────────────────────────────────────────────────────────────
 
 locals {
-  lambda_runtime = "nodejs20.x"
-  lambda_env = var.enable_websocket ? {
-    DATABASE_URL          = "postgresql://${var.db_username}:${var.db_password}@${aws_db_instance.postgres.address}:${aws_db_instance.postgres.port}/${var.db_name}"
+  lambda_runtime = "nodejs22.x"
+  # VPC Lambdas (authorizer, connect, disconnect) are inside the VPC and cannot
+  # reach the SSM API endpoint over the internet (no NAT gateway).  Their secrets
+  # are injected at deploy time by Terraform, sourced from the SSM resource values
+  # so the tfvars / resource block remains the single source of truth.
+  lambda_env_vpc = var.enable_websocket ? {
+    DATABASE_URL          = aws_ssm_parameter.database_url.value
+    JWT_SECRET            = aws_ssm_parameter.jwt_secret.value
     RATE_LIMIT_PER_MINUTE = tostring(var.ws_rate_limit_per_minute)
-    JWT_SECRET            = "ffa32c3d40342bec6c1bcfba7b4f8197"
     ALLOWED_ROLES         = "User,Admin"
-    RABBITMQ_URL          = "amqps://grdulrnl:FLkurItpuAPeOM-VfalX5iGxQkRxuYVi@armadillo.rmq.cloudamqp.com:5671/grdulrnl"
     ORCHESTRATOR_QUEUE    = "orchestrator_agent_queue"
+  } : {}
+
+  # send-message Lambda sits outside the VPC (needs internet to reach CloudAMQP).
+  # It fetches its secrets from SSM at cold start using the built-in AWS SDK.
+  lambda_env_public = var.enable_websocket ? {
+    SSM_JWT_SECRET   = aws_ssm_parameter.jwt_secret.name
+    SSM_RABBITMQ_URL = aws_ssm_parameter.rabbitmq_url.name
+    ORCHESTRATOR_QUEUE = "orchestrator_agent_queue"
   } : {}
 
   # Lambdas run in the VPC public subnets so they can reach RDS via VPC-local routing.
@@ -123,7 +163,7 @@ resource "aws_lambda_function" "ws_authorizer" {
     }
   }
 
-  environment { variables = local.lambda_env }
+  environment { variables = local.lambda_env_vpc }
 }
 
 resource "aws_lambda_function" "ws_connect" {
@@ -145,7 +185,7 @@ resource "aws_lambda_function" "ws_connect" {
     }
   }
 
-  environment { variables = local.lambda_env }
+  environment { variables = local.lambda_env_vpc }
 }
 
 resource "aws_lambda_function" "ws_disconnect" {
@@ -167,7 +207,7 @@ resource "aws_lambda_function" "ws_disconnect" {
     }
   }
 
-  environment { variables = local.lambda_env }
+  environment { variables = local.lambda_env_vpc }
 }
 
 resource "aws_lambda_function" "ws_send_message" {
@@ -181,15 +221,12 @@ resource "aws_lambda_function" "ws_send_message" {
   filename         = data.archive_file.lambda["send-message"].output_path
   source_code_hash = data.archive_file.lambda["send-message"].output_base64sha256
 
-  dynamic "vpc_config" {
-    for_each = local.lambda_vpc_config
-    content {
-      subnet_ids         = vpc_config.value.subnet_ids
-      security_group_ids = vpc_config.value.security_group_ids
-    }
-  }
+  # Intentionally NOT placed in the VPC: Lambda ENIs in a VPC cannot reach the
+  # internet (CloudAMQP AMQPS) without a NAT gateway even in a public subnet.
+  # This Lambda only needs internet access (RabbitMQ), not VPC-internal access.
+  # JWT is decoded locally; no RDS query needed.
 
-  environment { variables = local.lambda_env }
+  environment { variables = local.lambda_env_public }
 }
 
 # ──────────────────────────────────────────────────────────────────────────────
