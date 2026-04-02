@@ -148,7 +148,7 @@ wss.on('connection', async (ws, req) => {
       const ch = await ensureRmq();
       ch.sendToQueue(
         ORCH_QUEUE,
-        Buffer.from(JSON.stringify({ pattern: 'ws.chat', data: { connectionId, userId, sessionId: resolvedSession, message } })),
+        Buffer.from(JSON.stringify({ pattern: { cmd: 'agent.chat' }, data: { connectionId, userId, sessionId: resolvedSession, message } })),
         { persistent: false },
       );
       ws.send(JSON.stringify({ ack: true }));
@@ -171,7 +171,8 @@ wss.on('connection', async (ws, req) => {
 // ── HTTP Management API (POST /connections/:connectionId) ─────────────────────
 
 server.on('request', (req, res) => {
-  const match = req.url.match(/^\/connections\/([^/]+)$/);
+  // Accept both /connections/:id (legacy) and /@connections/:id (API GW SDK format)
+  const match = req.url.match(/^\/@?connections\/([^/]+)$/);
   if (!match || req.method !== 'POST') {
     res.writeHead(404); res.end(); return;
   }
