@@ -19,10 +19,13 @@ import { HandleUserInputMessageDto } from "@libs/modules/generic/dto/handle-user
 import { ClientAuthGuard } from "@libs/utils/guards/auth.guard";
 import { CurrentUser } from "@libs/utils/decorators/user.decorator";
 import { HandleIncomingMessageDto } from "@libs/modules/generic/dto/handle-incoming-message.dto";
-import { MessagePattern } from "@nestjs/microservices";
+import { MessagePattern, Payload } from "@nestjs/microservices";
 import { AgentChatPayload } from "@libs/modules/generic/interface/agent-chat-payload.interface";
 import { AGENT_CHAT_PATTERN } from "@libs/modules/generic/enum/agent-chat.pattern";
 import { OrchestratorGateway } from "./orchestrator.gateway";
+import { ConfigService } from "@nestjs/config";
+import { ApiGatewayManagementApiClient, PostToConnectionCommand } from "@aws-sdk/client-apigatewaymanagementapi";
+import axios from "axios";
 
 @ApiTags("Orchestrator")
 @Controller("orchestrator-agent")
@@ -32,6 +35,7 @@ export class OrchestratorController {
     constructor(
         private readonly orchestratorService: OrchestratorService,
         private readonly gateway: OrchestratorGateway,
+        private readonly configService: ConfigService,
     ) {}
 
     /**
@@ -100,12 +104,52 @@ export class OrchestratorController {
     }
 
     /**
-     * Callback for Orchestrator Agent
+     * Callback for Orchestrator Agent (RabbitMQ)
+     *
+     * Two code paths:
+     *  - connectionId present → WebSocket user message from Lambda; call processChat
+     *    and push the reply back via API Gateway Management API.
+     *  - connectionId absent  → Specialist agent callback; call processAgentCallback
+     *    and push update via Socket.IO gateway.
      */
     @MessagePattern(AGENT_CHAT_PATTERN)
-    async handleCallback(@Body() body: AgentChatPayload) {
+    async handleCallback(@Payload() body: AgentChatPayload) {
         try {
-            const { sessionId, userId, message } = body;
+            const { sessionId, userId, message, connectionId } = body;
+            const endpoint = this.configService.get<string>('WEBSOCKET_API_ENDPOINT');
+
+            if (connectionId) {
+                // WebSocket path: initial user message forwarded by Lambda or ws-gateway
+                const result = await this.orchestratorService.processChat(
+                    userId,
+                    sessionId,
+                    message,
+                );
+                if (endpoint) {
+                    const payload = JSON.stringify({ reply: result.response, sessionId });
+                    if (endpoint.startsWith('http://')) {
+                        // Local dev: plain HTTP POST — no AWS credentials needed
+                        await axios.post(
+                            `${endpoint}/@connections/${connectionId}`,
+                            payload,
+                            { headers: { 'Content-Type': 'application/json' } },
+                        );
+                    } else {
+                        // Production: AWS API Gateway Management API (SigV4 signed)
+                        const client = new ApiGatewayManagementApiClient({
+                            endpoint,
+                            region: this.configService.get<string>('AWS_REGION') ?? 'ap-southeast-1',
+                        });
+                        await client.send(new PostToConnectionCommand({
+                            ConnectionId: connectionId,
+                            Data: Buffer.from(payload),
+                        }));
+                    }
+                }
+                return { success: true };
+            }
+
+            // Specialist agent callback path
             const result = await this.orchestratorService.processAgentCallback(
                 sessionId,
                 userId,
@@ -114,7 +158,7 @@ export class OrchestratorController {
             this.gateway.sendAgentUpdate(sessionId, result.messageContent);
             return { success: true };
         } catch (error) {
-            this.logger.error(`Logistics Callback Error: ${error}`);
+            this.logger.error(`handleCallback error: ${error}`);
             throw error;
         }
     }
