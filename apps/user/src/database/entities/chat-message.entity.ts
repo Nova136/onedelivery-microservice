@@ -3,13 +3,19 @@ import {
     PrimaryGeneratedColumn,
     Column,
     CreateDateColumn,
-    Index,
     ManyToOne,
     JoinColumn,
+    Relation,
 } from "typeorm";
 import { ChatSession } from "./chat-session.entity";
 
-export type ChatMessageType = "human" | "ai" | "tool" | "system" | "unknown";
+export type ChatMessageType =
+    | "human"
+    | "ai"
+    | "tool"
+    | "system"
+    | "admin"
+    | "unknown";
 
 @Entity({ name: "chat_message", schema: "users" })
 export class ChatMessage {
@@ -18,7 +24,7 @@ export class ChatMessage {
 
     @ManyToOne(() => ChatSession, { onDelete: "CASCADE" })
     @JoinColumn({ name: "sessionId" })
-    sessionId: ChatSession;
+    sessionId: Relation<ChatSession>;
 
     @Column({ type: "varchar", length: 32 })
     type: ChatMessageType;

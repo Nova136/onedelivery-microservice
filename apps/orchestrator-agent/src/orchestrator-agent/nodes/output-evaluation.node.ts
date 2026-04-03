@@ -3,10 +3,12 @@ import { OrchestratorStateType } from "../state";
 import { getSlidingWindowMessages } from "../utils/message-window";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { PromptShieldService } from "../../modules/prompt-shield/prompt-shield.service";
+import { AuditService } from "../../modules/audit/audit.service";
 
 export interface OutputEvaluationDependencies {
     outputEvaluator: any; // Using any for now as I don't have the exact type
     promptShield: PromptShieldService;
+    auditService: AuditService;
 }
 
 const logger = new Logger("OutputEvaluationNode");
@@ -16,11 +18,13 @@ export const createOutputEvaluationNode = (
 ) => {
     return async (state: OrchestratorStateType) => {
         logger.log(`Evaluating output for session ${state.session_id}`);
-        const { outputEvaluator, promptShield } = deps;
+        const { outputEvaluator, promptShield, auditService } = deps;
 
         const lastMessage = state.messages[state.messages.length - 1];
         const output = lastMessage.content as string;
-        const lastHumanMessage = [...state.messages].reverse().find(m => m instanceof HumanMessage);
+        const lastHumanMessage = [...state.messages]
+            .reverse()
+            .find((m) => m instanceof HumanMessage);
         const input = (lastHumanMessage?.content as string) || "";
 
         // Include recent chat history in the context for better evaluation
@@ -52,6 +56,22 @@ ${promptShield.wrapUntrustedData("recent_history", historyContext)}
             input,
             context,
         );
+
+        await auditService.log({
+            session_id: state.session_id,
+            node: "output_evaluation",
+            action: "evaluate_output",
+            input: {
+                userInput: input,
+                aiOutput: output,
+            },
+            output: evaluation,
+            metadata: {
+                isSafe: evaluation.isSafe,
+                biasDetected: evaluation.biasDetected,
+                retryCount: state.retry_count || 0,
+            },
+        });
 
         return {
             last_evaluation: evaluation,

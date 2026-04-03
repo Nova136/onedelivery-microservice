@@ -12,10 +12,6 @@ export const AgentCallbackState = Annotation.Root({
         reducer: (x, y) => y ?? x,
         default: () => "",
     }),
-    summary: Annotation<string>({
-        reducer: (x, y) => y ?? x,
-        default: () => "",
-    }),
     is_safe: Annotation<boolean>({
         reducer: (x, y) => y ?? x,
         default: () => true,

@@ -7,6 +7,7 @@ import { OrchestratorStateType } from "../state";
 import { formatOrders } from "../utils/format-orders";
 import { getSlidingWindowMessages } from "../utils/message-window";
 import { PromptShieldService } from "../../modules/prompt-shield/prompt-shield.service";
+import { AuditService } from "../../modules/audit/audit.service";
 import { buildZodSchema, getMissingData } from "../utils/sop-utils";
 import { SOP_AGENT_PROMPT, DIALOGUE_PROMPTS } from "../prompts/sop.prompt";
 import { executeSopTool } from "../utils/sop-tool-executor";
@@ -17,6 +18,7 @@ export interface SopHandlerDependencies {
     tools: StructuredTool[];
     knowledgeClient: KnowledgeClientService;
     promptShield: PromptShieldService;
+    auditService: AuditService;
     utilityTools?: string[];
 }
 
@@ -31,7 +33,8 @@ export const createSopHandlerNode = (deps: SopHandlerDependencies) => {
             tools,
             knowledgeClient,
             promptShield,
-            utilityTools = ["Search_FAQ", "Search_Internal_SOP"],
+            auditService,
+            utilityTools = ["Search_FAQ"],
         } = deps;
         const intent = state.current_intent;
         let sop = state.current_sop;
@@ -191,12 +194,19 @@ export const createSopHandlerNode = (deps: SopHandlerDependencies) => {
                     SOP_AGENT_PROMPT.split("<input>")[0].trim() +
                     "\n\n" +
                     SOP_AGENT_PROMPT.split("</input>")[1].trim();
+                const toolDefinitions = relevantTools
+                    .map((t) => {
+                        return `\n- ${t.name}: ${t.description}`;
+                    })
+                    .join("\n\n");
+
                 const userData =
                     `<input>${SOP_AGENT_PROMPT.split("<input>")[1].split("</input>")[0]}</input>`
                         .replace(
                             "{{requiredData}}",
                             JSON.stringify(sop.requiredData),
                         )
+                        .replace("{{tools}}", toolDefinitions)
                         .replace("{{current_intent}}", intent || "Unknown")
                         .replace("{{current_intent}}", intent || "Unknown")
                         .replace("{{user_context}}", userContext)
@@ -225,6 +235,24 @@ export const createSopHandlerNode = (deps: SopHandlerDependencies) => {
                         runName: "SopHandler",
                     },
                 );
+
+                await auditService.log({
+                    session_id: state.session_id,
+                    node: "sop_handler",
+                    action: "process_sop",
+                    input: {
+                        intent,
+                        query,
+                        sopId: sop?.id,
+                    },
+                    output: agentOutput,
+                    metadata: {
+                        isComplete: agentOutput.is_complete,
+                        isConfirmed: agentOutput.is_confirmed,
+                        requestedTool: agentOutput.requested_tool?.name,
+                    },
+                });
+
                 logger.log(`SOP Agent Reasoning: ${agentOutput.thought}`);
                 logger.debug(
                     `SOP Agent State: ${JSON.stringify({

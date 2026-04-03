@@ -18,7 +18,7 @@ export class Sop extends BaseEntity {
     @Column({ name: "agent_owner" })
     agentOwner: string;
 
-    @Column()
+    @Column({ type: "varchar", length: 255 })
     title: string;
 
     @Column("jsonb", { name: "required_data", default: [] })

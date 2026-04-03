@@ -4,6 +4,7 @@ import {
     Column,
     CreateDateColumn,
     OneToMany,
+    Relation,
 } from "typeorm";
 import { Refund } from "./refund.entity";
 
@@ -34,5 +35,5 @@ export class Payment {
     createdAt: Date;
 
     @OneToMany(() => Refund, (r) => r.payment)
-    refunds: Refund[];
+    refunds: Relation<Refund[]>;
 }

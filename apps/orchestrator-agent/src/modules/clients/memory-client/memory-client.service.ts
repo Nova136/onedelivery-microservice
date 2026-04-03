@@ -4,6 +4,7 @@ import {
     AIMessage,
     ToolMessage,
     SystemMessage,
+    ChatMessage,
 } from "@langchain/core/messages";
 import { ChatOpenAI } from "@langchain/openai";
 import {
@@ -50,6 +51,11 @@ export class MemoryClientService {
             toolCallId = baseMessage.tool_call_id ?? null;
         } else if (baseMessage instanceof SystemMessage) {
             type = "system";
+        } else if (
+            baseMessage instanceof ChatMessage &&
+            baseMessage.role === "admin"
+        ) {
+            type = "admin";
         }
 
         // 3. Create the object literal using the interface
@@ -134,6 +140,26 @@ export class MemoryClientService {
             this.userClient,
             { cmd: "user.chat.endSession" },
             payload,
+        );
+    }
+
+    async getOpenSessions(): Promise<GetChatHistoryListingResponse[]> {
+        return await this.commonService.sendViaRMQ<
+            GetChatHistoryListingResponse[]
+        >(
+            this.userClient,
+            { cmd: "user.chat.getSessionsByStatus" },
+            { status: "OPEN" },
+        );
+    }
+
+    async getEscalatedSessions(): Promise<GetChatHistoryListingResponse[]> {
+        return await this.commonService.sendViaRMQ<
+            GetChatHistoryListingResponse[]
+        >(
+            this.userClient,
+            { cmd: "user.chat.getSessionsByStatus" },
+            { status: "ESCALATED" },
         );
     }
 }

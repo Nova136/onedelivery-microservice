@@ -13,7 +13,6 @@ import {
 } from "./chat.dto";
 import { ChatSession } from "../database/entities/chat-session.entity";
 
-// TODO: Add authentication and ensure users can only access their own chat sessions and messages.
 @Controller()
 export class ChatController {
     constructor(private readonly chatService: ChatService) {}
@@ -74,5 +73,12 @@ export class ChatController {
             payload.userId,
             payload.sessionId,
         );
+    }
+
+    @MessagePattern({ cmd: "user.chat.getSessionsByStatus" })
+    async getSessionsByStatus(
+        @Payload() payload: { status: string },
+    ): Promise<ChatSessionDTO[]> {
+        return this.chatService.getSessionsByStatus(payload.status);
     }
 }

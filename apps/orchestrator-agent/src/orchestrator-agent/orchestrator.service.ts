@@ -3,6 +3,7 @@ import {
     HumanMessage,
     AIMessage,
     SystemMessage,
+    ChatMessage,
 } from "@langchain/core/messages";
 import { MemoryClientService } from "../modules/clients/memory-client/memory-client.service";
 import { PiiRedactionService } from "../modules/pii-redaction/pii-redaction.service";
@@ -27,7 +28,7 @@ export class OrchestratorService {
     /**
      * Core chat processing logic
      */
-    async processChat(
+    async processHumanInput(
         userId: string,
         sessionId: string | undefined,
         message: string,
@@ -84,6 +85,14 @@ export class OrchestratorService {
             const pivotMessage =
                 "I'm sorry, I'm specialized in assisting with OneDelivery's services and don't have information regarding my internal operations or out-of-scope topics. I'd be happy to help you with your orders or our delivery policies instead. What can I do for you today?";
 
+            // Save pivot message to history
+            await this.memoryService.saveHistory(
+                userId,
+                session.id,
+                (session.messages?.length || 0) + 1,
+                new AIMessage(pivotMessage),
+            );
+
             return {
                 sessionId: session.id,
                 response: pivotMessage,
@@ -136,6 +145,30 @@ export class OrchestratorService {
             current_intent: result.current_intent,
             order_states: result.order_states,
             user_orders: result.user_orders,
+        };
+    }
+
+    async processAdminInput(
+        userId: string,
+        sessionId: string | undefined,
+        message: string,
+    ) {
+        const adminMessage = new ChatMessage({
+            content: message,
+            role: "admin",
+        });
+
+        // Save admin message to history
+        await this.memoryService.saveHistory(
+            userId,
+            sessionId || "unknown_session",
+            undefined,
+            adminMessage,
+        );
+
+        return {
+            sessionId: sessionId,
+            response: adminMessage.content,
         };
     }
 
@@ -225,7 +258,6 @@ export class OrchestratorService {
         const result = await this.callbackGraph.invoke(
             {
                 agent_message: message,
-                summary: state.summary || "",
                 user_id: userId,
                 session_id: sessionId,
             },
@@ -239,8 +271,25 @@ export class OrchestratorService {
             this.logger.warn(
                 `Agent update for session ${sessionId} failed safety check. Falling back to safe message.`,
             );
-            result.synthesized_message =
-                "Your request has been updated. Please check your order details for the most current information.";
+            const lowerMsg = message.toLowerCase();
+            if (
+                lowerMsg.includes("reject") ||
+                lowerMsg.includes("decline") ||
+                lowerMsg.includes("fail")
+            ) {
+                result.synthesized_message =
+                    "Your request has been rejected. Please request human support for more information regarding this decision.";
+            } else if (
+                lowerMsg.includes("approve") ||
+                lowerMsg.includes("success") ||
+                lowerMsg.includes("refund")
+            ) {
+                result.synthesized_message =
+                    "Your request has been approved. Please check your order details for the most current information.";
+            } else {
+                result.synthesized_message =
+                    "Your request has been updated. Please check your order details for the most current information.";
+            }
         }
 
         this.logger.log(

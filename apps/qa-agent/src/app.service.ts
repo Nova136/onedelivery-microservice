@@ -11,6 +11,7 @@ import {
     AIMessage,
     ToolMessage,
     SystemMessage,
+    ChatMessage,
 } from "@langchain/core/messages";
 import { MemoryService } from "./memory/memory.service";
 import { Cron, CronExpression } from "@nestjs/schedule";
@@ -306,6 +307,11 @@ export class AppService {
                     content: msg.content,
                     tool_call_id: msg.toolCallId ?? "",
                 });
+            if (msg.type === "admin")
+                return new ChatMessage({
+                    role: "admin",
+                    content: msg.content,
+                });
 
             return new HumanMessage(msg.content);
         });
@@ -347,7 +353,7 @@ export class AppService {
                         incidentLogged = true;
                     } catch (error) {
                         this.logger.error(
-                            `Failed to log incident for session ${sessionId}: ${error.message}`,
+                            `Failed to log incident for session ${sessionId}: ${error}`,
                         );
                     }
                 } else if (toolCall.name === "save_sentiment") {
@@ -363,7 +369,7 @@ export class AppService {
                         );
                     } catch (error) {
                         this.logger.error(
-                            `Failed to save sentiment for session ${sessionId}: ${error.message}`,
+                            `Failed to save sentiment for session ${sessionId}: ${error}`,
                         );
                     }
                 }
