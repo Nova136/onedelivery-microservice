@@ -13,11 +13,6 @@ export default class OrderSeeder implements Seeder {
         const orderRepository = dataSource.getRepository(Order);
         const orderItemRepository = dataSource.getRepository(OrderItem);
 
-        const existing = await orderRepository.count();
-        if (existing > 0) {
-            return;
-        }
-
         const customerId = "83593ca4-b975-4fef-a521-4a2a8d72dd81";
 
         const orders: Partial<Order>[] = [
@@ -124,6 +119,61 @@ export default class OrderSeeder implements Seeder {
                 updatedAt: new Date(),
                 priorityOption: PriorityOption.STANDARD,
             },
+            // Scenario 10: Delivered order outside the 2-hour refund window
+            {
+                id: "FD-0000-000010",
+                customerId,
+                status: OrderStatus.DELIVERED,
+                deliveryAddress: "888 Expired Window Ave, City",
+                totalOrderValue: 8.0,
+                createdAt: new Date(Date.now() - 4 * 60 * 60 * 1000),
+                updatedAt: new Date(Date.now() - 3 * 60 * 60 * 1000), // delivered 3 hours ago
+                priorityOption: PriorityOption.STANDARD,
+            },
+            // Scenario 11: Delivered order for wrong item refund test
+            {
+                id: "FD-0000-000011",
+                customerId,
+                status: OrderStatus.DELIVERED,
+                deliveryAddress: "901 Wrong Item St, City",
+                totalOrderValue: 7.5,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+                priorityOption: PriorityOption.STANDARD,
+            },
+            // Scenario 12: Order in delivery for not-yet-delivered refund rejection
+            {
+                id: "FD-0000-000012",
+                customerId,
+                status: OrderStatus.IN_DELIVERY,
+                deliveryAddress: "902 On The Way Rd, City",
+                totalOrderValue: 12.0,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+                priorityOption: PriorityOption.EXPRESS,
+            },
+            // Scenario 13: Delivered order for quantity-exceeds test (qty 1, user asks for 2)
+            {
+                id: "FD-0000-000013",
+                customerId,
+                status: OrderStatus.DELIVERED,
+                deliveryAddress: "903 Overflow Lane, City",
+                totalOrderValue: 5.0,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+                priorityOption: PriorityOption.STANDARD,
+            },
+            // Scenario 14: Delivered order for multi-turn slot filling refund test
+            {
+                id: "FD-0000-000014",
+                customerId,
+                status: OrderStatus.DELIVERED,
+                deliveryAddress: "904 Multiturn Blvd, City",
+                totalOrderValue: 8.5,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+                priorityOption: PriorityOption.STANDARD,
+            },
         ];
 
         const orderItems: Partial<OrderItem>[] = [
@@ -218,7 +268,65 @@ export default class OrderSeeder implements Seeder {
                 quantityOrdered: 1,
                 itemValue: 50.0,
             },
+            // Item for Scenario 10
+            {
+                orderId: "FD-0000-000010",
+                productId: "c3d4e5f6-a7b8-9012-3456-789012cdef02", // Mee Goreng
+                productName: "Mee Goreng",
+                price: 8.0,
+                quantityOrdered: 1,
+                itemValue: 8.0,
+            },
+            // Item for Scenario 11
+            {
+                orderId: "FD-0000-000011",
+                productId: "d4e5f6a7-b8c9-0123-4567-890123def013", // Nasi Goreng
+                productName: "Nasi Goreng",
+                price: 7.5,
+                quantityOrdered: 1,
+                itemValue: 7.5,
+            },
+            // Item for Scenario 12
+            {
+                orderId: "FD-0000-000012",
+                productId: "e5f6a7b8-c9d0-1234-5678-901234ef0124", // Chicken Satay
+                productName: "Chicken Satay",
+                price: 12.0,
+                quantityOrdered: 1,
+                itemValue: 12.0,
+            },
+            // Item for Scenario 13
+            {
+                orderId: "FD-0000-000013",
+                productId: "f6a7b8c9-d0e1-2345-6789-012345ef0125", // Wonton Noodles
+                productName: "Wonton Noodles",
+                price: 5.0,
+                quantityOrdered: 1,
+                itemValue: 5.0,
+            },
+            // Item for Scenario 14
+            {
+                orderId: "FD-0000-000014",
+                productId: "a7b8c9d0-e1f2-3456-7890-123456ef0126", // Beef Rendang
+                productName: "Beef Rendang",
+                price: 8.5,
+                quantityOrdered: 1,
+                itemValue: 8.5,
+            },
         ];
+
+        const existing = await orderRepository.count();
+        if (existing > 0) {
+            // Additive: insert only orders that do not exist yet
+            const existingIds = (await orderRepository.find({ select: ["id"] })).map(o => o.id);
+            const missingOrders = orders.filter(o => !existingIds.includes(o.id as string));
+            if (missingOrders.length === 0) return;
+            await orderRepository.insert(missingOrders);
+            const missingOrderIds = new Set(missingOrders.map(o => o.id));
+            const missingItems = orderItems.filter(i => missingOrderIds.has(i.orderId));
+            if (missingItems.length > 0) await orderItemRepository.insert(missingItems);
+            return;
+        }
 
         await orderRepository.insert(orders);
         await orderItemRepository.insert(orderItems);

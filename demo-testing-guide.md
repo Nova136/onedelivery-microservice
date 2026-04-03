@@ -135,6 +135,45 @@ These tests verify the specific business logic, calculations, and constraints wi
 - **Test Input Example:** "My order FD-0000-000001 arrived very late. I want a refund for the delay."
 - **Expected Behavior:** The agent recognizes the issue category is 'late_delivery', calculates the flat $5 refund as dictated by the SOP, and processes the refund successfully.
 
+### Refund Success (Wrong Item)
+
+- **Order:** FD-0000-000011 (`status: DELIVERED`, Nasi Goreng $7.50 × 1)
+- **Test Input Example:** "The Nasi Goreng in order FD-0000-000011 was completely wrong, it was something else entirely."
+- **Expected Behavior:** The agent classifies the issue as 'wrong_item', calculates the refund as 1 × $7.50 = **$7.50**, routes it to the Guardian for approval, and confirms the refund amount to the user.
+
+### Refund Rejection (Order Not Yet Delivered)
+
+- **Order:** FD-0000-000012 (`status: IN_DELIVERY`, Chicken Satay $12.00 × 1)
+- **Test Input Example:** "I want a refund for FD-0000-000012. The Chicken Satay looks wrong in the tracker photo."
+- **Expected Behavior:** The agent rejects the request, stating the order is not yet eligible for a refund as it has not been delivered. No internal status values should be visible to the user.
+
+### Refund Rejection (Time Window Expired — 2 Hours)
+
+- **Order:** FD-0000-000010 (`status: DELIVERED`, `refundStatus: NONE`, `updatedAt`: 3 hours ago, Mee Goreng $8.00 × 1)
+- **Test Input Example:** "My Mee Goreng from order FD-0000-000010 was missing. I'd like a refund."
+- **Expected Behavior:** The agent rejects the request, stating the refund window for the order has expired. The 2-hour window is enforced from the delivery timestamp.
+
+### Refund Rejection (Quantity Exceeds Amount Ordered)
+
+- **Order:** FD-0000-000013 (`status: DELIVERED`, Wonton Noodles $5.00 × 1)
+- **Test Input Example:** "2 Wonton Noodles were missing from my order FD-0000-000013."
+- **Expected Behavior:** The agent rejects the request, stating the requested quantity (2) exceeds the amount that was ordered and is eligible for a refund (1).
+
+### Multi-Turn Slot Filling — Refund (Step 1)
+
+- **Test Input Example:** "I want to get a refund for my recent order."
+- **Expected Behavior:** The agent asks for the order ID.
+
+### Multi-Turn Slot Filling — Refund (Step 2)
+
+- **Test Input Example:** "It's FD-0000-000014."
+- **Expected Behavior:** The agent asks what the issue is with the order.
+
+### Multi-Turn Slot Filling — Refund (Step 3)
+
+- **Test Input Example:** "The Beef Rendang was missing."
+- **Expected Behavior:** The agent routes to the Resolution Agent and confirms the $8.50 refund for the missing Beef Rendang.
+
 ---
 
 ## 6. Output Evaluation & Self-Correction Scenarios
