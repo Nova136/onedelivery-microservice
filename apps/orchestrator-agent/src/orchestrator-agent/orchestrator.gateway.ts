@@ -55,6 +55,16 @@ export class OrchestratorGateway
         }
     }
 
+    sendAdminUpdate(sessionId: string, messageContent: string | null) {
+        if (messageContent) {
+            this.logger.log(`Emitting ADMIN_UPDATE to session ${sessionId}`);
+            this.server.to(sessionId).emit("message", {
+                type: "ADMIN_UPDATE",
+                message: messageContent,
+            });
+        }
+    }
+
     @SubscribeMessage("message")
     async handleMessage(
         @MessageBody() data: any,
@@ -69,7 +79,7 @@ export class OrchestratorGateway
             if (data.type === "CHAT_MESSAGE") {
                 const { message, userId } = data;
 
-                const result = await this.orchestratorService.processChat(
+                const result = await this.orchestratorService.processHumanInput(
                     userId,
                     sessionId,
                     message,

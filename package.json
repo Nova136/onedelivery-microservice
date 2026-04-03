@@ -48,7 +48,7 @@
         "start-debug-docker-shx": "docker compose -f docker-compose.debug.yml up --build",
         "stop-debug-docker": "docker-compose -f docker-compose.debug.yml down",
         "eval-all": "concurrently \"npm:test-*\"",
-        "test-orchestrator-agent": "npx ts-node -r tsconfig-paths/register --transpile-only apps/orchestrator-agent/scripts/langsmith-eval.ts",
+        "test-orchestrator-agent": "cd apps/orchestrator-agent && npm run test",
         "test-qa-agent": "npx ts-node -r tsconfig-paths/register --transpile-only apps/qa-agent/scripts/langsmith-eval.ts",
         "test-qa-trends": "npx ts-node -r tsconfig-paths/register --transpile-only apps/qa-agent/scripts/langsmith-trends-eval.ts",
         "test-logistics-agent": "npx ts-node -r tsconfig-paths/register --transpile-only apps/logistics-agent/scripts/langsmith-eval.ts",
@@ -57,7 +57,6 @@
         "test:coverage": "jest --testMatch \"**/+(*.)+(e2e-test).+(ts)\" --forceExit --coverage --coverageDirectory=./coverage",
         "test:unit": "jest --testMatch \"**/+(*.)+(spec).+(ts)\" --forceExit --json --outputFile ./unit-test-report.json",
         "generate-anygen": "node ./presentation/generate-anygen.js ./presentation/content.md ./presentation/onedelivery-anygen.pptx"
-
     },
     "dependencies": {
         "@aws-sdk/client-apigatewaymanagementapi": "^3.1016.0",
@@ -148,6 +147,5 @@
         "typeorm-naming-strategies": "^4.1.0",
         "typescript": "^5.0.0",
         "@types/uuid": "^10.0.0"
-
     }
 }

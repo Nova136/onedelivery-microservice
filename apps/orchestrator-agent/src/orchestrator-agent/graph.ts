@@ -12,6 +12,7 @@ import { OrderClientService } from "../modules/clients/order-client/order-client
 import { OutputEvaluatorService } from "../modules/output-evaluator/output-evaluator.service";
 import { IntentClassifierService } from "../modules/intent-classifier/intent-classifier.service";
 import { PromptShieldService } from "../modules/prompt-shield/prompt-shield.service";
+import { AuditService } from "../modules/audit/audit.service";
 import * as nodes from "./nodes";
 import { OrchestratorState, OrchestratorStateType } from "./state";
 
@@ -22,6 +23,7 @@ export interface GraphServices {
     orderService: OrderClientService;
     knowledgeClient: KnowledgeClientService;
     promptShield: PromptShieldService;
+    auditService: AuditService;
     sopModel: BaseChatModel;
     sopModelFallback: BaseChatModel;
     infoModel: BaseChatModel;
@@ -137,6 +139,7 @@ export function createOrchestratorGraph(
                 tools: services.tools,
                 knowledgeClient: services.knowledgeClient,
                 promptShield: services.promptShield,
+                auditService: services.auditService,
             }),
         )
         .addNode(
@@ -151,6 +154,7 @@ export function createOrchestratorGraph(
             nodes.createOutputEvaluationNode({
                 outputEvaluator: services.outputEvaluator,
                 promptShield: services.promptShield,
+                auditService: services.auditService,
             }),
         )
         .addNode(

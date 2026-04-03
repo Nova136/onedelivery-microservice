@@ -18,6 +18,8 @@ import { IntentClassifierService } from "../modules/intent-classifier/intent-cla
 import { SummarizerModule } from "../modules/summarizer/summarizer.module";
 import { PromptShieldModule } from "../modules/prompt-shield/prompt-shield.module";
 import { PromptShieldService } from "../modules/prompt-shield/prompt-shield.service";
+import { AuditModule } from "../modules/audit/audit.module";
+import { AuditService } from "../modules/audit/audit.service";
 import { createCheckpointer } from "./checkpointer";
 import { createOrchestratorGraph } from "./graph";
 import { createAgentCallbackGraph } from "./agent-callback.graph";
@@ -41,6 +43,7 @@ import { InputValidatorModule } from "../modules/input-validator/input-validator
         SummarizerModule,
         PromptShieldModule,
         InputValidatorModule,
+        AuditModule,
     ],
     controllers: [OrchestratorController, SessionController],
     providers: [
@@ -52,6 +55,7 @@ import { InputValidatorModule } from "../modules/input-validator/input-validator
                 piiService: PiiRedactionService,
                 outputEvaluator: OutputEvaluatorService,
                 promptShield: PromptShieldService,
+                auditService: AuditService,
             ) => {
                 const geminiFlash = new ChatGoogleGenerativeAI({
                     model: "gemini-3-flash-preview",
@@ -73,6 +77,7 @@ import { InputValidatorModule } from "../modules/input-validator/input-validator
                     piiService,
                     promptShield,
                     outputEvaluator,
+                    auditService,
                     llm: callbackModel,
                     llmFallback: geminiFlash,
                 });
@@ -81,6 +86,7 @@ import { InputValidatorModule } from "../modules/input-validator/input-validator
                 PiiRedactionService,
                 OutputEvaluatorService,
                 PromptShieldService,
+                AuditService,
             ],
         },
         {
@@ -93,6 +99,7 @@ import { InputValidatorModule } from "../modules/input-validator/input-validator
                 agentsClient: AgentsClientService,
                 memoryService: MemoryClientService,
                 promptShield: PromptShieldService,
+                auditService: AuditService,
             ) => {
                 const checkpointer = await createCheckpointer();
 
@@ -179,6 +186,7 @@ import { InputValidatorModule } from "../modules/input-validator/input-validator
                         orderService,
                         knowledgeClient,
                         promptShield,
+                        auditService,
                         sopModel: sopModel,
                         sopModelFallback: geminiPro,
                         infoModel: infoModel,
@@ -209,6 +217,7 @@ import { InputValidatorModule } from "../modules/input-validator/input-validator
                 AgentsClientService,
                 MemoryClientService,
                 PromptShieldService,
+                AuditService,
             ],
         },
     ],

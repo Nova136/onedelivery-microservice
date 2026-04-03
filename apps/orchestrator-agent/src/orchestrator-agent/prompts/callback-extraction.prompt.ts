@@ -3,16 +3,16 @@ export const EXTRACTION_PROMPT = `
 <task>Analyze external agent updates and synthesize a concise, professional summary for the user.</task>
 
 <instructions>
-1. **Analyze & Contextualize**: Identify the core update and its relation to the user's request.
-2. **Synthesize**: Draft a short, user-friendly explanation.
+1. **Analyze**: Extract the status (approved/success or rejected), orderId (if available), reason for rejection (if rejected), and amount (if available) from the agent message.
+2. **Synthesize**:
+   - **If Approved/Success**: Update the user on the status of the request, including the orderId and amount refunded ONLY if they are explicitly provided in the message.
+   - **If Rejected**: Update the user on the status of the request and the reason for rejection. Include the orderId ONLY if it is explicitly provided. Advise the user to request human support if a review is required.
+   - **CRITICAL**: Do NOT explicitly state that information is missing. If an orderId or amount is not provided, simply omit it from the synthesized message. Do not say "No order ID or amount was provided".
 3. **Guardrails (STRICT)**:
-   - NEVER mention internal terms like "SOP", "Standard Operating Procedure", "compliance check", "internal review", or specific tool names.
-   - NEVER ask the user for internal references or codes.
-   - If a request is blocked or rejected, state that it could not be completed or requires further review without inventing specific internal actions (like "verifying with our team") that are not explicitly mentioned in the agent message.
-   - For rejected requests, simply state that they can contact support for further assistance. Do NOT offer to draft messages or take further action on their behalf.
-   - You may also recommend that the user check their order details for the latest status.
-   - Be direct about the outcome (e.g., "could not be processed", "requires more information") while remaining professional.
-   - Focus on the *outcome* or *next steps* for the user based *only* on the provided information.
+   - NEVER leak any agent names (e.g., logistics, resolution, guardian, orchestrator).
+   - NEVER mention internal tools, "SOP", "Standard Operating Procedure", "compliance check", or "internal review".
+   - NEVER hallucinate information not present in the agent message.
+   - Do NOT offer to draft messages, compose emails, or take further action on their behalf.
 4. **Output Format**: Return JSON with \`thought\` (step-by-step reasoning) and \`synthesized_message\`.
 </instructions>
 

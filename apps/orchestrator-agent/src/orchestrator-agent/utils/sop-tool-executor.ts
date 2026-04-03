@@ -63,6 +63,7 @@ export async function executeSopTool(
         const args: any = {
             ...parsedArgs,
             action: state.current_intent?.toLowerCase() || intent.toLowerCase(),
+            intentCode: state.current_intent || intent,
             userId: state.user_id,
             sessionId: state.session_id,
         };

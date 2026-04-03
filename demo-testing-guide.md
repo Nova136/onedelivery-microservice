@@ -28,9 +28,9 @@ These tests verify that the `InputValidatorService` correctly identifies and blo
 
 ---
 
-## 2. Semantic Routing & Boundary Setting Scenarios
+## 2. Intent Classification & Boundary Setting Scenarios
 
-These tests verify that the `SemanticRouterService` correctly classifies user intents and routes them to the appropriate handler.
+These tests verify that the `IntentClassifierService` correctly classifies user intents and routes them to the appropriate handler.
 
 ### Out-of-Bounds Fallback
 
@@ -98,11 +98,6 @@ These tests verify the `SopHandlerNode`'s ability to gather required information
 
 - **Test Input Example:** "Actually, never mind. How can I pay with cash?"
 - **Expected Behavior:** The agent successfully breaks out of the refund flow and explains that Cash on Delivery is accepted for orders under $50.
-
-### The LLM Bailout (Context Switch - Step 3)
-
-- **Test Input Example:** "Cancel order FD-0000-000005 please, I don't want it anymore."
-- **Expected Behavior:** The agent successfully changed into the cancellation workflow.
 
 ---
 
@@ -181,9 +176,14 @@ These tests verify that sensitive information is tokenized.
 ### Email Redaction
 
 - **Test Input Example:** "My email is test@example.com."
-- **Expected Behavior:** The LLM sees "My email is [REDACTED_EMAIL_...]". The actual email is stored in Redis.
+- **Expected Behavior:** The LLM sees "My email is REDACTED*EMAIL*...". The actual email is stored in Redis.
 
-### Phone Redaction
+### Phone Redaction (International & Singapore)
 
-- **Test Input Example:** "Call me at 90865888."
-- **Expected Behavior:** The LLM sees "Call me at [REDACTED_PHONE_...]".
+- **Test Input Example:** "My number +65 9123 4567."
+- **Expected Behavior:** The LLM sees "Call me at REDACTED*PHONE*..., or my Singapore number REDACTED*PHONE*...".
+
+### Credit Card Redaction (Priority over Phone)
+
+- **Test Input Example:** "My card number is 1234-5678-9012-3456."
+- **Expected Behavior:** The LLM sees "My card number is REDACTED*CARD*...". It should NOT be partially redacted as a phone number.
