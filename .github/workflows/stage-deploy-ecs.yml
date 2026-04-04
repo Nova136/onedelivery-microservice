@@ -79,6 +79,26 @@ jobs:
             ECS_TASK_ROLE_ARN="arn:aws:iam::${ACCOUNT_ID}:role/onedelivery-ecs-task"
           fi
 
+          get_port() {
+            case "$1" in
+              audit) echo "9001" ;;
+              logistics) echo "9002" ;;
+              order) echo "9003" ;;
+              payment) echo "9004" ;;
+              user) echo "9005" ;;
+              incident) echo "9006" ;;
+              knowledge) echo "9007" ;;
+              orchestrator-agent) echo "9010" ;;
+              logistics-agent) echo "9011" ;;
+              resolution-agent) echo "9012" ;;
+              guardian-agent) echo "9013" ;;
+              qa-agent) echo "9014" ;;
+              *) echo "80" ;;
+            esac
+          }
+
+          PORT="$(get_port "$MICROSERVICE_NAME")"
+
           mkdir -p .github/workflows/generated-task-definitions
           OUT=".github/workflows/generated-task-definitions/${MICROSERVICE_NAME}.json"
 
@@ -103,6 +123,7 @@ jobs:
             --arg dbName "${DB_NAME}" \
             --arg dbUser "${DB_USER}" \
             --arg dbPassword "${DB_PASSWORD}" \
+            --argjson port "$PORT" \
             '{
               family: $family,
               networkMode: $networkMode,
@@ -116,7 +137,7 @@ jobs:
                   name: $cname,
                   image: $image,
                   portMappings: [
-                    { containerPort: 80, hostPort: 80, protocol: "tcp" }
+                    { containerPort: $port, hostPort: $port, protocol: "tcp" }
                   ],
                   environment: [
                     { name: "NODE_ENV", value: $nodeEnv },
