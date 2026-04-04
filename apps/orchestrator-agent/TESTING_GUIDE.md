@@ -44,7 +44,7 @@ The orchestrator uses a multi-tiered testing approach to ensure every layer of t
 
 ### **LLM as a Judge**
 
-Since AI responses are non-deterministic, we use a high-reasoning model (**GPT-5.4**) to act as a judge. The judge evaluates the agent's response against a set of criteria:
+Since AI responses are non-deterministic, we use a high-reasoning model (**gpt-4o**) to act as a judge. The judge evaluates the agent's response against a set of criteria:
 
 - **Accuracy**: Did the agent follow the SOP correctly?
 - **Completeness**: Did it gather all required fields?
