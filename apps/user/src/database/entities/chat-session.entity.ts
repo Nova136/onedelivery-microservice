@@ -7,6 +7,7 @@ import {
     OneToMany,
     OneToOne,
     JoinColumn,
+    Relation,
 } from "typeorm";
 import { ChatMessage } from "./chat-message.entity";
 import { Sentiment } from "./sentiment.entity";
@@ -33,7 +34,7 @@ export class ChatSession {
     updatedAt: Date;
 
     @OneToMany(() => ChatMessage, (message) => message.sessionId)
-    messages: ChatMessage[];
+    messages: Relation<ChatMessage[]>;
 
     // Store summary of the conversation
     @Column({ type: "text", nullable: true })
@@ -46,5 +47,5 @@ export class ChatSession {
     // NEW: FK to Sentiment (optional)
     @OneToOne(() => Sentiment, { nullable: true, eager: false })
     @JoinColumn({ name: "sentiment_id" })
-    sentiment: Sentiment | null;
+    sentiment: Relation<Sentiment> | null;
 }

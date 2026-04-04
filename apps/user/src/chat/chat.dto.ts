@@ -17,7 +17,7 @@ export interface ChatSessionDTO {
 
 export interface ChatMessageDTO {
     id?: string;
-    type: "human" | "ai" | "tool" | "system" | "unknown";
+    type: "human" | "ai" | "tool" | "admin" | "system" | "unknown";
     content: string;
     toolCallId?: string;
     sequence: number;

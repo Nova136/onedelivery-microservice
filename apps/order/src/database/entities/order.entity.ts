@@ -6,6 +6,7 @@ import {
     OneToMany,
     BeforeInsert,
     PrimaryColumn,
+    Relation,
 } from "typeorm";
 import { OrderItem } from "./order-item.entity";
 import { OrderStatus, PriorityOption, RefundStatus } from "./order.enum";
@@ -39,7 +40,7 @@ export class Order {
     updatedAt: Date;
 
     @OneToMany(() => OrderItem, (item) => item.order)
-    items: OrderItem[];
+    items: Relation<OrderItem[]>;
 
     @Column({ type: "decimal", precision: 10, scale: 2, default: 0 })
     totalOrderValue: number;

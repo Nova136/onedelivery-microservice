@@ -19,10 +19,27 @@ export const createCallbackExtractionNode = (
     return async (state: AgentCallbackStateType) => {
         const { llm, llmFallback, promptShield } = deps;
 
+        const getFallbackMessage = (msg: string) => {
+            const lowerMsg = msg.toLowerCase();
+            if (
+                lowerMsg.includes("reject") ||
+                lowerMsg.includes("decline") ||
+                lowerMsg.includes("fail")
+            ) {
+                return "Your request has been rejected. Please request human support for more information regarding this decision.";
+            } else if (
+                lowerMsg.includes("approve") ||
+                lowerMsg.includes("success") ||
+                lowerMsg.includes("refund")
+            ) {
+                return "Your request has been approved. Please check your order details for the most current information.";
+            }
+            return "Your request has been updated. Please check your order details for the most current information.";
+        };
+
         if (!state.is_safe) {
             return {
-                synthesized_message:
-                    "Your request has been updated. Please check your order details for the most current information.",
+                synthesized_message: getFallbackMessage(state.agent_message),
             };
         }
 
@@ -74,8 +91,7 @@ export const createCallbackExtractionNode = (
         } catch (e) {
             logger.error("Failed to extract data from callback:", e);
             return {
-                synthesized_message:
-                    "Your request has been updated. Please check your order details for the most current information.",
+                synthesized_message: getFallbackMessage(state.agent_message),
             };
         }
     };

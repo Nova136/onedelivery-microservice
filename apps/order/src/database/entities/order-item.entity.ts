@@ -4,6 +4,7 @@ import {
     Column,
     ManyToOne,
     JoinColumn,
+    Relation,
 } from "typeorm";
 import { Order } from "./order.entity";
 
@@ -17,7 +18,7 @@ export class OrderItem {
 
     @ManyToOne(() => Order, (order) => order.items, { onDelete: "CASCADE" })
     @JoinColumn({ name: "order_id" })
-    order: Order;
+    order: Relation<Order>;
 
     @Column({ type: "uuid" })
     productId: string;
