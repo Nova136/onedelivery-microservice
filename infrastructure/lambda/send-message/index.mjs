@@ -34,6 +34,24 @@ const RABBITMQ_URL = _map[process.env.SSM_RABBITMQ_URL];
 
 const ORCHESTRATOR_QUEUE = process.env.ORCHESTRATOR_QUEUE || 'orchestrator_agent_queue';
 
+// ── Cached AMQP connection (reused across warm invocations) ───────────────────
+
+let _conn   = null;
+let _channel = null;
+
+async function getChannel() {
+  if (_channel) return _channel;
+  // Connection may be stale — reconnect
+  try { await _conn?.close(); } catch { /* ignore */ }
+  _conn    = await amqp.connect(RABBITMQ_URL);
+  _conn.on('error', () => { _conn = null; _channel = null; });
+  _conn.on('close', () => { _conn = null; _channel = null; });
+  _channel = await _conn.createChannel();
+  _channel.on('error', () => { _channel = null; });
+  _channel.on('close', () => { _channel = null; });
+  return _channel;
+}
+
 // ── JWT helpers (HS256, built-in crypto — no external deps) ───────────────────
 
 function b64urlDecode(s) {
@@ -95,22 +113,16 @@ export const handler = async (event) => {
     return { statusCode: 401, body: JSON.stringify({ error: 'No userId in token' }) };
   }
 
-  const conn = await amqp.connect(RABBITMQ_URL);
-  try {
-    const channel = await conn.createChannel();
-    await channel.assertQueue(ORCHESTRATOR_QUEUE, { durable: false });
-    channel.sendToQueue(
-      ORCHESTRATOR_QUEUE,
-      Buffer.from(JSON.stringify({
-        pattern: { cmd: 'agent.chat' },
-        data: { connectionId, userId, sessionId: resolvedSession, message: message.trim() },
-      })),
-      { persistent: false },
-    );
-    await channel.close();
-  } finally {
-    await conn.close();
-  }
+  const channel = await getChannel();
+  await channel.assertQueue(ORCHESTRATOR_QUEUE, { durable: false });
+  channel.sendToQueue(
+    ORCHESTRATOR_QUEUE,
+    Buffer.from(JSON.stringify({
+      pattern: { cmd: 'agent.chat' },
+      data: { connectionId, userId, sessionId: resolvedSession, message: message.trim() },
+    })),
+    { persistent: false },
+  );
 
   console.log(`Queued: connectionId=${connectionId} userId=${userId} session=${resolvedSession}`);
   return { statusCode: 200 };

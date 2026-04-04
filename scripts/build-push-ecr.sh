@@ -25,6 +25,7 @@ set -euo pipefail
 AWS_PROFILE="${AWS_PROFILE:-onedelivery}"
 AWS_REGION="${AWS_REGION:-ap-southeast-1}"
 IMAGE_TAG="${IMAGE_TAG:-$(git rev-parse --short HEAD)}"
+NO_CACHE="${NO_CACHE:-false}"
 ACCOUNT_ID=$(AWS_PROFILE=$AWS_PROFILE aws sts get-caller-identity --query Account --output text)
 ECR_REGISTRY="$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
 DOCKERFILE=".docker/Dockerfile.template"
@@ -84,10 +85,14 @@ for name in "${SERVICES[@]}"; do
 
   echo "==> [$name] Building image (port $port, tag $IMAGE_TAG)..."
 
+  no_cache_flag=""
+  [[ "$NO_CACHE" = "true" ]] && no_cache_flag="--no-cache"
+
   if docker build \
       --provenance=false \
       --platform linux/amd64 \
       --progress=plain \
+      $no_cache_flag \
       --file "$DOCKERFILE" \
       --build-arg SERVICE_NAME="$name" \
       --build-arg EXPOSE_PORT="$port" \

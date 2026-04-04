@@ -14,12 +14,12 @@ export default class IncidentSeeder implements Seeder {
 
         const incidents: Partial<Incident>[] = [
             {
-                type: "DELIVERY_DELAY",
+                type: "LATE_DELIVERY",
                 orderId: "FD-0000-000001",
                 summary: "Shipment delayed by 24h due to weather.",
             },
             {
-                type: "COMPLAINT",
+                type: "DAMAGED_PACKAGING",
                 orderId: null,
                 summary: "Customer feedback: packaging damaged.",
             },

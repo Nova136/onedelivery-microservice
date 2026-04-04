@@ -18,6 +18,7 @@ export async function createCheckpointer() {
     try {
         const pool = new pg.Pool({
             connectionString,
+            ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false,
         });
 
         const checkpointer = new PostgresSaver(pool);
