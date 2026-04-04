@@ -7,7 +7,7 @@ import { LogIncidentDto } from './dto/LogIncidentDto';
 
 
 @ApiTags('Incident')
-@Controller("incident")
+@Controller()
 export class IncidentController {
   constructor(private readonly incidentService: IncidentService) {}
 
