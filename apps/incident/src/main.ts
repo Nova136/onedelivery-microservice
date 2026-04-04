@@ -6,6 +6,7 @@ import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  app.setGlobalPrefix('incident', { exclude: ['health'] });
   const configService = app.get(ConfigService);
 
   const corsOrigin = configService.get('CORS_ORIGIN', 'http://localhost:5173');

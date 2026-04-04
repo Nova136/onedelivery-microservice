@@ -1,6 +1,9 @@
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { ChatOpenAI } from "@langchain/openai";
 import { Global, Module } from "@nestjs/common";
+import { TypeOrmModule } from "@nestjs/typeorm";
+import { WsConnection } from "../database/entities/ws-connection.entity";
+import { WsConnectionService } from "../database/ws-connection.service";
 import { AgentsClientModule } from "../modules/clients/agents-client/agents-client.module";
 import { AgentsClientService } from "../modules/clients/agents-client/agents-client.service";
 import { KnowledgeClientModule } from "../modules/clients/knowledge-client/knowledge-client.module";
@@ -44,11 +47,13 @@ import { InputValidatorModule } from "../modules/input-validator/input-validator
         PromptShieldModule,
         InputValidatorModule,
         AuditModule,
+        TypeOrmModule.forFeature([WsConnection]),
     ],
     controllers: [OrchestratorController, SessionController],
     providers: [
         OrchestratorService,
         OrchestratorGateway,
+        WsConnectionService,
         {
             provide: "AGENT_CALLBACK_GRAPH",
             useFactory: async (

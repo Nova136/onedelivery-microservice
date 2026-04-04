@@ -112,9 +112,9 @@ resource "aws_ssm_parameter" "jwt_secret" {
 
 resource "aws_ssm_parameter" "rabbitmq_url" {
   name        = "/${local.name}/RABBITMQ_URL"
-  description = "CloudAMQP AMQPS connection URL"
+  description = "LavinMQ (CloudAMQP) AMQPS connection URL"
   type        = "SecureString"
-  value       = "amqps://grdulrnl:REDACTED_CLOUDAMQP_PASSWORD@armadillo.rmq.cloudamqp.com:5671/grdulrnl"
+  value       = "amqps://prigraqy:RotEGUGQXBnhaPT6FvVoJ19Cp3rGdTm8@capybara.lmq.cloudamqp.com:5671/prigraqy"
 
   lifecycle {
     ignore_changes = [value]
