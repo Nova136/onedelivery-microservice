@@ -67,11 +67,12 @@ with Diagram(
                 "/qa-agent/*"
             )
 
-            with Cluster("Lambda Functions  (nodejs20.x · VPC)"):
+            with Cluster("Lambda Functions  (nodejs22.x · VPC)"):
                 lam_auth = Lambda("ws-authorizer\nJWT · RBAC\nrate-limit → RDS")
                 lam_conn = Lambda("ws-connect\nINSERT ws.connections")
                 lam_disc = Lambda("ws-disconnect\nDELETE ws.connections")
-                lam_send = Lambda("ws-send-message\npublish → RabbitMQ")
+
+            lam_send = Lambda("ws-send-message\npublish → RabbitMQ\n(no VPC · internet access)")
 
             with Cluster("ECS Fargate Cluster"):
 
@@ -157,9 +158,13 @@ with Diagram(
 
     # =========================================================================
     # ── ④ Guardian SOP gate  (red) ───────────────────────────────────────────
+    # Resolution agent: refund approval gate
+    # Logistics agent: cancellation approval gate
     # =========================================================================
     res   >> Edge(color="#CC0000", style="bold", penwidth="3") >> guard
     guard >> Edge(color="#CC0000", style="bold", penwidth="3") >> res
+    logi  >> Edge(color="#CC0000", style="bold", penwidth="3") >> guard
+    guard >> Edge(color="#CC0000", style="bold", penwidth="3") >> logi
 
     # =========================================================================
     # ── Domain service events → RabbitMQ  (brown dashed) ─────────────────────
@@ -182,4 +187,5 @@ with Diagram(
     # ── CloudWatch + ECR  (grey) ──────────────────────────────────────────────
     # =========================================================================
     http_api >> Edge(color="#888888", style="dashed", penwidth="2") >> cw
+    ws_api   >> Edge(color="#888888", style="dashed", penwidth="2") >> cw
     ecr      >> Edge(color="#AAAAAA", style="dotted", penwidth="2") >> orch

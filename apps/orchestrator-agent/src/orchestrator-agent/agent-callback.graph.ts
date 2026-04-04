@@ -3,6 +3,7 @@ import { StateGraph, START, END } from "@langchain/langgraph";
 import { OutputEvaluatorService } from "../modules/output-evaluator/output-evaluator.service";
 import { PiiRedactionService } from "../modules/pii-redaction/pii-redaction.service";
 import { PromptShieldService } from "../modules/prompt-shield/prompt-shield.service";
+import { AuditService } from "../modules/audit/audit.service";
 import * as nodes from "./nodes";
 import { AgentCallbackState } from "./agent-callback.state";
 
@@ -10,6 +11,7 @@ export interface CallbackGraphServices {
     piiService: PiiRedactionService;
     promptShield: PromptShieldService;
     outputEvaluator: OutputEvaluatorService;
+    auditService: AuditService;
     llm: BaseChatModel;
     llmFallback: BaseChatModel;
 }
@@ -38,6 +40,7 @@ export function createAgentCallbackGraph(services: CallbackGraphServices) {
             "evaluation",
             nodes.createCallbackEvaluationNode({
                 outputEvaluator: services.outputEvaluator,
+                auditService: services.auditService,
             }),
         )
         .addEdge(START, "pre_processing")

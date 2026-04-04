@@ -98,13 +98,11 @@ export class PiiRedactionService {
 
         // Standard Regex patterns
         const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
-
-        // Include singapore and overseas phone formats
-        const phoneRegex =
-            /(?:\+?(\d{1,3}))?[-. (]*(\d{3})[-. )]*(\d{3})[-. ]*(\d{4})(?: *x(\d+))?/g;
         const creditCardRegex = /\b(?:\d[ -]*?){13,16}\b/g;
-        // Simple address regex for "precise location" (e.g., "123 Main St")
-        // const addressRegex = /\b\d+\s+[A-Za-z0-9\s,]{5,}(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Drive|Dr|Lane|Ln|Way|Court|Ct|Circle|Cir|Trail|Trl|Parkway|Pkwy|Square|Sq)\b/gi;
+        // Supports international (+ or 00), US formats, and Singapore (8 digits starting with 8 or 9)
+        // Uses negative lookbehind and lookahead to avoid matching order numbers like FD-0000-000002
+        const phoneRegex =
+            /(?<![A-Za-z0-9-])(?:(?:\+|00)\d{1,3}[\s.-]?(?:\(?\d{1,4}\)?[\s.-]?)?(?:\d[\s.-]?){4,14}\d|\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}|[89]\d{3}[\s.-]?\d{4})(?![A-Za-z0-9-])/g;
 
         const replaceAsync = async (
             str: string,
@@ -125,9 +123,8 @@ export class PiiRedactionService {
         };
 
         scrubbed = await replaceAsync(scrubbed, emailRegex, "EMAIL");
-        scrubbed = await replaceAsync(scrubbed, phoneRegex, "PHONE");
         scrubbed = await replaceAsync(scrubbed, creditCardRegex, "CARD");
-        // scrubbed = await replaceAsync(scrubbed, addressRegex, "ADDRESS");
+        scrubbed = await replaceAsync(scrubbed, phoneRegex, "PHONE");
 
         return scrubbed;
     }

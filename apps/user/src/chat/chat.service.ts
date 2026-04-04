@@ -48,7 +48,7 @@ export class ChatService {
             .leftJoinAndSelect("session.messages", "message")
             .where("session.id = :sessionId", { sessionId })
             .andWhere("session.userId = :userId", { userId: userId })
-            .orderBy("message.sequence", "ASC")
+            .orderBy("message.createdAt", "ASC")
             .getOne();
 
         if (!session) {
@@ -75,7 +75,7 @@ export class ChatService {
             reviewed: session.reviewed,
             createdAt: session.createdAt,
             updatedAt: session.updatedAt,
-            messages: session.messages.map((msg) => ({
+            messages: session.messages?.map((msg) => ({
                 id: msg.id,
                 type: msg.type,
                 content: msg.content,
@@ -93,7 +93,10 @@ export class ChatService {
         const session = await this.ensureSession(sessionId, userId);
         const entity = new ChatMessage();
         entity.sessionId = session;
-        entity.sequence = message.sequence;
+        entity.sequence =
+            (await this.chatMessageRepo.countBy({
+                sessionId: { id: session.id },
+            })) + 1;
         entity.type = message.type;
         entity.content = message.content;
         entity.toolCallId = message.toolCallId ?? null;
@@ -188,5 +191,30 @@ export class ChatService {
             { id: sessionId, userId },
             { status: "CLOSED" },
         );
+    }
+
+    async getSessionsByStatus(status: string): Promise<ChatSessionDTO[]> {
+        const sessions = await this.chatSessionRepo.find({
+            where: { status: status },
+            order: { createdAt: "DESC" },
+        });
+        return sessions.map((session) => ({
+            id: session.id,
+            userId: session.userId,
+            status: session.status,
+            reviewed: session.reviewed,
+            createdAt: session.createdAt,
+            updatedAt: session.updatedAt,
+            messages: session.messages?.map((msg) => ({
+                id: msg.id,
+                type: msg.type,
+                content: msg.content,
+                toolCallId: msg.toolCallId,
+                sequence: msg.sequence,
+                createdAt: msg.createdAt,
+            })),
+            summary: session.summary,
+            lastSummarizedSequence: session.lastSummarizedSequence,
+        }));
     }
 }
