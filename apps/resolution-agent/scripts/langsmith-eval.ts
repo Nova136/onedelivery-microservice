@@ -364,7 +364,8 @@ async function main() {
         console.log("Dataset already exists. Skipping creation.");
     } catch {
         const dataset = await client.createDataset(DATASET_NAME, {
-            description: "Isolated evaluations for the Resolution Backend Agent",
+            description:
+                "Isolated evaluations for the Resolution Backend Agent",
         });
         await Promise.all(
             testCases.map((tc) =>

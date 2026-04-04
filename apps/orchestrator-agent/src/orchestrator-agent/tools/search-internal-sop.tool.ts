@@ -1,21 +1,24 @@
 import { z } from "zod";
 import { StructuredTool, tool } from "@langchain/core/tools";
-import { KnowledgeClientService, SopRequiredData } from "../../modules/clients/knowledge-client/knowledge-client.service";
+import { KnowledgeClientService } from "../../modules/clients/knowledge-client/knowledge-client.service";
+import { SopRequiredData } from "../../modules/clients/knowledge-client/interface/search-sop-response.interface";
 
 /**
  * Helper to format recursive SopRequiredData for LLM readability
  */
 function formatRequiredData(data: SopRequiredData[], indent = ""): string {
-    return data.map(item => {
-        let line = `${indent}- ${item.name} (${item.type}): ${item.description || ""}`;
-        if (item.properties) {
-            line += `\n${formatRequiredData(item.properties, indent + "  ")}`;
-        }
-        if (item.itemsSchema) {
-            line += `\n${indent}  Items:\n${formatRequiredData(item.itemsSchema, indent + "    ")}`;
-        }
-        return line;
-    }).join("\n");
+    return data
+        .map((item) => {
+            let line = `${indent}- ${item.name} (${item.type}): ${item.description || ""}`;
+            if (item.properties) {
+                line += `\n${formatRequiredData(item.properties, indent + "  ")}`;
+            }
+            if (item.itemsSchema) {
+                line += `\n${indent}  Items:\n${formatRequiredData(item.itemsSchema, indent + "    ")}`;
+            }
+            return line;
+        })
+        .join("\n");
 }
 
 const fetchInternalSOPSchema = z
@@ -64,7 +67,9 @@ ${sop.permittedTools && sop.permittedTools.length > 0 ? sop.permittedTools.join(
                 return formattedSop;
             } catch (err) {
                 const msg = err instanceof Error ? err.message : String(err);
-                throw new Error(`System Error: Knowledge Microservice unreachable. ${msg}`);
+                throw new Error(
+                    `System Error: Knowledge Microservice unreachable. ${msg}`,
+                );
             }
         },
         {

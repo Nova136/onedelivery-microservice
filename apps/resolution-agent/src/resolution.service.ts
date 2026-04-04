@@ -16,7 +16,11 @@ import { AgentChatPayload } from "@libs/modules/generic/interface/agent-chat-pay
 import { createGetOrderDetailsTool } from "./tools/get-order-details.tool";
 import { createExecuteRefundTool } from "./tools/execute-refund.tool";
 import { resolutionPromptBase } from "./core/prompt/resolution.prompt";
-import { AGENT_CHAT_PATTERN, GUARDIAN_VERIFY_PREFIX, GUARDIAN_GATE_PREFIX } from "@libs/modules/generic/enum/agent-chat.pattern";
+import {
+    AGENT_CHAT_PATTERN,
+    GUARDIAN_VERIFY_PREFIX,
+    GUARDIAN_GATE_PREFIX,
+} from "@libs/modules/generic/enum/agent-chat.pattern";
 
 /** Refunds above this USD amount are rejected without Guardian or Execute_Refund. */
 const AUTO_APPROVAL_LIMIT_USD = 20;
@@ -52,7 +56,9 @@ export class ResolutionService {
         let orderId: string | undefined;
         try {
             orderId = (JSON.parse(message) as { orderId?: string }).orderId;
-        } catch { /* non-JSON payload — orderId stays undefined */ }
+        } catch {
+            /* non-JSON payload — orderId stays undefined */
+        }
 
         let sopContext = "No SOP found.";
         try {
@@ -107,7 +113,9 @@ Before you use a tool or return your final answer, you MUST enclose your interna
         const scratchpad: BaseMessage[] = [];
 
         for (let i = 0; i < 5; i++) {
-            this.logger.log(`[${userId}] Resolution Loop ${i + 1}: Thinking...`);
+            this.logger.log(
+                `[${userId}] Resolution Loop ${i + 1}: Thinking...`,
+            );
 
             const formattedPrompt = await prompt.formatMessages({
                 input: message,
@@ -117,7 +125,9 @@ Before you use a tool or return your final answer, you MUST enclose your interna
             const response = await this.agentWithTools.invoke(formattedPrompt);
 
             if (response.content && String(response.content).length > 0) {
-                this.logger.log(`[${userId}] Resolution Thought: ${response.content}`);
+                this.logger.log(
+                    `[${userId}] Resolution Thought: ${response.content}`,
+                );
             }
 
             if (!response.tool_calls || response.tool_calls.length === 0) {
@@ -136,11 +146,17 @@ Before you use a tool or return your final answer, you MUST enclose your interna
                         const gateResult = await this.agentsClient.send(
                             "guardian",
                             AGENT_CHAT_PATTERN,
-                            { userId, sessionId: `${sessionId}-gate`, message: gateMessage },
+                            {
+                                userId,
+                                sessionId: `${sessionId}-gate`,
+                                message: gateMessage,
+                            },
                         );
                         const gateReply: string = gateResult?.reply ?? "";
                         if (gateReply.startsWith("BLOCKED:")) {
-                            this.logger.warn(`[${userId}] Guardian blocked Execute_Refund: ${gateReply}`);
+                            this.logger.warn(
+                                `[${userId}] Guardian blocked Execute_Refund: ${gateReply}`,
+                            );
                             scratchpad.push(
                                 new ToolMessage({
                                     content: `REJECTED: Guardian blocked this refund — ${gateReply.replace("BLOCKED: ", "")}`,
@@ -149,7 +165,9 @@ Before you use a tool or return your final answer, you MUST enclose your interna
                             );
                             continue;
                         }
-                        this.logger.log(`[${userId}] Guardian approved Execute_Refund.`);
+                        this.logger.log(
+                            `[${userId}] Guardian approved Execute_Refund.`,
+                        );
                     }
 
                     this.logger.log(
@@ -181,9 +199,7 @@ Before you use a tool or return your final answer, you MUST enclose your interna
             (finalMessage?.content as string) ||
             "REJECTED: We were unable to process your refund request at this time. Please contact our support team for assistance.";
 
-        result = result
-            .replace(/<thinking>[\s\S]*?<\/thinking>/g, "")
-            .trim();
+        result = result.replace(/<thinking>[\s\S]*?<\/thinking>/g, "").trim();
 
         this.logger.log(`[${userId}] Final Result (pre-guardian): "${result}"`);
 
@@ -210,7 +226,9 @@ Before you use a tool or return your final answer, you MUST enclose your interna
 
         // Guardian found issues — inject feedback and let the agent correct itself
         const feedback = guardianReply.replace("FEEDBACK: ", "").trim();
-        this.logger.log(`[${userId}] Guardian feedback received: "${feedback}". Retrying...`);
+        this.logger.log(
+            `[${userId}] Guardian feedback received: "${feedback}". Retrying...`,
+        );
 
         scratchpad.push(
             new SystemMessage(
@@ -220,7 +238,9 @@ Before you use a tool or return your final answer, you MUST enclose your interna
 
         let retryMessage: BaseMessage | undefined;
         for (let i = 0; i < 3; i++) {
-            this.logger.log(`[${userId}] Guardian Retry Loop ${i + 1}: Thinking...`);
+            this.logger.log(
+                `[${userId}] Guardian Retry Loop ${i + 1}: Thinking...`,
+            );
 
             const formattedPrompt = await prompt.formatMessages({
                 input: message,
@@ -238,26 +258,51 @@ Before you use a tool or return your final answer, you MUST enclose your interna
             for (const toolCall of response.tool_calls) {
                 const t = this.tools[toolCall.name];
                 if (!t) {
-                    scratchpad.push(new ToolMessage({ content: "Error: Tool not found", tool_call_id: toolCall.id }));
+                    scratchpad.push(
+                        new ToolMessage({
+                            content: "Error: Tool not found",
+                            tool_call_id: toolCall.id,
+                        }),
+                    );
                     continue;
                 }
                 if (toolCall.name === "Execute_Refund") {
                     const gateMessage = `${GUARDIAN_GATE_PREFIX} action: Tool=Execute_Refund, orderId="${toolCall.args.orderId}", items=${JSON.stringify(toolCall.args.items)}, reason="${toolCall.args.reason}". Confirm this refund action is SOP-compliant before execution.`;
-                    const gateResult = await this.agentsClient.send("guardian", AGENT_CHAT_PATTERN, { userId, sessionId: `${sessionId}-gate`, message: gateMessage });
+                    const gateResult = await this.agentsClient.send(
+                        "guardian",
+                        AGENT_CHAT_PATTERN,
+                        {
+                            userId,
+                            sessionId: `${sessionId}-gate`,
+                            message: gateMessage,
+                        },
+                    );
                     const gateReply: string = gateResult?.reply ?? "";
                     if (gateReply.startsWith("BLOCKED:")) {
-                        scratchpad.push(new ToolMessage({ content: `REJECTED: Guardian blocked this refund — ${gateReply.replace("BLOCKED: ", "")}`, tool_call_id: toolCall.id }));
+                        scratchpad.push(
+                            new ToolMessage({
+                                content: `REJECTED: Guardian blocked this refund — ${gateReply.replace("BLOCKED: ", "")}`,
+                                tool_call_id: toolCall.id,
+                            }),
+                        );
                         continue;
                     }
                 }
                 const toolOutput = await t.invoke(toolCall.args);
-                scratchpad.push(new ToolMessage({ content: String(toolOutput), tool_call_id: toolCall.id }));
+                scratchpad.push(
+                    new ToolMessage({
+                        content: String(toolOutput),
+                        tool_call_id: toolCall.id,
+                    }),
+                );
             }
         }
 
-        const finalResult = (retryMessage?.content as string)
-            ?.replace(/<thinking>[\s\S]*?<\/thinking>/g, "")
-            .trim() || "REJECTED: Your refund request could not be completed at this time. Please contact our support team for further assistance.";
+        const finalResult =
+            (retryMessage?.content as string)
+                ?.replace(/<thinking>[\s\S]*?<\/thinking>/g, "")
+                .trim() ||
+            "REJECTED: Your refund request could not be completed at this time. Please contact our support team for further assistance.";
 
         this.logger.log(`[${userId}] Guardian Retry Result: "${finalResult}"`);
         return this.finalizeReply(payload, finalResult, orderId);
@@ -266,7 +311,11 @@ Before you use a tool or return your final answer, you MUST enclose your interna
     /**
      * Wrap the agent result in a structured JSON response, notify the orchestrator, and return the JSON string.
      */
-    private finalizeReply(payload: AgentChatPayload, message: string, orderId?: string): string {
+    private finalizeReply(
+        payload: AgentChatPayload,
+        message: string,
+        orderId?: string,
+    ): string {
         const structured = this.buildStructuredResponse(message, orderId);
         const structuredStr = JSON.stringify(structured);
         this.agentsClient.notifyOrchestrator({
@@ -291,7 +340,9 @@ Before you use a tool or return your final answer, you MUST enclose your interna
             if (typeof parsed.status === "string") {
                 return { orderId: orderId ?? null, ...parsed };
             }
-        } catch { /* not JSON — fall through to plain-text parsing */ }
+        } catch {
+            /* not JSON — fall through to plain-text parsing */
+        }
 
         if (message.startsWith("SUCCESS:")) {
             const amountMatch = message.match(/\$(\d+(?:\.\d+)?)/);
@@ -314,7 +365,9 @@ Before you use a tool or return your final answer, you MUST enclose your interna
     /**
      * Single order fetch: reject if refundStatus is not NONE, or (missing/wrong items) if amount > $20.
      */
-    private async maybeRejectPreflight(message: string): Promise<string | null> {
+    private async maybeRejectPreflight(
+        message: string,
+    ): Promise<string | null> {
         type Payload = {
             orderId?: string;
             issueCategory?: string;
@@ -376,7 +429,10 @@ Before you use a tool or return your final answer, you MUST enclose your interna
     }
 
     private normalizeProductName(name: string): string {
-        return name.toLowerCase().replace(/^\d+\s+/, "").trim();
+        return name
+            .toLowerCase()
+            .replace(/^\d+\s+/, "")
+            .trim();
     }
 
     private findOrderLineForName(

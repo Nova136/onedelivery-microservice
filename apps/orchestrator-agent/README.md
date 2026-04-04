@@ -299,8 +299,8 @@ This system was designed with **Safety**, **Observability**, and **Scalability**
 
 ### 5. Multi-Model Hybrid vs. Single Provider
 
-- **The Decision:** We route tasks to different models (GPT-4o-mini, gpt-4o, Gemini 3.1 Pro) based on complexity.
-- **Why:** Optimizes the **Cost-Latency-Reasoning Trilemma**. A simple "Where is my food?" needs a sub-second response (GPT-4o-mini). However, a complex complaint like "My order was missing 3 items, the soup was cold, and I have a peanut allergy, what is my refund?" requires deep reasoning (gpt-4o). Cross-provider fallbacks ensure 99.99% uptime even during vendor outages, which is critical during peak meal times.
+- **The Decision:** We route tasks to different models (gpt-5.4-mini, gpt-4o, Gemini 3.1 Pro) based on complexity.
+- **Why:** Optimizes the **Cost-Latency-Reasoning Trilemma**. A simple "Where is my food?" needs a sub-second response (gpt-5.4-mini). However, a complex complaint like "My order was missing 3 items, the soup was cold, and I have a peanut allergy, what is my refund?" requires deep reasoning (gpt-4o). Cross-provider fallbacks ensure 99.99% uptime even during vendor outages, which is critical during peak meal times.
 
 ### 6. Communication Mechanism: Asynchronous vs. Synchronous
 
@@ -475,7 +475,7 @@ This orchestrator is designed with a "Security-First" architecture, implementing
 - **Backend**: Node.js (NestJS), LangGraph (orchestration), TypeORM (persistence), WebSocket (ws).
 - **AI Models**:
     - **gpt-4o / Gemini 3.1 Pro**: Complex reasoning & SOP execution.
-    - **gpt-4o-Mini / Gemini 3 Flash**: High-speed validation & routing.
+    - **gpt-5.4-mini / Gemini 3 Flash**: High-speed validation & routing.
 - **Storage**: Postgres (Single source of truth for Graph State, Chat History, Orders, SOPs, FAQs), Redis (Ephemeral PII Tokens).
 
 ## ⚙️ Setup & Installation
