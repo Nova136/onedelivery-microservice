@@ -50,128 +50,12 @@ jobs:
         id: ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Prepare task definition for microservice
-        env:
-          MICROSERVICE_NAME: ${{ matrix.microservice }}
-          AWS_REGION: ${{ env.AWS_REGION }}
-          ECS_TASK_EXECUTION_ROLE_ARN: ${{ vars.ECS_TASK_EXECUTION_ROLE_ARN }}
-          ECS_TASK_ROLE_ARN: ${{ vars.ECS_TASK_ROLE_ARN }}
-          ECS_TASK_CPU: ${{ vars.ECS_TASK_CPU || '256' }}
-          ECS_TASK_MEMORY: ${{ vars.ECS_TASK_MEMORY || '512' }}
-          ECS_NETWORK_MODE: ${{ vars.ECS_NETWORK_MODE || 'awsvpc' }}
-          ECS_REQUIRES_COMPATIBILITIES: ${{ vars.ECS_REQUIRES_COMPATIBILITIES || 'FARGATE' }}
-          NODE_ENV: ${{ vars.NODE_ENV || 'production' }}
-          DATABASE_URL: ${{ secrets.DATABASE_URL || vars.DATABASE_URL || '' }}
-          JWT_SECRET: ${{ secrets.JWT_SECRET || vars.JWT_SECRET || '' }}
-          RABBITMQ_URL: ${{ secrets.RABBITMQ_URL || vars.RABBITMQ_URL || '' }}
-          CORS_ORIGIN: ${{ vars.CORS_ORIGIN || '*' }}
-          DB_HOST: ${{ vars.DB_HOST || 'postgres' }}
-          DB_PORT: ${{ vars.DB_PORT || '5432' }}
-          DB_NAME: ${{ vars.DB_NAME || 'onedelivery' }}
-          DB_USER: ${{ secrets.DB_USER || vars.DB_USER || 'postgres' }}
-          DB_PASSWORD: ${{ secrets.DB_PASSWORD || vars.DB_PASSWORD || 'postgres' }}
+      - name: Download existing task definition
         run: |
-          set -euo pipefail
-
-          if [[ -z "${ECS_TASK_EXECUTION_ROLE_ARN:-}" || -z "${ECS_TASK_ROLE_ARN:-}" ]]; then
-            ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
-            ECS_TASK_EXECUTION_ROLE_ARN="arn:aws:iam::${ACCOUNT_ID}:role/onedelivery-ecs-exec"
-            ECS_TASK_ROLE_ARN="arn:aws:iam::${ACCOUNT_ID}:role/onedelivery-ecs-task"
-          fi
-
-          get_port() {
-            case "$1" in
-              audit) echo "9001" ;;
-              logistics) echo "9002" ;;
-              order) echo "9003" ;;
-              payment) echo "9004" ;;
-              user) echo "9005" ;;
-              incident) echo "9006" ;;
-              knowledge) echo "9007" ;;
-              orchestrator-agent) echo "9010" ;;
-              logistics-agent) echo "9011" ;;
-              resolution-agent) echo "9012" ;;
-              guardian-agent) echo "9013" ;;
-              qa-agent) echo "9014" ;;
-              *) echo "80" ;;
-            esac
-          }
-
-          PORT="$(get_port "$MICROSERVICE_NAME")"
-          PORT_ENV_VAR="$(echo "$MICROSERVICE_NAME" | tr '[:lower:]' '[:upper:]' | tr '-' '_')_PORT"
-
-          EXISTING_SECRETS=$(aws ecs describe-task-definition --task-definition "onedelivery-${MICROSERVICE_NAME}" --query 'taskDefinition.containerDefinitions[0].secrets' --output json || echo "[]")
-          if [[ "$EXISTING_SECRETS" == "null" ]]; then
-            EXISTING_SECRETS="[]"
-          fi
-
           mkdir -p .github/workflows/generated-task-definitions
-          OUT=".github/workflows/generated-task-definitions/${MICROSERVICE_NAME}.json"
-
-          jq -n \
-            --arg family "onedelivery-${MICROSERVICE_NAME}" \
-            --arg networkMode "${ECS_NETWORK_MODE}" \
-            --arg requiresCompat "${ECS_REQUIRES_COMPATIBILITIES}" \
-            --arg cpu "${ECS_TASK_CPU}" \
-            --arg memory "${ECS_TASK_MEMORY}" \
-            --arg execRole "${ECS_TASK_EXECUTION_ROLE_ARN}" \
-            --arg taskRole "${ECS_TASK_ROLE_ARN}" \
-            --arg cname "${MICROSERVICE_NAME}" \
-            --arg image "placeholder" \
-            --arg awsRegion "${AWS_REGION}" \
-            --arg nodeEnv "${NODE_ENV}" \
-            --arg databaseUrl "${DATABASE_URL}" \
-            --arg jwtSecret "${JWT_SECRET}" \
-            --arg rabbitmqUrl "${RABBITMQ_URL}" \
-            --arg corsOrigin "${CORS_ORIGIN}" \
-            --arg dbHost "${DB_HOST}" \
-            --arg dbPort "${DB_PORT}" \
-            --arg dbName "${DB_NAME}" \
-            --arg dbUser "${DB_USER}" \
-            --arg dbPassword "${DB_PASSWORD}" \
-            --argjson port "$PORT" \
-            --arg portEnvVar "$PORT_ENV_VAR" \
-            --argjson secrets "$EXISTING_SECRETS" \
-            '{
-              family: $family,
-              networkMode: $networkMode,
-              requiresCompatibilities: [$requiresCompat],
-              cpu: $cpu,
-              memory: $memory,
-              executionRoleArn: $execRole,
-              taskRoleArn: $taskRole,
-              containerDefinitions: [
-                {
-                  name: $cname,
-                  image: $image,
-                  portMappings: [
-                    { containerPort: $port, hostPort: $port, protocol: "tcp" }
-                  ],
-                  environment: [
-                    { name: "NODE_ENV", value: $nodeEnv },
-                    { name: "DATABASE_URL", value: $databaseUrl },
-                    { name: "JWT_SECRET", value: $jwtSecret },
-                    { name: "RABBITMQ_URL", value: $rabbitmqUrl },
-                    { name: "CORS_ORIGIN", value: $corsOrigin },
-                    { name: "DB_HOST", value: $dbHost },
-                    { name: "DB_PORT", value: $dbPort },
-                    { name: "DB_NAME", value: $dbName },
-                    { name: "DB_USER", value: $dbUser },
-                    { name: "DB_PASSWORD", value: $dbPassword },
-                    { name: $portEnvVar, value: ($port | tostring) }
-                  ],
-                  secrets: $secrets,
-                  logConfiguration: {
-                    logDriver: "awslogs",
-                    options: {
-                      "awslogs-group": ("/ecs/onedelivery-" + $cname),
-                      "awslogs-region": $awsRegion,
-                      "awslogs-stream-prefix": $cname
-                    }
-                  }
-                }
-              ]
-            }' > "$OUT"
+          aws ecs describe-task-definition \
+            --task-definition "onedelivery-${{ matrix.microservice }}" \
+            --query taskDefinition > .github/workflows/generated-task-definitions/${{ matrix.microservice }}.json
 
       - name: Set image URI
         id: build-image
@@ -188,6 +72,12 @@ jobs:
           task-definition: .github/workflows/generated-task-definitions/${{ matrix.microservice }}.json
           container-name: ${{ matrix.microservice }}
           image: ${{ steps.build-image.outputs.image }}
+          environment-variables: |
+            DATABASE_URL=${{ secrets.DATABASE_URL || vars.DATABASE_URL || '' }}
+            JWT_SECRET=${{ secrets.JWT_SECRET || vars.JWT_SECRET || '' }}
+            RABBITMQ_URL=${{ secrets.RABBITMQ_URL || vars.RABBITMQ_URL || '' }}
+            CORS_ORIGIN=${{ vars.CORS_ORIGIN || '*' }}
+            DB_PASSWORD=${{ secrets.DB_PASSWORD || vars.DB_PASSWORD || 'postgres' }}
 
       - name: Deploy Amazon ECS task definition
         uses: aws-actions/amazon-ecs-deploy-task-definition@v1
