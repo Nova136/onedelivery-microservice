@@ -194,7 +194,15 @@ export class OrderController {
                 status: o.status,
                 customerId: o.customerId,
                 createdAt: o.createdAt.toISOString(),
-                items: o.items,
+                items: o.items?.map((i) => ({
+                    id: i.id,
+                    orderId: i.orderId,
+                    productId: i.productId,
+                    productName: i.productName,
+                    quantityOrdered: i.quantityOrdered,
+                    quantityRefunded: i.quantityRefunded,
+                    price: Number(i.price),
+                })),
             })),
             message: "Order microservice: list returned",
         };

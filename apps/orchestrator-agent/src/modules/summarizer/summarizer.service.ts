@@ -10,7 +10,7 @@ export class SummarizerService {
 
     constructor() {
         const primaryModel = new ChatOpenAI({
-            modelName: "gpt-4o-mini",
+            modelName: "gpt-5.4-mini",
             openAIApiKey: process.env.OPENAI_API_KEY,
             temperature: 0,
             metadata: { environment: "production", component: "summarizer" },
@@ -58,6 +58,7 @@ export class SummarizerService {
    - If the agent says the request is "submitted" or "processing", the outcome is "Submitted" and it should also be listed in 'Pending Actions'.
    - Only use "Cancelled" or "Resolved" if the agent explicitly confirms the action is FINAL and complete.
    - Clear the 'Current Goal' if no task is active, or update it to the new 'Current Active Task'.
+   - For Agent History, specifiy the details (E.g. Order ID of the request initiated).
 3. **Style**: Be concise, information-dense, and remove redundancies. Target length: ~200 words. If the conversation is very long, prioritize the most recent status and critical facts (Order IDs, resolutions).
 4. **Output**: Return ONLY the updated summary text.
 </instructions>
