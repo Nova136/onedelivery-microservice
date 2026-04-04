@@ -28,10 +28,12 @@ const logisticsSchema = z.object({
     orderId: z
         .string()
         .optional()
+        .nullable()
         .describe("The order ID. REQUIRED if action is 'cancel_order'."),
     description: z
         .string()
         .optional()
+        .nullable()
         .describe(
             "A detailed description of the reason for cancellation (e.g., 'I ordered the wrong items' or 'I found a better price'). CRITICAL: Do not use the user's intent to cancel as the description; if the user only says 'I want to cancel', this field should remain null until they explain WHY.",
         ),
@@ -51,7 +53,9 @@ export function createRouteToLogisticsTool(
                 return "Request submitted to Logistics Agent.";
             } catch (err) {
                 const msg = err instanceof Error ? err.message : String(err);
-                throw new Error(`System Error: Logistics Agent unreachable. ${msg}`);
+                throw new Error(
+                    `System Error: Logistics Agent unreachable. ${msg}`,
+                );
             }
         },
         {
