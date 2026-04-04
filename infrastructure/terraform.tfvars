@@ -80,3 +80,4 @@ cors_allowed_origins = ["https://nova136.github.io"]
 # ── AI / LLM secrets (written to SSM Parameter Store as SecureString) ─────────
 # openai_api_key is REQUIRED — set your actual key here or via TF_VAR_openai_api_key
 openai_api_key = "sk-REPLACE_ME"
+gemini_api_key = "REPLACE_ME_WITH_GEMINI_KEY"
