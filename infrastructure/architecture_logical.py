@@ -68,7 +68,7 @@ with Diagram(
             moderation = TypeScript("Moderation Guard\nInput · Output eval")
 
         router = TypeScript(
-            "Semantic Router  (GPT-4o-mini)\n"
+            "Semantic Router  (gpt-5.4-mini)\n"
             "ACTION · FAQ · ESCALATE · END_SESSION"
         )
 
@@ -84,7 +84,7 @@ with Diagram(
             )
             faq_agent = NodeJS(
                 "FAQ Agent\n"
-                "GPT-4o-mini\n"
+                "gpt-5.4-mini\n"
                 "Semantic FAQ / SOP Q&A"
             )
 
@@ -124,7 +124,7 @@ with Diagram(
 
     with Cluster("External AI Services"):
         gpt4o      = Sagemaker("OpenAI  GPT-4o\nAction · Resolution\nLogistics · Guardian")
-        gpt4o_mini = Sagemaker("OpenAI  GPT-4o-mini\nSemantic Router · FAQ\nQA Agent")
+        gpt4o_mini = Sagemaker("OpenAI  gpt-5.4-mini\nSemantic Router · FAQ\nQA Agent")
         langsmith  = Datadog("LangSmith\nLLM tracing · eval\nCI pipeline")
 
     # =========================================================================

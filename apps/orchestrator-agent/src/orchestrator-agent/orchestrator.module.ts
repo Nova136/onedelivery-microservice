@@ -64,7 +64,7 @@ import { InputValidatorModule } from "../modules/input-validator/input-validator
                 });
 
                 const callbackModel = new ChatOpenAI({
-                    modelName: "gpt-4o-mini",
+                    modelName: "gpt-5.4-mini",
                     openAIApiKey: process.env.OPENAI_API_KEY,
                     temperature: 0,
                     metadata: {
@@ -116,7 +116,7 @@ import { InputValidatorModule } from "../modules/input-validator/input-validator
                 });
 
                 const sopModel = new ChatOpenAI({
-                    modelName: "gpt-4o",
+                    modelName: "gpt-5.4-mini",
                     openAIApiKey: process.env.OPENAI_API_KEY,
                     temperature: 0,
                     metadata: {
@@ -126,7 +126,7 @@ import { InputValidatorModule } from "../modules/input-validator/input-validator
                 });
 
                 const infoModel = new ChatOpenAI({
-                    modelName: "gpt-4o-mini",
+                    modelName: "gpt-5.4-mini",
                     openAIApiKey: process.env.OPENAI_API_KEY,
                     temperature: 0,
                     metadata: {
@@ -136,7 +136,7 @@ import { InputValidatorModule } from "../modules/input-validator/input-validator
                 });
 
                 const routingModel = new ChatOpenAI({
-                    modelName: "gpt-4o-mini",
+                    modelName: "gpt-5.4-mini",
                     openAIApiKey: process.env.OPENAI_API_KEY,
                     temperature: 0,
                     metadata: {
@@ -146,7 +146,7 @@ import { InputValidatorModule } from "../modules/input-validator/input-validator
                 });
 
                 const correctionModel = new ChatOpenAI({
-                    modelName: "gpt-4o",
+                    modelName: "gpt-5.4-mini",
                     openAIApiKey: process.env.OPENAI_API_KEY,
                     temperature: 0,
                     metadata: {
@@ -156,7 +156,7 @@ import { InputValidatorModule } from "../modules/input-validator/input-validator
                 });
 
                 const aggregationModel = new ChatOpenAI({
-                    modelName: "gpt-4o-mini",
+                    modelName: "gpt-5.4-mini",
                     openAIApiKey: process.env.OPENAI_API_KEY,
                     temperature: 0,
                     metadata: {
