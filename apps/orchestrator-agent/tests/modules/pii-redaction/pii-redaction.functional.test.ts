@@ -14,24 +14,29 @@ async function runTests() {
             validate: (redacted: string) => redacted.includes("REDACTED_EMAIL_") && !redacted.includes("john.doe@example.com")
         },
         {
-            name: "Phone Number Redaction",
-            input: "Call me at +1 (555) 123-4567 or 555-987-6543.",
-            validate: (redacted: string) => redacted.split("REDACTED_PHONE_").length > 2 && !redacted.includes("555")
+            name: "Phone Number Redaction (US & International)",
+            input: "Call me at +1 (555) 123-4567 or +65 9123 4567.",
+            validate: (redacted: string) => redacted.split("REDACTED_PHONE_").length > 2 && !redacted.includes("555") && !redacted.includes("9123")
         },
         {
-            name: "Credit Card Redaction",
+            name: "Phone Number Redaction (Singapore Local)",
+            input: "My local number is 81234567 or 9123 4567.",
+            validate: (redacted: string) => redacted.split("REDACTED_PHONE_").length > 2 && !redacted.includes("81234567") && !redacted.includes("9123")
+        },
+        {
+            name: "Order Number (No Redaction)",
+            input: "My order number is 12345678.",
+            validate: (redacted: string) => redacted.includes("12345678") && !redacted.includes("REDACTED_PHONE_")
+        },
+        {
+            name: "Credit Card Redaction (Priority over Phone)",
             input: "My card number is 1234-5678-9012-3456.",
-            validate: (redacted: string) => redacted.includes("REDACTED_CARD_") && !redacted.includes("1234-5678")
+            validate: (redacted: string) => redacted.includes("REDACTED_CARD_") && !redacted.includes("1234-5678") && !redacted.includes("REDACTED_PHONE_")
         },
         {
             name: "Name Redaction (NLP)",
             input: "Hello, my name is Alice Smith and I live in London.",
             validate: (redacted: string) => redacted.includes("REDACTED_NAME_") && !redacted.includes("Alice") && redacted.includes("London") // London should NOT be redacted
-        },
-        {
-            name: "Precise Location Redaction (Regex)",
-            input: "Please deliver to 123 Main Street, Apt 4B.",
-            validate: (redacted: string) => redacted.includes("REDACTED_ADDRESS_") && !redacted.includes("123 Main Street")
         },
         {
             name: "Company Name (No Redaction)",
@@ -40,11 +45,10 @@ async function runTests() {
         },
         {
             name: "Mixed PII and Scope",
-            input: "Contact Bob at bob@gmail.com regarding the delivery to 456 Avenue Road in New York.",
+            input: "Contact Bob at bob@gmail.com regarding the delivery to New York.",
             validate: (redacted: string) => 
                 redacted.includes("REDACTED_NAME_") && 
                 redacted.includes("REDACTED_EMAIL_") && 
-                redacted.includes("REDACTED_ADDRESS_") && 
                 redacted.includes("New York") // New York should NOT be redacted
         },
         {

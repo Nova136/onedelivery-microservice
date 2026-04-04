@@ -6,7 +6,7 @@ export class Faq extends BaseEntity {
     @Column({ type: "varchar", length: 255, nullable: true })
     title: string;
 
-    @Column({ type: "text" })
+    @Column({ type: "text", nullable: true })
     content: string;
 
     @Column({ type: "vector", nullable: true })
