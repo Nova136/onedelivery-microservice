@@ -88,6 +88,20 @@ async function pollTask(apiKey, taskId) {
     );
 
     if (status === "completed") {
+      // Artifact may not be ready immediately after completion — keep polling
+      // until files appear or export_status is no longer "no_artifact".
+      const files = extractFiles(data);
+      const exportStatus = data.output?.export_status ?? "";
+      if (files.length > 0) {
+        process.stdout.write("\n");
+        return data;
+      }
+      if (exportStatus === "no_artifact") {
+        process.stdout.write(
+          `\r  [${elapsed}s] status: completed     (export pending...)`
+        );
+        continue;
+      }
       process.stdout.write("\n");
       return data;
     }
@@ -141,7 +155,33 @@ if (!fs.existsSync(contentFile)) {
   process.exit(1);
 }
 
-const markdownContent = fs.readFileSync(contentFile, "utf8");
+const rawMarkdown = fs.readFileSync(contentFile, "utf8");
+const contentDir = path.dirname(path.resolve(contentFile));
+
+// Embed local image references as base64 data URIs so AnyGen receives the
+// actual image bytes rather than an unresolvable local filesystem path.
+// Matches: ![alt text](relative/or/absolute/path.png)
+// Skips:   already-embedded data URIs and http(s) URLs
+function embedImages(markdown, baseDir) {
+  return markdown.replace(
+    /!\[([^\]]*)\]\(([^)]+)\)/g,
+    (match, alt, src) => {
+      if (src.startsWith("data:") || src.startsWith("http")) return match;
+      const imgPath = path.resolve(baseDir, src);
+      if (!fs.existsSync(imgPath)) {
+        console.warn(`  [warn] Image not found, skipping embed: ${imgPath}`);
+        return match;
+      }
+      const ext = path.extname(imgPath).toLowerCase().replace(".", "");
+      const mime = ext === "jpg" ? "image/jpeg" : `image/${ext}`;
+      const b64 = fs.readFileSync(imgPath).toString("base64");
+      console.log(`  [embed] ${src} (${(b64.length * 0.75 / 1024).toFixed(0)} KB)`);
+      return `![${alt}](data:${mime};base64,${b64})`;
+    }
+  );
+}
+
+const markdownContent = embedImages(rawMarkdown, contentDir);
 const apiKey = getApiKey();
 
 const defaultOutput =
@@ -150,6 +190,8 @@ const outputPath = outputFile ?? defaultOutput;
 
 console.log(`\n==> Reading content from : ${contentFile}`);
 console.log(`==> Output will be saved : ${outputPath}`);
+console.log(`==> Embedding local images as base64 data URIs...`);
+
 console.log(`==> Starting AnyGen slide generation...`);
 
 try {
