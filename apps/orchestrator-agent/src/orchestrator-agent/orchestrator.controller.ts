@@ -163,6 +163,7 @@ export class OrchestratorController {
                     userId,
                     sessionId,
                     message,
+                    connectionId,
                 );
                 if (endpoint) {
                     const payload = JSON.stringify({
@@ -196,12 +197,56 @@ export class OrchestratorController {
             }
 
             // Specialist agent callback path
+            this.logger.log(`[CB] processAgentCallback start — session=${sessionId} userId=${userId}`);
             const result = await this.orchestratorService.processAgentCallback(
                 sessionId,
                 userId,
                 message,
             );
-            this.gateway.sendAgentUpdate(sessionId, result.messageContent);
+            this.logger.log(`[CB] processAgentCallback done — connectionId=${result.connectionId} messageContent=${result.messageContent ? `"${String(result.messageContent).slice(0, 80)}..."` : "null"}`);
+
+            const callbackConnectionId = result.connectionId;
+            if (!callbackConnectionId) {
+                this.logger.warn(
+                    `[CB] No connectionId for session=${sessionId} — cannot push callback to WebSocket`,
+                );
+                return { success: true };
+            }
+            if (!result.messageContent) {
+                this.logger.warn(`[CB] messageContent is null for session=${sessionId} — skipping push`);
+                return { success: true };
+            }
+            const wsPayload = JSON.stringify({ reply: result.messageContent, sessionId });
+            if (endpoint?.startsWith("http://")) {
+                // Local dev: plain HTTP POST — no AWS credentials needed
+                this.logger.log(`[CB] Pushing to local ws-gateway: ${endpoint}/@connections/${callbackConnectionId}`);
+                await axios.post(
+                    `${endpoint}/@connections/${callbackConnectionId}`,
+                    wsPayload,
+                    { headers: { "Content-Type": "application/json" } },
+                );
+                this.logger.log(`[CB] Successfully pushed to local ws-gateway for connectionId=${callbackConnectionId}`);
+            } else if (endpoint) {
+                // Production: AWS API Gateway Management API (SigV4 signed)
+                this.logger.log(`[CB] Pushing to API Gateway: endpoint=${endpoint} connectionId=${callbackConnectionId}`);
+                const client = new ApiGatewayManagementApiClient({
+                    endpoint,
+                    region:
+                        this.configService.get<string>("AWS_REGION") ??
+                        "ap-southeast-1",
+                });
+                await client.send(
+                    new PostToConnectionCommand({
+                        ConnectionId: callbackConnectionId,
+                        Data: Buffer.from(wsPayload),
+                    }),
+                );
+                this.logger.log(`[CB] Successfully pushed to API Gateway for connectionId=${callbackConnectionId}`);
+            } else {
+                this.logger.warn(`[CB] WEBSOCKET_API_ENDPOINT is not set — cannot push callback`);
+            }
+
+            // this.gateway.sendAgentUpdate(sessionId, result.messageContent);
             return { success: true };
         } catch (error) {
             this.logger.error(`handleCallback error: ${error}`);
