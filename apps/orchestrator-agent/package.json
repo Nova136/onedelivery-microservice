@@ -1,5 +1,6 @@
 {
     "scripts": {
+        "build": "cd ../.. && nest build orchestrator-agent",
         "typeorm-migration": "cd .. && cd .. &&  ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js",
         "typeorm-migration-gen:orchestrator-agent": "npm run typeorm-migration -- -d apps/orchestrator-agent/typeorm-config.ts migration:generate apps/orchestrator-agent/src/database/migrations/Migrations",
         "typeorm-migration-run:orchestrator-agent": "npm run typeorm-migration -- -d apps/orchestrator-agent/typeorm-config.ts migration:run",
