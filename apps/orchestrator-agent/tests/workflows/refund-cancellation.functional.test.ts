@@ -1,14 +1,13 @@
-import { AIMessage, HumanMessage } from "@langchain/core/messages";
+import { PromptShieldService } from "../../src/modules/prompt-shield/prompt-shield.service";
+import { AuditService } from "../../src/modules/audit/audit.service";
+import { HumanMessage } from "@langchain/core/messages";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { StructuredTool } from "@langchain/core/tools";
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { ChatOpenAI } from "@langchain/openai";
 import dotenv from "dotenv";
 import { z } from "zod";
-import { KnowledgeClientService } from "../../src/modules/clients/knowledge-client/knowledge-client.service";
 import { createSopHandlerNode } from "../../src/orchestrator-agent/nodes/sop-handler.node";
-import { wrapOpenAI } from "langsmith/wrappers";
-import { Client } from "langsmith";
 
 dotenv.config();
 
@@ -19,9 +18,9 @@ class LLMJudge {
     private model: BaseChatModel;
 
     constructor() {
-        // Use GPT-5.4 for reasoning-heavy evaluation
+        // Use gpt-4o for reasoning-heavy evaluation
         this.model = new ChatOpenAI({
-            modelName: "gpt-5.4",
+            modelName: "gpt-4o",
             temperature: 0,
         });
     }
@@ -67,7 +66,7 @@ async function runWorkflowTests() {
 
     // Initialize Models
     const llm = new ChatOpenAI({
-        modelName: "gpt-5.4",
+        modelName: "gpt-4o",
         temperature: 0,
     });
 
@@ -76,12 +75,59 @@ async function runWorkflowTests() {
         apiKey: process.env.GEMINI_API_KEY || "mock-key",
     });
 
-    const model = llm.withFallbacks({
+    llm.withFallbacks({
         fallbacks: [geminiFallback],
-    }) as unknown as BaseChatModel;
+    });
 
     // Initialize Services
-    const knowledgeClient = new KnowledgeClientService(null);
+    const mockKnowledgeClient = {
+        searchInternalSop: async (params: any) => {
+            if (params.intentCode === "REQUEST_REFUND") {
+                return {
+                    intentCode: "REQUEST_REFUND",
+                    title: "Refund Request",
+                    requiredData: [
+                        {
+                            name: "orderId",
+                            type: "string",
+                            description: "The order ID",
+                        },
+                        {
+                            name: "issueCategory",
+                            type: "string",
+                            description: "The category of the issue",
+                        },
+                        {
+                            name: "description",
+                            type: "string",
+                            description: "Description of the issue",
+                        },
+                    ],
+                    resolutionTool: "Route_To_Resolution",
+                };
+            }
+            if (params.intentCode === "CANCEL_ORDER") {
+                return {
+                    intentCode: "CANCEL_ORDER",
+                    title: "Cancel Order",
+                    requiredData: [
+                        {
+                            name: "orderId",
+                            type: "string",
+                            description: "The order ID",
+                        },
+                        {
+                            name: "reason",
+                            type: "string",
+                            description: "Reason for cancellation",
+                        },
+                    ],
+                    resolutionTool: "Route_To_Resolution",
+                };
+            }
+            return null;
+        },
+    };
 
     // Mock Tools
     class MockResolutionTool extends StructuredTool {
@@ -112,10 +158,15 @@ async function runWorkflowTests() {
     }
 
     const tools = [new MockResolutionTool(), new MockLogisticsTool()];
+    const promptShield = new PromptShieldService();
+    const auditService = new AuditService();
     const sopHandler = createSopHandlerNode({
-        llm: model,
+        llm: llm,
+        llmFallback: geminiFallback,
         tools,
-        knowledgeClient,
+        knowledgeClient: mockKnowledgeClient as any,
+        promptShield,
+        auditService,
     });
     const judge = new LLMJudge();
 
@@ -133,7 +184,7 @@ async function runWorkflowTests() {
             intent: "REQUEST_REFUND",
             input: "I want a refund for order #12345 because some items are missing.",
             expectedOutcome:
-                "The agent should identify the category as 'missing_item' and ask for the specific items and quantities that are missing.",
+                "The agent should identify the category as 'missing_item' and output a system instruction to ask for confirmation of the gathered details.",
             initialState: { order_states: { orderId: "12345" } },
         },
         {
@@ -141,7 +192,7 @@ async function runWorkflowTests() {
             intent: "REQUEST_REFUND",
             input: "I want a refund for order #12345. The food was cold and spilled everywhere.",
             expectedOutcome:
-                "The agent should extract orderId #12345, category 'quality_issue', and the description, then ask for confirmation.",
+                "The agent should extract orderId #12345, category 'quality_issue', and the description, and output a system instruction to ask for confirmation.",
             initialState: { order_states: {} },
         },
         {
@@ -157,7 +208,7 @@ async function runWorkflowTests() {
             intent: "CANCEL_ORDER",
             input: "Cancel order #9999. I've been waiting for 2 hours and I'm not hungry anymore.",
             expectedOutcome:
-                "The agent should extract orderId #9999 and the description, then ask for confirmation.",
+                "The agent should extract orderId #9999 and the description, and output a system instruction to ask for confirmation.",
             initialState: { order_states: {} },
         },
     ];
@@ -174,6 +225,11 @@ async function runWorkflowTests() {
                     {
                         orderId: "12345",
                         status: "DELIVERED",
+                        createdAt: new Date().toISOString(),
+                    },
+                    {
+                        orderId: "9999",
+                        status: "IN_TRANSIT",
                         createdAt: new Date().toISOString(),
                     },
                 ],
