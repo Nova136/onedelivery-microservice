@@ -45,11 +45,15 @@ export function createRouteToLogisticsTool(
     return tool(
         async (payload: LogisticsPayload) => {
             try {
-                agentsClient.send("logistic", {
-                    userId: payload.userId,
-                    sessionId: payload.sessionId,
-                    message: JSON.stringify(payload),
-                });
+                agentsClient
+                    .send("logistic", {
+                        userId: payload.userId,
+                        sessionId: payload.sessionId,
+                        message: JSON.stringify(payload),
+                    })
+                    .catch((err) => {
+                        console.error("[Route_To_Logistics] Fire-and-forget failed:", err?.message ?? err);
+                    });
                 return "Request submitted to Logistics Agent.";
             } catch (err) {
                 const msg = err instanceof Error ? err.message : String(err);
