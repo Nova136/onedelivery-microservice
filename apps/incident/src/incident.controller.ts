@@ -7,7 +7,7 @@ import { LogIncidentDto } from './dto/LogIncidentDto';
 
 
 @ApiTags('Incident')
-@Controller()
+@Controller("Incident")
 export class IncidentController {
   constructor(private readonly incidentService: IncidentService) {}
 
@@ -53,14 +53,14 @@ export class IncidentController {
     };
   }
 
-  @Get('/incidents')
+  @Get('')
   @ApiOperation({ summary: 'Get all incidents via REST' })
   async getIncidents() {
     const incident = await this.incidentService.getIncidents();
     return { incidents: incident };
   }
 
-  @Get('/incidents/trends')
+  @Get('/trends')
   @ApiOperation({ summary: 'Get incident trends via REST' })
   async trendAnalysis() {
     const trendAnalysis = await this.incidentService.analyzeTrends();
