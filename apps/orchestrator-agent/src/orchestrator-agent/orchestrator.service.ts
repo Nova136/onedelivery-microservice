@@ -1,4 +1,5 @@
 import { Injectable, Inject, Logger } from "@nestjs/common";
+import type { Pool } from "pg";
 import {
     HumanMessage,
     AIMessage,
@@ -18,12 +19,30 @@ export class OrchestratorService {
     constructor(
         @Inject("ORCHESTRATOR_GRAPH") private readonly graph: any,
         @Inject("AGENT_CALLBACK_GRAPH") private readonly callbackGraph: any,
+        @Inject("PG_POOL") private readonly pool: Pool,
         private readonly memoryService: MemoryClientService,
         private readonly piiService: PiiRedactionService,
         private readonly promptShield: PromptShieldService,
         private readonly inputValidator: InputValidatorService,
         private readonly summarizer: SummarizerService,
     ) {}
+
+    private async getConnectionId(sessionId: string): Promise<string | null> {
+        this.logger.log(`[WS] Looking up connectionId for session=${sessionId}`);
+        const { rows } = await this.pool.query<{ connection_id: string }>(
+            `SELECT connection_id FROM ws.connections
+             WHERE session_id = $1 AND expires_at > NOW()
+             LIMIT 1`,
+            [sessionId],
+        );
+        const connectionId = rows[0]?.connection_id ?? null;
+        if (connectionId) {
+            this.logger.log(`[WS] Found connectionId=${connectionId} for session=${sessionId}`);
+        } else {
+            this.logger.warn(`[WS] No active connectionId found for session=${sessionId}`);
+        }
+        return connectionId;
+    }
 
     /**
      * Core chat processing logic
@@ -32,7 +51,20 @@ export class OrchestratorService {
         userId: string,
         sessionId: string | undefined,
         message: string,
+        connectionId?: string,
     ) {
+        // Upsert connectionId into ws.connections so the callback path can look it up.
+        // In production the Lambda connect handler already inserted the row;
+        // in local dev (no Lambda) this is the only writer.
+        if (connectionId && sessionId && userId) {
+            await this.pool.query(
+                `INSERT INTO ws.connections (connection_id, user_id, session_id, expires_at)
+                 VALUES ($1, $2, $3, NOW() + INTERVAL '24 hours')
+                 ON CONFLICT (connection_id) DO UPDATE
+                   SET session_id = $3, expires_at = NOW() + INTERVAL '24 hours'`,
+                [connectionId, userId, sessionId],
+            );
+        }
         const session = await this.memoryService.getChatHistory(
             userId,
             sessionId,
@@ -325,7 +357,10 @@ export class OrchestratorService {
             state.current_intent || "None",
         );
 
+        const connectionId = await this.getConnectionId(sessionId);
+
         return {
+            connectionId,
             success: true,
             messageContent: result.synthesized_message,
             isSafe: result.is_safe,

@@ -20,6 +20,7 @@ import { PromptShieldModule } from "../modules/prompt-shield/prompt-shield.modul
 import { PromptShieldService } from "../modules/prompt-shield/prompt-shield.service";
 import { AuditModule } from "../modules/audit/audit.module";
 import { AuditService } from "../modules/audit/audit.service";
+import pg from "pg";
 import { createCheckpointer } from "./checkpointer";
 import { createOrchestratorGraph } from "./graph";
 import { createAgentCallbackGraph } from "./agent-callback.graph";
@@ -49,6 +50,11 @@ import { InputValidatorModule } from "../modules/input-validator/input-validator
     providers: [
         OrchestratorService,
         OrchestratorGateway,
+        {
+            provide: "PG_POOL",
+            useFactory: () =>
+                new pg.Pool({ connectionString: process.env.DATABASE_URL }),
+        },
         {
             provide: "AGENT_CALLBACK_GRAPH",
             useFactory: async (
@@ -225,6 +231,7 @@ import { InputValidatorModule } from "../modules/input-validator/input-validator
         OrchestratorService,
         "ORCHESTRATOR_GRAPH",
         "AGENT_CALLBACK_GRAPH",
+        "PG_POOL",
     ],
 })
 export class OrchestratorModule {}
