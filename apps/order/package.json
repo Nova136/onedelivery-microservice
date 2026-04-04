@@ -1,14 +1,15 @@
 {
-  "scripts": {
-    "typeorm-migration": "cd .. && cd .. &&  ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js",
-    "typeorm-migration-gen:order": "npm run typeorm-migration -- -d apps/order/typeorm-config.ts migration:generate apps/order/src/database/migrations/Migrations",
-    "typeorm-migration-run:order": "npm run typeorm-migration -- -d apps/order/typeorm-config.ts migration:run",
-    "typeorm-migration-revert:order": "npm run typeorm-migration -- -d apps/order/typeorm-config.ts migration:revert",
-    "test:unit": "jest --testMatch \"**/+(*.)+(spec).+(ts)\" ",
-    "test:coverage": "jest --config jest.unit.config.js --coverage",
-    "test:e2e:watch": "jest --watchAll",
-    "test:e2e": "jest --testMatch \"**/+(*.)+(e2e-spec).+(ts)\"",
-    "test:e2e:coverage": "jest --coverage",
-    "seed:run": "ts-node -r tsconfig-paths/register seed"
-  }
+    "scripts": {
+        "build": "cd ../.. && nest build order",
+        "typeorm-migration": "cd .. && cd .. &&  ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js",
+        "typeorm-migration-gen:order": "npm run typeorm-migration -- -d apps/order/typeorm-config.ts migration:generate apps/order/src/database/migrations/Migrations",
+        "typeorm-migration-run:order": "npm run typeorm-migration -- -d apps/order/typeorm-config.ts migration:run",
+        "typeorm-migration-revert:order": "npm run typeorm-migration -- -d apps/order/typeorm-config.ts migration:revert",
+        "test:unit": "jest --testMatch \"**/+(*.)+(spec).+(ts)\" ",
+        "test:coverage": "jest --config jest.unit.config.js --coverage",
+        "test:e2e:watch": "jest --watchAll",
+        "test:e2e": "jest --testMatch \"**/+(*.)+(e2e-spec).+(ts)\"",
+        "test:e2e:coverage": "jest --coverage",
+        "seed:run": "ts-node -r tsconfig-paths/register seed"
+    }
 }

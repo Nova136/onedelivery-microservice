@@ -71,7 +71,7 @@ export class OutputEvaluatorService {
 
     constructor() {
         this.primaryModel = new ChatOpenAI({
-            modelName: "gpt-5.4-mini",
+            modelName: "gpt-4o-mini",
             openAIApiKey: process.env.OPENAI_API_KEY,
             temperature: 0,
             metadata: {
