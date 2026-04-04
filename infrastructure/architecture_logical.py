@@ -14,7 +14,7 @@ graph_attr = {
     "fontsize": "14",
     "bgcolor": "white",
     "pad": "2.5",
-    "splines": "ortho",
+    "splines": "curved",
     "nodesep": "1.8",
     "ranksep": "2.4",
     "fontname": "Helvetica",
@@ -161,8 +161,10 @@ with Diagram(
     event_bus    >> Edge(color="#CC6600", style="dashed", penwidth="2") >> qa_agent
 
     # ── Guardian gate  (red) ──────────────────────────────────────────────────
-    res_agent >> Edge(color="#CC0000", style="bold", penwidth="3") >> guardian
-    guardian  >> Edge(color="#CC0000", style="bold", penwidth="3") >> res_agent
+    res_agent  >> Edge(color="#CC0000", style="bold", penwidth="3") >> guardian
+    guardian   >> Edge(color="#CC0000", style="bold", penwidth="3") >> res_agent
+    logi_agent >> Edge(color="#CC0000", style="bold", penwidth="3") >> guardian
+    guardian   >> Edge(color="#CC0000", style="bold", penwidth="3") >> logi_agent
 
     # ── Agents → Domain services  (teal dashed) ───────────────────────────────
     faq_agent  >> Edge(color="#008888", style="dashed", penwidth="2") >> domain
