@@ -1,6 +1,7 @@
 # OneDelivery — Agentic AI for Customer Service
 ### NUSISS Practice Module | Architecting AI Systems
-**Team: Yihang Chia**
+**Team: NCS Team 16**
+*Chee Lim Peng · Yeoh Yong Shan · Chia Kai Xiang · Tan Yee Yuan · Chia Yi Hang*
 
 <!--
 DESIGN INSTRUCTIONS — apply these to every slide:
@@ -64,6 +65,23 @@ Each agent has a defined role, tools, and memory — they hand off via RabbitMQ 
 ---
 
 ## 2. Overall Effort to Date
+### Team Effort by Member
+
+| Member | Report 1 (27 Feb) | Report 2 (13 Mar) | Cumulative |
+|---|---|---|---|
+| Chee Lim Peng | 24 hrs | 36 hrs | **60 hrs** |
+| Yeoh Yong Shan | 24 hrs | 36 hrs | **60 hrs** |
+| Chia Kai Xiang | 24 hrs | 24 hrs | **48 hrs** |
+| Tan Yee Yuan | 24 hrs | 24 hrs | **48 hrs** |
+| Chia Yi Hang | 48 hrs | 24 hrs | **72 hrs** |
+| **Total** | **144 hrs** | **144 hrs** | **288 hrs** |
+
+**Report 1 (27 Feb) — Foundation:**
+Repo setup, branching strategy, NestJS/ViteJS base, Docker/Kong/Terraform DevOps, architecture alignment
+
+**Report 2 (13 Mar) — Core Build:**
+User stories, AI agent workflow design, incident/messaging microservice, service scaffolding, database schema planning
+
 ### Estimate vs Actual
 
 | Area | Estimated | Actual | Notes |
@@ -108,10 +126,10 @@ Each agent has a defined role, tools, and memory — they hand off via RabbitMQ 
 - **Blue** — HTTPS REST: Browser → HTTP API GW → ALB → ECS services (path-based)
 - **Purple** — WebSocket: Browser → WS API GW → Lambda Authorizer → RabbitMQ → Orchestrator → push reply
 - **Orange** — Agentic routing: Orchestrator → RabbitMQ → Logistics / Resolution / QA agents
-- **Red** — Guardian SOP gate: Resolution Agent ↔ Guardian Agent
-- **Green dashed** — TypeORM + pgvector → RDS PostgreSQL 17 (private subnets)
+- **Red** — Guardian SOP gate: Resolution Agent ↔ Guardian Agent · Logistics Agent ↔ Guardian Agent
+- **Green dashed** — TypeORM + pgvector → RDS PostgreSQL 17.6 (private subnets)
 
-**AWS Services:** ECS Fargate, ALB, API Gateway v2 (HTTP + WebSocket), Lambda (nodejs20.x), RDS PostgreSQL 17, ECR, CloudWatch, SSM (ECS Exec)
+**AWS Services:** ECS Fargate, ALB, API Gateway v2 (HTTP + WebSocket), Lambda (nodejs22.x), RDS PostgreSQL 17.6, ECR, CloudWatch, SSM Parameter Store (Lambda secrets + ECS Exec)
 
 ---
 
@@ -180,17 +198,19 @@ Each agent has a defined role, tools, and memory — they hand off via RabbitMQ 
 ### Logistics Agent & Resolution Agent
 
 **Logistics Agent**
-- Purpose: Handle shipment tracking, ETA queries, delay prediction
-- Reasoning: GPT-4o with logistics-domain prompt; queries Logistics service via RMQ
-- Memory: Stateless — context passed in per call
-- Tools: `Get_Order_Status`, `Get_Shipment_ETA`, `Predict_Delay`
+- Purpose: Order cancellation workflow executor — validates cancellation eligibility, enforces SOP rules, executes cancellation and refund
+- Reasoning: GPT-4o (temperature 0, deterministic); SOP workflow injected at runtime from Knowledge service (`PROCESS_CANCELLATION_LOGIC`)
+- Memory: Stateless — fresh scratchpad per invocation, max 5 reasoning iterations
+- Tools: `Get_Order_Details`, `Route_To_Guardian`, `Execute_Cancellation_And_Refund`
+- Returns plain text: `SUCCESS: <reason>` or `REJECTED: <reason>`
 
 **Resolution Agent**
-- Purpose: Process refund requests end-to-end
-- Reasoning: GPT-4o evaluates refund eligibility against SOP rules; returns structured JSON `{status, orderId, amount/reason, summary}`
-- Memory: Stateless per session; SOP context loaded from Knowledge service via pgvector
-- Tools: `Check_Refund_Eligibility`, `Process_Refund`, `Query_SOP_Knowledge`
-- Auto-approves refunds ≤ $20; escalates higher amounts to Guardian
+- Purpose: Refund request processor — validates eligibility, calculates refund amount, enforces financial controls, executes item-level refunds
+- Reasoning: GPT-4o-mini (temperature 0); SOP workflow injected from Knowledge service (`PROCESS_REFUND_LOGIC`); 2-hour delivery window enforced, refund math computed per line item (quantity × unit price)
+- Memory: Stateless — no session history between calls
+- Tools: `Get_Order_Details`, `Route_To_Guardian`, `Execute_Refund`
+- Returns structured JSON: `{status, orderId, amount, summary}` on success or `{status, reason, summary}` on rejection
+- Refunds **≤ $20**: Guardian approval required before execution; refunds **> $20**: auto-rejected immediately, Guardian is never called
 
 ---
 
@@ -198,18 +218,20 @@ Each agent has a defined role, tools, and memory — they hand off via RabbitMQ 
 ### Guardian Agent & QA Agent
 
 **Guardian Agent**
-- Purpose: SOP compliance gate — verifies all actions before execution
-- Reasoning: Reviews proposed action against retrieved SOP rules; approves or rejects with explanation
-- Memory: None — stateless verifier
-- Tools: `Retrieve_SOP_Rules` (pgvector semantic search), `Approve_Action`, `Reject_Action`
-- All resolution actions pass through Guardian; 3 rejection cycles → human escalation
+- Purpose: Dual-mode compliance gate — (1) **GATE**: pre-execution approval/block of high-risk tool calls; (2) **VERIFY**: post-loop validation of proposed responses against SOP
+- Reasoning: Dual LLM — `gpt-4o` (temperature 0) for gate/verify decisions; `gpt-4o-mini` for indirect prompt injection scanning. 8 layered guardrails including deny-list regex, hardcoded $20 cap, session compliance budget (1 refund/cancellation per session)
+- Memory: **Stateful per session** — tracks `gatedActions` list and `refundCount` in-memory per sessionId
+- Tools: **None** — pure LLM verification; SOP fetched directly from Knowledge service
+- Called by both Resolution Agent (refund gate) and Logistics Agent (cancellation gate); fail-open on VERIFY, fail-closed on GATE
+- Returns `"APPROVED"` / `"BLOCKED: <reason>"` for gate; `"VERIFIED"` / `"FEEDBACK: <reason>"` for verify
 
 **QA Agent**
-- Purpose: Post-session quality analysis and trend detection
-- Reasoning: Scores sessions on resolution accuracy, SOP compliance, customer sentiment, response quality
-- Memory: Aggregates session scores for trend analysis via `@nestjs/schedule` cron
-- Tools: `Score_Session`, `Detect_Trends`, `Flag_Incidents`
-- Receives sessions fire-and-forget via `End_Chat_Session` tool
+- Purpose: Post-session incident logging, sentiment capture, and trend analysis
+- Reasoning: `gpt-4o-mini` (temperature 0) reviews completed chat sessions to detect service failures, score customer sentiment, and surface incident trends
+- Memory: **Stateful** — reads and persists chat history via User service over RabbitMQ
+- Tools: `log_incident` (logs failure type + summary to Incident service), `save_sentiment` (saves score −1.0→1.0 + escalation flag), `get_incidents_by_date_range` (fetches incidents for trend analysis)
+- Receives sessions fire-and-forget from Orchestrator via `End_Chat_Session` tool; cron-based trend review is implemented but currently disabled
+- Returns structured JSON: `{status, sentiment_captured, message}` for session review; trend JSON for analysis requests
 
 ---
 
@@ -219,14 +241,14 @@ Each agent has a defined role, tools, and memory — they hand off via RabbitMQ 
 
 | Principle | Implementation |
 |---|---|
-| Explainability | Structured JSON responses include `summary` field explaining every decision |
-| Transparency | LangSmith traces all LLM calls; full audit trail in Audit service |
-| Fairness | SOP-grounded responses — decisions based on rules, not LLM opinion |
-| Privacy | `PrivacyService` redacts PII (name, email, phone, NRIC) before LLM call |
-| Human Oversight | Guardian blocks non-compliant actions; human escalation path always available |
-| Accountability | Every interaction logged with sessionId, userId, agent decisions, timestamps |
+| Explainability | Resolution Agent returns structured JSON `{status, summary, reason/amount}` explaining each refund decision; all agents return decision context to the orchestrator |
+| Transparency | LangSmith evaluation suite for agent accuracy; Audit service logs Guardian policy decisions and orchestrator node transitions to CloudWatch |
+| Fairness | SOP-grounded responses — decisions based on human-authored rules, not LLM opinion; pgvector used for FAQ semantic search |
+| Privacy | `PrivacyService` redacts PII (name, email, phone, credit card) via regex + NLP before any LLM call; tokens stored in Redis (1-hour TTL) |
+| Human Oversight | Guardian blocks non-compliant actions (fail-closed on gate); `Escalate_To_Human` tool always available in orchestrator |
+| Accountability | Key agent decisions logged with sessionId, userId, action, and timestamps — Guardian policy decisions, orchestrator node transitions, output evaluation results |
 
-**Bias Mitigation:** SOP retrieval via pgvector anchors responses to documented policy — reduces model hallucination and inconsistent treatment across customers.
+**Bias Mitigation:** SOP retrieved just-in-time from the Knowledge service by intentCode anchors all agent decisions to documented policy — reduces model hallucination and inconsistent treatment across customers.
 
 ---
 
@@ -251,16 +273,26 @@ Each agent has a defined role, tools, and memory — they hand off via RabbitMQ 
 
 | Risk | Severity | Mitigation |
 |---|---|---|
-| Prompt Injection | High | Input moderation service; system prompt isolation; output evaluation |
-| PII Leakage to LLM | High | PrivacyService redacts before every LLM call |
-| Jailbreak / Role Confusion | High | System prompt hardening; moderation guard rejects out-of-scope inputs |
-| Hallucinated SOP Decisions | Medium | pgvector retrieval grounds responses; Guardian verifies against source SOP |
+| Prompt Injection | High | Input moderation service; system prompt isolation; Guardian deny-list + injection scan; output evaluation |
+| PII Leakage to LLM | High | PrivacyService redacts name, email, phone, credit card before every LLM call |
+| Jailbreak / Role Confusion | High | System prompt hardening; moderation guard rejects out-of-scope inputs; Guardian 8-layer guardrails |
+| Hallucinated SOP Decisions | Medium | pgvector retrieval grounds FAQ responses; Guardian verifies agent responses against SOP |
 | Excessive LLM Authority | Medium | Tool-based architecture — LLM can only call defined tools, not arbitrary code |
-| API Key Exposure | Medium | Keys in AWS Secrets Manager; never in code or logs |
-| Model Denial-of-Service | Low | Rate limiting at API Gateway; preflight checks reduce wasted LLM calls |
-| Supply Chain (LLM Provider) | Low | Abstract LLM behind LangChain; provider can be swapped without app changes |
+| API Key Exposure | Medium | Keys in AWS SSM Parameter Store (SecureString + KMS encryption); injected at runtime; never in code or logs |
+| Model Denial-of-Service | Low | Rate limiting at WebSocket API (PostgreSQL-backed per-user window); Guardian session compliance budget |
+| Supply Chain (LLM Provider) | Low | LLM abstracted behind LangChain; provider can be swapped without app changes |
 
-**Security Tools:** Trivy (container image scanning in CI), SonarQube (SAST), JWT auth on all endpoints
+**Security Tools (CI/CD Pipeline):**
+
+| Tool | Type | Scope |
+|---|---|---|
+| Trivy | Filesystem vulnerability scan | All source files + dependencies on every push |
+| OWASP Dependency Check | SCA (Software Composition Analysis) | Known CVEs in npm dependencies (NVD database) |
+| Semgrep | SAST | TypeScript/Node.js rules; SARIF uploaded to GitHub Security tab |
+| SonarCloud | SAST + Code Quality | 10 of 11 microservices; coverage report per app |
+| OWASP ZAP | DAST (Dynamic) | Baseline scan against live target URL (gated by `ENABLE_DAST_SCAN`) |
+
+**Runtime Security:** JWT auth on all HTTP endpoints; WebSocket CUSTOM authorizer (JWT + RBAC + rate limit)
 
 ---
 
@@ -288,28 +320,41 @@ Each agent has a defined role, tools, and memory — they hand off via RabbitMQ 
 ### CI/CD Security Pipeline
 
 ```
-Push to GitHub
-      ↓
-[Stage 1 — CI]
-  ├── Trivy container vulnerability scan
-  ├── ESLint code quality check
-  ├── NestJS build validation (all 12 services)
-  ├── LangSmith evaluations (gated: ENABLE_LANGSMITH_EVALUATOR)
-  │     └── Orchestrator, QA, Logistics, Resolution agent evals
-  └── SonarQube SAST scan (matrix parallel, 3-attempt retry)
-      ↓
-[Stage 2 — Build & Push]  (main branch only)
-  ├── Build Docker images (SERVICE_NAME + EXPOSE_PORT args)
+Push to any branch / PR → Stage 1 (all 6 jobs run in PARALLEL)
+┌──────────────────────────────┬──────────────────────────────────┐
+│  [run-tests]                 │  [langsmith-eval]                 │
+│  • Trivy filesystem scan     │  • Orchestrator agent eval        │
+│    (SARIF → GitHub Security) │  • QA agent eval                  │
+│  • ESLint code quality       │  • Logistics agent eval           │
+│  • NestJS build (12 svcs)    │  • Resolution agent eval          │
+│                              │  • QA trends eval                 │
+├──────────────────────────────┼───────────────────────────────────┤
+│  [owasp-dependency-check]    │  [sast-semgrep]                   │
+│  • OWASP dep-check scan      │  • Semgrep SAST rules scan        │
+│  • HTML report artifact      │  • SARIF → GitHub Security tab    │
+├──────────────────────────────┼───────────────────────────────────┤
+│  [dast-zap]                  │  [sonar-scan]                     │
+│  • OWASP ZAP baseline scan   │  • SonarCloud scan                │
+│  • Against DAST_TARGET_URL   │  • 10-app matrix, parallel        │
+│  • Report artifact           │  • 3-attempt retry per app        │
+└──────────────────────────────┴───────────────────────────────────┘
+      ↓  (main branch push or workflow_dispatch only)
+[Stage 2 — Build & Push]
+  ├── Build all NestJS apps (npx nest build per service)
+  ├── Docker buildx per service (SERVICE_NAME + EXPOSE_PORT args)
   ├── Tag with Git SHA + :latest
-  └── Push to AWS ECR
+  └── Push to AWS ECR (12 repositories)
       ↓
 [Stage 3 — Deploy]
   ├── Generate ECS task definition per service
   ├── Deploy to ECS Fargate (matrix parallel)
   └── Force-new-deployment to pull fresh images
+      ↓
+[Stage 4 — Notify]  (always runs)
+  └── Report final pipeline outcome
 ```
 
-**LLMSecOps additions:** LangSmith evals gate merges; eval scripts run in-process with mocked dependencies for deterministic scoring.
+**LLMSecOps additions:** LangSmith evals gate merges; eval scripts run in-process with mocked dependencies for deterministic scoring. All 6 Stage 1 security jobs run in parallel — no single scan blocks others.
 
 ---
 
@@ -318,18 +363,21 @@ Push to GitHub
 
 | Test Type | Scope | Tool | Status |
 |---|---|---|---|
-| Unit Tests | Service logic, prompt builders, parsers | Jest | Passing |
-| Integration Tests | RabbitMQ message flow, TypeORM queries | Jest + Supertest | Passing |
-| Security Scan | Container images (CVEs) | Trivy | No critical CVEs |
-| SAST | TypeScript source code | SonarQube | No blocker issues |
-| LLM Evaluation | Agent accuracy, intent classification | LangSmith | Eval suite active |
-| E2E Tests | Full chat session flow | Supertest | Core scenarios covered |
+| Unit Tests | 22 spec files across 11 services + shared libs | Jest | Passing |
+| E2E Tests | Per-service flows with in-memory PostgreSQL (pg-mem) | Jest | Core scenarios covered |
+| SCA / Dependency Scan | Known CVEs in npm packages | OWASP Dependency Check | Passing |
+| Container / FS Scan | Filesystem vulnerabilities (SARIF → GitHub Security) | Trivy (fs scan) | No critical CVEs |
+| SAST | TypeScript source code, secrets, misconfigs | Semgrep | No blocker issues |
+| Code Quality | Per-app quality gates, coverage, duplication | SonarCloud (10-app matrix) | No blocker issues |
+| DAST | Live HTTP baseline scan against deployed endpoint | OWASP ZAP | Passing |
+| LLM Evaluation | Agent accuracy, intent routing, session scoring | LangSmith | Eval suite active |
 
-**LangSmith Eval Results:**
-- Orchestrator intent classification accuracy: correct routing on standard scenarios
-- Guardian compliance detection: blocks non-SOP actions reliably
-- QA Agent scoring: consistent session quality scores vs ground truth
-- Resolution Agent: structured JSON output with correct orderId threading
+**LangSmith Eval Results (5 eval suites):**
+- Orchestrator: intent classification accuracy — correct routing across ACTION / FAQ / ESCALATE / END_SESSION
+- Logistics Agent: order cancellation eligibility — correct accept/reject across 5 state scenarios
+- Resolution Agent: refund processing — structured JSON output, correct amount calculation, quantity/time-window validation
+- QA Agent: session scoring — tool invocation correctness (log_incident vs save_sentiment) across 3 session types
+- QA Trends: trend analysis accuracy across date-range aggregation scenarios
 
 ---
 
@@ -337,9 +385,10 @@ Push to GitHub
 ### OneDelivery — Built with NestJS · LangChain · AWS · pgvector
 
 **Summary of What Was Built:**
-- Agentic AI system with deterministic guardrails, not just LLM reasoning
-- 12 production-grade microservices on AWS Fargate with full CI/CD
-- SOP-grounded knowledge retrieval via pgvector — reduces hallucination
-- Privacy-first, audit-complete, human-in-the-loop where it matters
+- 12 production-grade microservices deployed on AWS ECS Fargate with RabbitMQ async event bus and isolated per-service PostgreSQL schemas
+- LangGraph-powered orchestrator with semantic routing, PII redaction, moderation guards, and multi-turn conversation memory
+- 5 AI agents (Orchestrator, Logistics, Resolution, Guardian, QA) backed by GPT-4o / GPT-4o-mini with SOP-grounded pgvector retrieval — reduces hallucination
+- Deterministic guardrails: Guardian SOP compliance gate (dual-model, 8 guardrails, stateful), output evaluator with self-correction, and $20 auto-approval ceiling with human escalation path
+- Full MLSecOps pipeline: 6 parallel CI security jobs (Trivy, Semgrep, OWASP, ZAP, SonarCloud, LangSmith evals) gating every merge
 
 *Questions welcome*
