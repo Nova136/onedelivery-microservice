@@ -78,11 +78,15 @@ export function createRouteToResolutionTool(
     return tool(
         async (payload: ResolutionPayload) => {
             try {
-                agentsClient.send("resolution", {
-                    userId: payload.userId,
-                    sessionId: payload.sessionId,
-                    message: JSON.stringify(payload),
-                });
+                agentsClient
+                    .send("resolution", {
+                        userId: payload.userId,
+                        sessionId: payload.sessionId,
+                        message: JSON.stringify(payload),
+                    })
+                    .catch((err) => {
+                        console.error("[Route_To_Resolution] Fire-and-forget failed:", err?.message ?? err);
+                    });
                 return "Request submitted to Resolution Agent.";
             } catch (err) {
                 const msg = err instanceof Error ? err.message : String(err);

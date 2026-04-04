@@ -40,7 +40,7 @@ let _conn   = null;
 let _channel = null;
 
 async function getChannel() {
-  if (_channel && !_channel.isClosed()) return _channel;
+  if (_channel) return _channel;
   // Connection may be stale — reconnect
   try { await _conn?.close(); } catch { /* ignore */ }
   _conn    = await amqp.connect(RABBITMQ_URL);

@@ -4,6 +4,10 @@ import { Transport, MicroserviceOptions } from "@nestjs/microservices";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import { AppModule } from "./app.module";
 
+process.on("unhandledRejection", (reason) => {
+    console.error("[UnhandledRejection] Caught unhandled promise rejection:", reason);
+});
+
 async function bootstrap() {
     const app = await NestFactory.create(AppModule);
     const configService = app.get(ConfigService);

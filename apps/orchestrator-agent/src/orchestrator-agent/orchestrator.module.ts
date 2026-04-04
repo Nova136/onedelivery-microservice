@@ -1,6 +1,9 @@
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { ChatOpenAI } from "@langchain/openai";
 import { Global, Module } from "@nestjs/common";
+import { TypeOrmModule } from "@nestjs/typeorm";
+import { WsConnection } from "../database/entities/ws-connection.entity";
+import { WsConnectionService } from "../database/ws-connection.service";
 import { AgentsClientModule } from "../modules/clients/agents-client/agents-client.module";
 import { AgentsClientService } from "../modules/clients/agents-client/agents-client.service";
 import { KnowledgeClientModule } from "../modules/clients/knowledge-client/knowledge-client.module";
@@ -20,7 +23,6 @@ import { PromptShieldModule } from "../modules/prompt-shield/prompt-shield.modul
 import { PromptShieldService } from "../modules/prompt-shield/prompt-shield.service";
 import { AuditModule } from "../modules/audit/audit.module";
 import { AuditService } from "../modules/audit/audit.service";
-import pg from "pg";
 import { createCheckpointer } from "./checkpointer";
 import { createOrchestratorGraph } from "./graph";
 import { createAgentCallbackGraph } from "./agent-callback.graph";
@@ -45,16 +47,13 @@ import { InputValidatorModule } from "../modules/input-validator/input-validator
         PromptShieldModule,
         InputValidatorModule,
         AuditModule,
+        TypeOrmModule.forFeature([WsConnection]),
     ],
     controllers: [OrchestratorController, SessionController],
     providers: [
         OrchestratorService,
         OrchestratorGateway,
-        {
-            provide: "PG_POOL",
-            useFactory: () =>
-                new pg.Pool({ connectionString: process.env.DATABASE_URL }),
-        },
+        WsConnectionService,
         {
             provide: "AGENT_CALLBACK_GRAPH",
             useFactory: async (
@@ -231,7 +230,6 @@ import { InputValidatorModule } from "../modules/input-validator/input-validator
         OrchestratorService,
         "ORCHESTRATOR_GRAPH",
         "AGENT_CALLBACK_GRAPH",
-        "PG_POOL",
     ],
 })
 export class OrchestratorModule {}
