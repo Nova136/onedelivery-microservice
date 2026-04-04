@@ -23,7 +23,7 @@ import {
 
 /** Min time (ms) the order must stay in the current logistics step before the next advance. */
 const LOGISTICS_STEP_MIN_MS: Record<PriorityOption, number> = {
-    [PriorityOption.FAST]: 1 * 60 * 1000,
+    [PriorityOption.EXPRESS]: 1 * 60 * 1000,
     [PriorityOption.STANDARD]: 2 * 60 * 1000,
     [PriorityOption.ECONOMY]: 3 * 60 * 1000,
 };
@@ -264,9 +264,9 @@ export class OrderService {
         });
     }
 
-    async listByCustomer(customerId?: string) {
+    async listByCustomer(customerId: string) {
         return this.orderRepo.find({
-            ...(customerId ? { where: { customerId } } : {}),
+            where: { customerId: customerId },
             relations: ["items"],
             order: { createdAt: "DESC" },
         });
@@ -285,18 +285,17 @@ export class OrderService {
     }
 
     async cancel(orderId: string) {
-
-         let paymentResult =
+        let paymentResult =
             await this.commonService.sendViaRMQ<PaymentOrderResponse>(
                 this.paymentClient,
                 { cmd: "payment.getByOrder" },
-                { orderId: order.id, },
+                { orderId: orderId },
             );
 
         let refundResult =
             await this.commonService.sendViaRMQ<PaymentRefundResponse>(
                 this.paymentClient,
-                { cmd: "payment.refund"},
+                { cmd: "payment.refund" },
                 {
                     payment: paymentResult.paymentId,
                     account: paymentResult.amount,
@@ -358,7 +357,8 @@ export class OrderService {
             return order;
         }
         const minMs = LOGISTICS_STEP_MIN_MS[order.priorityOption];
-        const elapsed = Date.now() - this.logisticsWaitReference(order).getTime();
+        const elapsed =
+            Date.now() - this.logisticsWaitReference(order).getTime();
         if (elapsed < minMs) {
             return order;
         }
