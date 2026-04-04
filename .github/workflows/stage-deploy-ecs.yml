@@ -98,6 +98,12 @@ jobs:
           }
 
           PORT="$(get_port "$MICROSERVICE_NAME")"
+          PORT_ENV_VAR="$(echo "$MICROSERVICE_NAME" | tr '[:lower:]' '[:upper:]' | tr '-' '_')_PORT"
+
+          EXISTING_SECRETS=$(aws ecs describe-task-definition --task-definition "onedelivery-${MICROSERVICE_NAME}" --query 'taskDefinition.containerDefinitions[0].secrets' --output json || echo "[]")
+          if [[ "$EXISTING_SECRETS" == "null" ]]; then
+            EXISTING_SECRETS="[]"
+          fi
 
           mkdir -p .github/workflows/generated-task-definitions
           OUT=".github/workflows/generated-task-definitions/${MICROSERVICE_NAME}.json"
@@ -124,6 +130,8 @@ jobs:
             --arg dbUser "${DB_USER}" \
             --arg dbPassword "${DB_PASSWORD}" \
             --argjson port "$PORT" \
+            --arg portEnvVar "$PORT_ENV_VAR" \
+            --argjson secrets "$EXISTING_SECRETS" \
             '{
               family: $family,
               networkMode: $networkMode,
@@ -149,8 +157,10 @@ jobs:
                     { name: "DB_PORT", value: $dbPort },
                     { name: "DB_NAME", value: $dbName },
                     { name: "DB_USER", value: $dbUser },
-                    { name: "DB_PASSWORD", value: $dbPassword }
+                    { name: "DB_PASSWORD", value: $dbPassword },
+                    { name: $portEnvVar, value: ($port | tostring) }
                   ],
+                  secrets: $secrets,
                   logConfiguration: {
                     logDriver: "awslogs",
                     options: {

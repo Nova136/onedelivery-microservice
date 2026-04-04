@@ -112,7 +112,7 @@ These tests verify the specific business logic, calculations, and constraints wi
 
 ### Refund Rejection (Already Fully Refunded)
 
-- **Test Input Example:** "Can I get a refund for my order FD-0000-000007? 1 Hainanese Chicken Rice was terrible."
+- **Test Input Example:** "Can I get a refund for my order FD-0000-000007? The Hainanese Chicken Rice was terrible."
 - **Expected Behavior:** The agent rejects the request, noting that the order has already been fully refunded and is not eligible for further compensation.
 
 ### Refund Rejection ($20 Auto-Approval Limit)
@@ -122,7 +122,7 @@ These tests verify the specific business logic, calculations, and constraints wi
 
 ### Refund Rejection (Partially Refunded Order Block)
 
-- **Test Input Example:** "I need a refund for 1 Roti Prata in order FD-0000-000006."
+- **Test Input Example:** "I need a refund for 1 Roti Prata in order FD-0000-000006. It smells bad"
 - **Expected Behavior:** The agent rejects the request immediately, noting that the order has a 'PARTIAL' refund status and the SOP restricts further refunds once any refund has been applied to an order.
 
 ### Refund Success (Quality Issue Calculation)
