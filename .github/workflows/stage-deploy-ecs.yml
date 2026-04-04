@@ -10,7 +10,6 @@ permissions:
 env:
   AWS_REGION: ${{ vars.AWS_REGION || 'ap-southeast-1' }}
   ECS_CLUSTER: ${{ vars.ECS_CLUSTER || 'onedelivery-cluster' }}
-  IMAGE_TAG: ${{ github.sha }}
 
 jobs:
   prepare-matrix:
@@ -29,7 +28,7 @@ jobs:
           echo "microservices=$matrix_json" >> "$GITHUB_OUTPUT"
 
   deploy-ecs:
-    name: Deploy ECS task definitions
+    name: Force deploy ECS services
     needs: prepare-matrix
     runs-on: ubuntu-latest
     strategy:
@@ -37,52 +36,16 @@ jobs:
       matrix:
         microservice: ${{ fromJson(needs.prepare-matrix.outputs.microservices) }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Login to Amazon ECR
-        id: ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Download existing task definition
+      - name: Force new deployment
         run: |
-          mkdir -p .github/workflows/generated-task-definitions
-          aws ecs describe-task-definition \
-            --task-definition "onedelivery-${{ matrix.microservice }}" \
-            --query taskDefinition > .github/workflows/generated-task-definitions/${{ matrix.microservice }}.json
-
-      - name: Set image URI
-        id: build-image
-        env:
-          MICROSERVICE_NAME: ${{ matrix.microservice }}
-          ECR_REGISTRY: ${{ steps.ecr.outputs.registry }}
-        run: |
-          echo "image=$ECR_REGISTRY/onedelivery-$MICROSERVICE_NAME:${{ env.IMAGE_TAG }}" >> "$GITHUB_OUTPUT"
-
-      - name: Fill in the new image ID in the Amazon ECS task definition
-        id: task-def
-        uses: aws-actions/amazon-ecs-render-task-definition@v1
-        with:
-          task-definition: .github/workflows/generated-task-definitions/${{ matrix.microservice }}.json
-          container-name: ${{ matrix.microservice }}
-          image: ${{ steps.build-image.outputs.image }}
-          environment-variables: |
-            DATABASE_URL=${{ secrets.DATABASE_URL || vars.DATABASE_URL || '' }}
-            JWT_SECRET=${{ secrets.JWT_SECRET || vars.JWT_SECRET || '' }}
-            RABBITMQ_URL=${{ secrets.RABBITMQ_URL || vars.RABBITMQ_URL || '' }}
-            CORS_ORIGIN=${{ vars.CORS_ORIGIN || '*' }}
-            DB_PASSWORD=${{ secrets.DB_PASSWORD || vars.DB_PASSWORD || 'postgres' }}
-
-      - name: Deploy Amazon ECS task definition
-        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
-        with:
-          task-definition: ${{ steps.task-def.outputs.task-definition }}
-          service: ${{ matrix.microservice }}
-          cluster: ${{ env.ECS_CLUSTER }}
-          wait-for-service-stability: true
+          aws ecs update-service \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --service ${{ matrix.microservice }} \
+            --force-new-deployment \
+            --no-cli-pager
