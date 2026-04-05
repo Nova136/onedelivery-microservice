@@ -1,10 +1,10 @@
 import nlp from "compromise";
 import Redis from "ioredis";
 import { v4 as uuidv4 } from "uuid";
-import { Logger, Injectable } from "@nestjs/common";
+import { Logger, Injectable, OnModuleDestroy } from "@nestjs/common";
 
 @Injectable()
-export class PiiRedactionService {
+export class PiiRedactionService implements OnModuleDestroy {
     private readonly logger = new Logger(PiiRedactionService.name);
     private redis: Redis | null = null;
     private memoryFallback: Map<string, string> = new Map();
@@ -17,7 +17,7 @@ export class PiiRedactionService {
                 {
                     maxRetriesPerRequest: 1,
                     connectTimeout: 2000,
-                    retryStrategy: (times) => {
+                    retryStrategy: (times: number) => {
                         if (times > 1) return null; // Stop retrying after 1 attempt
                         return 1000;
                     },
@@ -35,6 +35,13 @@ export class PiiRedactionService {
                 "Failed to initialize Redis, using in-memory fallback.",
             );
             this.redis = null;
+        }
+    }
+
+    // Gracefully close the Redis connection when the module/app shuts down
+    onModuleDestroy() {
+        if (this.redis) {
+            this.redis.disconnect();
         }
     }
 
@@ -88,7 +95,10 @@ export class PiiRedactionService {
         // Fallback to memory
         this.memoryFallback.set(token, value);
         // Basic memory cleanup after 1 hour
-        setTimeout(() => this.memoryFallback.delete(token), 3600 * 1000);
+        setTimeout(
+            () => this.memoryFallback.delete(token),
+            3600 * 1000,
+        ).unref();
 
         return token;
     }

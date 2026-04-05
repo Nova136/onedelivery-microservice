@@ -1,7 +1,7 @@
 import { Injectable, Inject, Logger } from "@nestjs/common";
 import { ClientProxy } from "@nestjs/microservices";
 import { firstValueFrom } from "rxjs";
-import { AGENT_CHAT_PATTERN } from "@libs/modules/generic/enum/agent-chat.pattern";
+import { AGENT_CALLBACK_PATTERN } from "@libs/modules/generic/enum/agent-chat.pattern";
 import { AgentChatPayload } from "@libs/modules/generic/interface/agent-chat-payload.interface";
 
 export type AgentName = "guardian" | "order" | "payment";
@@ -45,7 +45,7 @@ export class AgentsClientService {
      */
     notifyOrchestrator(payload: AgentChatPayload): void {
         void firstValueFrom(
-            this.orchestratorClient.send(AGENT_CHAT_PATTERN, payload),
+            this.orchestratorClient.send(AGENT_CALLBACK_PATTERN, payload),
         ).catch((err) =>
             this.logger.error(
                 "Failed to notify orchestrator",
