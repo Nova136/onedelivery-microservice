@@ -13,32 +13,26 @@ describe("OrchestratorService", () => {
 
     beforeEach(() => {
         mockGraph = {
-            invoke: jest
-                .fn()
-                .mockResolvedValue({
-                    messages: [new AIMessage("AI response")],
-                }),
+            invoke: jest.fn().mockResolvedValue({
+                messages: [new AIMessage("AI response")],
+            }),
             getState: jest
                 .fn()
                 .mockResolvedValue({ values: { summary: "summary" } }),
             updateState: jest.fn().mockResolvedValue(undefined),
         };
         mockCallbackGraph = {
-            invoke: jest
-                .fn()
-                .mockResolvedValue({
-                    is_safe: true,
-                    synthesized_message: "Safe message",
-                }),
+            invoke: jest.fn().mockResolvedValue({
+                is_safe: true,
+                synthesized_message: "Safe message",
+            }),
         };
         mockMemoryService = {
-            getChatHistory: jest
-                .fn()
-                .mockResolvedValue({
-                    id: "session1",
-                    status: "active",
-                    messages: [],
-                }),
+            getChatHistory: jest.fn().mockResolvedValue({
+                id: "session1",
+                status: "active",
+                messages: [],
+            }),
             saveHistory: jest.fn().mockResolvedValue(undefined),
             updateSessionSummary: jest.fn().mockResolvedValue(undefined),
         };
@@ -113,6 +107,6 @@ describe("OrchestratorService", () => {
             "user1",
             "Status: Rejected. Reason: Fraud.",
         );
-        expect(res.messageContent).toContain("Your request has been rejected");
+        expect(res.response).toContain("Your request has been rejected");
     });
 });

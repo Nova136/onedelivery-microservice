@@ -4,6 +4,7 @@ import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { ChatOpenAI } from "@langchain/openai";
 import dotenv from "dotenv";
 import { z } from "zod";
+import * as path from "path";
 import { IntentClassifierService } from "../../src/modules/intent-classifier/intent-classifier.service";
 import { PromptShieldService } from "../../src/modules/prompt-shield/prompt-shield.service";
 import { createEndSessionNode } from "../../src/orchestrator-agent/nodes/end-session.node";
@@ -11,19 +12,20 @@ import { createEscalationNode } from "../../src/orchestrator-agent/nodes/escalat
 import { createInformationalHandlerNode } from "../../src/orchestrator-agent/nodes/informational-handler.node";
 import { createResetHandlerNode } from "../../src/orchestrator-agent/nodes/reset-handler.node";
 
-dotenv.config();
-process.env.GEMINI_API_KEY = process.env.GEMINI_API_KEY || "mock-key";
-process.env.GOOGLE_API_KEY = process.env.GEMINI_API_KEY;
+// Load .env from the monorepo root
+dotenv.config({ path: path.resolve(__dirname, "../../../../.env") });
+console.log(process.env.OPENAI_API_KEY);
 
 async function runTests() {
     const primaryllm = new ChatOpenAI({
         modelName: "gpt-5.4-mini",
+        apiKey: process.env.OPENAI_API_KEY,
         temperature: 0,
     });
 
     const geminiFallback = new ChatGoogleGenerativeAI({
         model: "gemini-3-flash-preview",
-        apiKey: "mock-key",
+        apiKey: process.env.GEMINI_API_KEY || "mock-key",
     });
 
     primaryllm.withFallbacks({

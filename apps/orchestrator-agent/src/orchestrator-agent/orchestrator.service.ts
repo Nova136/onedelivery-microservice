@@ -1,5 +1,4 @@
 import { Injectable, Inject, Logger } from "@nestjs/common";
-import { WsConnectionService } from "../database/ws-connection.service";
 import {
     HumanMessage,
     AIMessage,
@@ -19,7 +18,6 @@ export class OrchestratorService {
     constructor(
         @Inject("ORCHESTRATOR_GRAPH") private readonly graph: any,
         @Inject("AGENT_CALLBACK_GRAPH") private readonly callbackGraph: any,
-        private readonly wsConnectionService: WsConnectionService,
         private readonly memoryService: MemoryClientService,
         private readonly piiService: PiiRedactionService,
         private readonly promptShield: PromptShieldService,
@@ -34,34 +32,11 @@ export class OrchestratorService {
         userId: string,
         sessionId: string | undefined,
         message: string,
-        connectionId?: string,
     ) {
-        // Upsert connectionId into ws.connections so the callback path can look it up.
-        // In production the Lambda connect handler already inserted the row;
-        // in local dev (no Lambda) this is the only writer.
-        if (connectionId && sessionId && userId) {
-            await this.wsConnectionService.upsert(connectionId, userId, sessionId);
-        }
         const session = await this.memoryService.getChatHistory(
             userId,
             sessionId,
         );
-
-        // Check if the session is already human-managed or closed from DB status
-        const status = session.status?.toLowerCase();
-        if (status === "closed" || status === "escalated") {
-            this.logger.log(
-                `Session ${session.id} is ${status}. Bypassing AI graph.`,
-            );
-            return {
-                sessionId: session.id,
-                response: null,
-                summary: session.summary,
-                current_intent: null,
-                order_states: {},
-                user_orders: [],
-            };
-        }
 
         // Redact PII from the user's message before it enters the graph
         const redactedMessage = await this.piiService.redact(message);
@@ -74,6 +49,23 @@ export class OrchestratorService {
             session.messages?.length || 0,
             humanMessage,
         );
+
+        // Check if the session is already human-managed or closed from DB status
+        const status = session.status?.toLowerCase();
+        if (status === "closed" || status === "escalated") {
+            this.logger.log(
+                `Session ${session.id} is ${status}. Bypassing AI graph.`,
+            );
+            return {
+                sessionId: session.id,
+                input: message,
+                response: null,
+                summary: session.summary,
+                current_intent: null,
+                order_states: {},
+                user_orders: [],
+            };
+        }
 
         // 1. Validate the input and check for prompt injections FIRST
         const [validationResult, isSuspicious] = await Promise.all([
@@ -149,6 +141,7 @@ export class OrchestratorService {
 
         return {
             sessionId: session.id,
+            input: message,
             response: lastAIMessage.content,
             summary: result.summary,
             current_intent: result.current_intent,
@@ -177,7 +170,7 @@ export class OrchestratorService {
 
         return {
             sessionId: sessionId,
-            response: adminMessage.content,
+            response: message,
         };
     }
 
@@ -334,13 +327,9 @@ export class OrchestratorService {
             state.current_intent || "None",
         );
 
-        const connectionId = await this.wsConnectionService.findConnectionId(sessionId);
-
         return {
-            connectionId,
-            success: true,
-            messageContent: result.synthesized_message,
-            isSafe: result.is_safe,
+            sessionId,
+            response: result.synthesized_message,
         };
     }
 }
