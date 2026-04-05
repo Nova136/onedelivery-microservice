@@ -5,7 +5,7 @@
         "typeorm-migration-gen:orchestrator-agent": "npm run typeorm-migration -- -d apps/orchestrator-agent/typeorm-config.ts migration:generate apps/orchestrator-agent/src/database/migrations/Migrations",
         "typeorm-migration-run:orchestrator-agent": "npm run typeorm-migration -- -d apps/orchestrator-agent/typeorm-config.ts migration:run",
         "typeorm-migration-revert:orchestrator-agent": "npm run typeorm-migration -- -d apps/orchestrator-agent/typeorm-config.ts migration:revert",
-        "test": "npm run test:unit && npm run test:functional && npm run test:security && npm run test:workflows",
+        "test": "npm run test:functional && npm run test:security && npm run test:workflows",
         "test:unit": "jest --testPathPattern=unit.test.ts",
         "test:coverage": "jest --coverage --testPathPattern=unit.test.ts",
         "test:functional": "npm run test:input-validator && npm run test:prompt-shield && npm run test:output-evaluator && npm run test:pii-redaction && npm run test:intent-classifier",

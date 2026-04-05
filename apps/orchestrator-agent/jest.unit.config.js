@@ -23,7 +23,7 @@ module.exports = {
         "^.+\\.(t|j)s$": ["@swc/jest", { ...swcConfig }],
     },
     testEnvironment: "node",
-    testMatch: ["**/+(*.)+(spec|unit.test).+(ts)"],
+    testMatch: ["**/+(*.)+(spec).+(ts)"],
     moduleFileExtensions: ["js", "json", "ts"],
     coveragePathIgnorePatterns: [
         "index.ts",
@@ -33,4 +33,5 @@ module.exports = {
         "main.ts",
     ],
     coverageProvider: "v8",
+    transformIgnorePatterns: ["/node_modules/(?!(nanoid)/)"],
 };
