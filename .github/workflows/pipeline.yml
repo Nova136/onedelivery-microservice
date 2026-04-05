@@ -18,6 +18,8 @@ jobs:
   ci:
     name: CI Stage
     uses: ./.github/workflows/stage-ci.yml
+    with:
+      full_scan: ${{ github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
     secrets: inherit
 
   build:
