@@ -202,9 +202,9 @@ export class OrchestratorController {
                 );
                 return { success: true };
             }
-            if (!result.messageContent) {
+            if (!result.response) {
                 this.logger.warn(
-                    `[CB] messageContent is null for session=${sessionId} — skipping push`,
+                    `[CB] response is null for session=${sessionId} — skipping push`,
                 );
                 return { success: true };
             }

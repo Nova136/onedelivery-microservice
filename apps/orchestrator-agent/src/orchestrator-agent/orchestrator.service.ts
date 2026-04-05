@@ -10,6 +10,7 @@ import { PiiRedactionService } from "../modules/pii-redaction/pii-redaction.serv
 import { PromptShieldService } from "../modules/prompt-shield/prompt-shield.service";
 import { InputValidatorService } from "../modules/input-validator/input-validator.service";
 import { SummarizerService } from "../modules/summarizer/summarizer.service";
+import { response } from "express";
 
 @Injectable()
 export class OrchestratorService {
@@ -245,9 +246,8 @@ export class OrchestratorService {
                 `Session ${sessionId} is ${status}. Bypassing agent callback graph.`,
             );
             return {
-                success: true,
-                messageContent: null,
-                isSafe: true,
+                response: null,
+                sessionId,
             };
         }
 

@@ -343,7 +343,7 @@ export class LogisticsAgentService {
         );
 
         // 8. Return the string straight back to the Orchestrator. No saving to DB!
-        this.agentsClient.send("orchestrator", {
+        this.agentsClient.notifyOrchestrator({
             userId: payload.userId,
             sessionId: payload.sessionId,
             message: finalResponseString,
