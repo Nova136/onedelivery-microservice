@@ -12,7 +12,10 @@ permissions:
 jobs:
   run-tests:
     name: Run tests/checks
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.USE_SELF_HOSTED_RUNNER == 'true' && fromJson('["self-hosted", "Windows"]') || 'ubuntu-latest' }}
+    defaults:
+      run:
+        shell: bash
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -46,7 +49,10 @@ jobs:
   langsmith-eval:
     name: LangSmith — ${{ matrix.evaluation }}
     if: vars.ENABLE_LANGSMITH_EVALUATOR == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.USE_SELF_HOSTED_RUNNER == 'true' && fromJson('["self-hosted", "Windows"]') || 'ubuntu-latest' }}
+    defaults:
+      run:
+        shell: bash
     strategy:
       fail-fast: false
       matrix:
@@ -78,7 +84,10 @@ jobs:
   owasp-dependency-check:
     name: OWASP Dependency Check
     if: vars.ENABLE_OWASP_SCAN != 'false'
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.USE_SELF_HOSTED_RUNNER == 'true' && fromJson('["self-hosted", "Windows"]') || 'ubuntu-latest' }}
+    defaults:
+      run:
+        shell: bash
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -109,6 +118,7 @@ jobs:
   sast-semgrep:
     name: SAST — Semgrep
     if: vars.ENABLE_SEMGREP_SCAN != 'false' && github.actor != 'dependabot[bot]'
+    # container: requires a Linux runner — always use ubuntu-latest regardless of USE_SELF_HOSTED_RUNNER
     runs-on: ubuntu-latest
     container:
       image: semgrep/semgrep
@@ -144,7 +154,10 @@ jobs:
   dast-zap:
     name: DAST — OWASP ZAP Baseline
     if: vars.ENABLE_DAST_SCAN == 'true' && vars.DAST_TARGET_URL != ''
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.USE_SELF_HOSTED_RUNNER == 'true' && fromJson('["self-hosted", "Windows"]') || 'ubuntu-latest' }}
+    defaults:
+      run:
+        shell: bash
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -175,7 +188,10 @@ jobs:
   sonar-scan:
     name: SonarQube — ${{ matrix.app }}
     if: vars.ENABLE_SONAR_SCAN != 'false'
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.USE_SELF_HOSTED_RUNNER == 'true' && fromJson('["self-hosted", "Windows"]') || 'ubuntu-latest' }}
+    defaults:
+      run:
+        shell: bash
     strategy:
       fail-fast: false
       matrix:

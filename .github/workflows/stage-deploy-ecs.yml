@@ -14,7 +14,10 @@ env:
 jobs:
   prepare-matrix:
     name: Prepare microservice matrix
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.USE_SELF_HOSTED_RUNNER == 'true' && fromJson('["self-hosted", "Windows"]') || 'ubuntu-latest' }}
+    defaults:
+      run:
+        shell: bash
     outputs:
       microservices: ${{ steps.matrix.outputs.microservices }}
     steps:
@@ -30,7 +33,10 @@ jobs:
   deploy-ecs:
     name: Force deploy ECS services
     needs: prepare-matrix
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.USE_SELF_HOSTED_RUNNER == 'true' && fromJson('["self-hosted", "Windows"]') || 'ubuntu-latest' }}
+    defaults:
+      run:
+        shell: bash
     strategy:
       fail-fast: false
       matrix:
