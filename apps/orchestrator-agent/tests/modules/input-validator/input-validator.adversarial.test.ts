@@ -2,8 +2,9 @@ import OpenAI from "openai";
 import { wrapOpenAI } from "langsmith/wrappers";
 import { InputValidatorService } from "../../../src/modules/input-validator/input-validator.service";
 import dotenv from "dotenv";
+import * as path from "path";
 
-dotenv.config();
+dotenv.config({ path: path.resolve(__dirname, "../../../../../.env") });
 process.env.GEMINI_API_KEY = process.env.GEMINI_API_KEY || "mock-key";
 process.env.GOOGLE_API_KEY = process.env.GEMINI_API_KEY;
 

@@ -7,9 +7,10 @@ import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { ChatOpenAI } from "@langchain/openai";
 import dotenv from "dotenv";
 import { z } from "zod";
+import * as path from "path";
 import { createSopHandlerNode } from "../../src/orchestrator-agent/nodes/sop-handler.node";
 
-dotenv.config();
+dotenv.config({ path: path.resolve(__dirname, "../../../../.env") });
 
 /**
  * LLM as a Judge for evaluating conversation outcomes.
@@ -21,6 +22,7 @@ class LLMJudge {
         // Use gpt-4o for reasoning-heavy evaluation
         this.model = new ChatOpenAI({
             modelName: "gpt-4o",
+            apiKey: process.env.OPENAI_API_KEY,
             temperature: 0,
         });
     }
@@ -67,6 +69,7 @@ async function runWorkflowTests() {
     // Initialize Models
     const llm = new ChatOpenAI({
         modelName: "gpt-4o",
+        apiKey: process.env.OPENAI_API_KEY,
         temperature: 0,
     });
 

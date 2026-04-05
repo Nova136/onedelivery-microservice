@@ -4,8 +4,9 @@ import { HumanMessage } from "@langchain/core/messages";
 import { StructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import dotenv from "dotenv";
+import * as path from "path";
 
-dotenv.config();
+dotenv.config({ path: path.resolve(__dirname, "../../../../.env") });
 
 async function runTests() {
     const llm = new ChatOpenAI({

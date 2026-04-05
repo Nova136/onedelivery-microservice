@@ -3,14 +3,17 @@ import { ConfigService } from "@nestjs/config";
 import { Transport, MicroserviceOptions } from "@nestjs/microservices";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import { AppModule } from "./app.module";
+import { Logger } from "nestjs-pino";
 
 process.on("unhandledRejection", (reason) => {
     console.error("[UnhandledRejection] Caught unhandled promise rejection:", reason);
 });
 
 async function bootstrap() {
-    const app = await NestFactory.create(AppModule);
+    // bufferLogs ensures startup messages are held until Pino is ready to take over
+    const app = await NestFactory.create(AppModule, { bufferLogs: true });
     const configService = app.get(ConfigService);
+    app.useLogger(app.get(Logger));
 
     const corsOrigin = configService.get(
         "CORS_ORIGIN",

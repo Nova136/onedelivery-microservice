@@ -2,8 +2,9 @@ import { ChatOpenAI } from "@langchain/openai";
 import { PromptShieldService } from "../../src/modules/prompt-shield/prompt-shield.service";
 import { createCallbackExtractionNode } from "../../src/orchestrator-agent/nodes/callback-extraction.node";
 import dotenv from "dotenv";
+import * as path from "path";
 
-dotenv.config();
+dotenv.config({ path: path.resolve(__dirname, "../../../../.env") });
 
 async function runTests() {
     console.log("--- STARTING CALLBACK EXTRACTION SECURITY TESTS ---\n");
