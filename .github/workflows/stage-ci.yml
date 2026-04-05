@@ -17,7 +17,7 @@ permissions:
 jobs:
   run-tests:
     name: Run tests/checks
-    runs-on: ${{ inputs.full_scan && vars.USE_SELF_HOSTED_RUNNER == 'true' && 'self-hosted' || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     defaults:
       run:
         shell: bash
@@ -54,7 +54,7 @@ jobs:
   langsmith-eval:
     name: LangSmith — ${{ matrix.evaluation }}
     if: inputs.full_scan && vars.ENABLE_LANGSMITH_EVALUATOR == 'true'
-    runs-on: ${{ vars.USE_SELF_HOSTED_RUNNER == 'true' && 'self-hosted' || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     defaults:
       run:
         shell: bash
@@ -89,7 +89,7 @@ jobs:
   owasp-dependency-check:
     name: OWASP Dependency Check
     if: inputs.full_scan && vars.ENABLE_OWASP_SCAN != 'false'
-    runs-on: ${{ vars.USE_SELF_HOSTED_RUNNER == 'true' && 'self-hosted' || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     defaults:
       run:
         shell: bash
@@ -123,30 +123,14 @@ jobs:
   sast-semgrep:
     name: SAST — Semgrep
     if: inputs.full_scan && vars.ENABLE_SEMGREP_SCAN != 'false' && github.actor != 'dependabot[bot]'
-    runs-on: ${{ vars.USE_SELF_HOSTED_RUNNER == 'true' && 'self-hosted' || 'ubuntu-latest' }}
-    defaults:
-      run:
-        shell: bash
+    runs-on: ubuntu-latest
+    container:
+      image: semgrep/semgrep
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Semgrep (self-hosted runner)
-        if: vars.USE_SELF_HOSTED_RUNNER == 'true'
-        run: pip3 install semgrep
-
-      - name: Run Semgrep CI (container image — GitHub runner)
-        if: vars.USE_SELF_HOSTED_RUNNER != 'true'
-        uses: docker://semgrep/semgrep
-        with:
-          entrypoint: semgrep
-          args: ci --sarif --output semgrep.sarif
-        env:
-          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
-        continue-on-error: true
-
-      - name: Run Semgrep CI (self-hosted runner)
-        if: vars.USE_SELF_HOSTED_RUNNER == 'true'
+      - name: Run Semgrep CI
         run: semgrep ci --sarif --output semgrep.sarif
         env:
           SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
@@ -185,7 +169,7 @@ jobs:
   dast-zap:
     name: DAST — OWASP ZAP Baseline
     if: inputs.full_scan && vars.ENABLE_DAST_SCAN == 'true' && vars.DAST_TARGET_URL != ''
-    runs-on: ${{ vars.USE_SELF_HOSTED_RUNNER == 'true' && 'self-hosted' || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     defaults:
       run:
         shell: bash
@@ -219,7 +203,7 @@ jobs:
   sonar-scan:
     name: SonarQube — ${{ matrix.app }}
     if: inputs.full_scan && vars.ENABLE_SONAR_SCAN != 'false'
-    runs-on: ${{ vars.USE_SELF_HOSTED_RUNNER == 'true' && 'self-hosted' || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     defaults:
       run:
         shell: bash
