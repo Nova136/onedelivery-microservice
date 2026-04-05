@@ -5,12 +5,12 @@
         "typeorm-migration-gen:orchestrator-agent": "npm run typeorm-migration -- -d apps/orchestrator-agent/typeorm-config.ts migration:generate apps/orchestrator-agent/src/database/migrations/Migrations",
         "typeorm-migration-run:orchestrator-agent": "npm run typeorm-migration -- -d apps/orchestrator-agent/typeorm-config.ts migration:run",
         "typeorm-migration-revert:orchestrator-agent": "npm run typeorm-migration -- -d apps/orchestrator-agent/typeorm-config.ts migration:revert",
-        "test": "npm run test:unit",
+        "test": "npm run test:unit && npm run test:functional && npm run test:security && npm run test:workflows",
         "test:unit": "jest --testPathPattern=unit.test.ts",
         "test:coverage": "jest --coverage --testPathPattern=unit.test.ts",
-        "test:functional": "tsx tests/modules/summarizer/summarizer.functional.test.ts && tsx tests/modules/input-validator/input-validator.functional.test.ts && tsx tests/modules/prompt-shield/prompt-shield.functional.test.ts && tsx tests/modules/output-evaluator/output-evaluator.functional.test.ts && tsx tests/modules/pii-redaction/pii-redaction.functional.test.ts && tsx tests/modules/intent-classifier/intent-classifier.functional.test.ts",
-        "test:security": "tsx tests/modules/input-validator/input-validator.adversarial.test.ts && tsx tests/modules/output-evaluator/output-evaluator.adversarial.test.ts && tsx tests/modules/intent-classifier/intent-classifier.adversarial.test.ts && tsx tests/orchestrator-agent/callback-extraction.security.test.ts && tsx tests/orchestrator-agent/sop-handler.security.test.ts",
-        "test:workflows": "tsx tests/orchestrator-workflows.functional.test.ts",
+        "test:functional": "npm run test:input-validator && npm run test:prompt-shield && npm run test:output-evaluator && npm run test:pii-redaction && npm run test:intent-classifier",
+        "test:security": "npm run test:input-validator-adversarial && npm run test:output-evaluator-adversarial && npm run test:intent-classifier-adversarial && npm run test:callback-extraction-security && npm run test:sop-handler-security",
+        "test:workflows": "npm run test:orchestrator-workflow && npm run test:refund-cancellation-workflow",
         "test:input-validator": "tsx tests/modules/input-validator/input-validator.functional.test.ts",
         "test:input-validator-adversarial": "tsx tests/modules/input-validator/input-validator.adversarial.test.ts",
         "test:prompt-shield": "tsx tests/modules/prompt-shield/prompt-shield.functional.test.ts",
@@ -19,7 +19,8 @@
         "test:pii-redaction": "tsx tests/modules/pii-redaction/pii-redaction.functional.test.ts",
         "test:intent-classifier": "tsx tests/modules/intent-classifier/intent-classifier.functional.test.ts",
         "test:intent-classifier-adversarial": "tsx tests/modules/intent-classifier/intent-classifier.adversarial.test.ts",
-        "test:refund-cancellation": "tsx tests/workflows/refund-cancellation.test.ts"
+        "test:orchestrator-workflow": "tsx tests/workflows/orchestrator.functional.test.ts",
+        "test:refund-cancellation-workflow": "tsx tests/workflows/refund-cancellation.functional.test.ts"
     },
     "dependencies": {
         "@nestjs/platform-socket.io": "^11.1.17",

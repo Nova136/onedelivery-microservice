@@ -1,8 +1,9 @@
 import { SummarizerService } from "../../../src/modules/summarizer/summarizer.service";
 import { HumanMessage, AIMessage } from "@langchain/core/messages";
 import dotenv from "dotenv";
+import * as path from "path";
 
-dotenv.config();
+dotenv.config({ path: path.resolve(__dirname, "../../../../../.env") });
 
 process.env.GEMINI_API_KEY = process.env.GEMINI_API_KEY || "mock-key";
 process.env.GOOGLE_API_KEY = process.env.GEMINI_API_KEY;
@@ -18,44 +19,66 @@ async function runTests() {
             existingSummary: "",
             currentTask: "refund_request",
             messages: [
-                new HumanMessage("I want a refund for order 12345 because the item was defective."),
-                new AIMessage("I can help with that. I have submitted your request.")
+                new HumanMessage(
+                    "I want a refund for order 12345 because the item was defective.",
+                ),
+                new AIMessage(
+                    "I can help with that. I have submitted your request.",
+                ),
             ],
             validate: (res: string) => {
                 const lowerRes = res.toLowerCase();
-                return lowerRes.includes("12345") || lowerRes.includes("refund") || lowerRes.includes("defective");
-            }
+                return (
+                    lowerRes.includes("12345") ||
+                    lowerRes.includes("refund") ||
+                    lowerRes.includes("defective")
+                );
+            },
         },
         {
             name: "Update Existing Summary",
-            existingSummary: "Current Goal: Refund request for order 12345.\nKey Facts: Order 12345.\nStatus: Pending reason.",
+            existingSummary:
+                "Current Goal: Refund request for order 12345.\nKey Facts: Order 12345.\nStatus: Pending reason.",
             currentTask: "refund_request",
             messages: [
                 new HumanMessage("The item was damaged when it arrived."),
-                new AIMessage("I'm sorry to hear that. I have submitted your refund request for order 12345 due to damage.")
+                new AIMessage(
+                    "I'm sorry to hear that. I have submitted your refund request for order 12345 due to damage.",
+                ),
             ],
-            validate: (res: string) => res.toLowerCase().includes("damage") && res.toLowerCase().includes("submit")
+            validate: (res: string) =>
+                res.toLowerCase().includes("damage") &&
+                res.toLowerCase().includes("submit"),
         },
         {
             name: "Task Transition to None",
-            existingSummary: "Current Goal: Refund request for order 12345.\nKey Facts: Order 12345, damaged.\nStatus: Submitted.",
+            existingSummary:
+                "Current Goal: Refund request for order 12345.\nKey Facts: Order 12345, damaged.\nStatus: Submitted.",
             currentTask: "None",
             messages: [
                 new HumanMessage("Thanks, that's all."),
-                new AIMessage("You're welcome! Have a great day.")
+                new AIMessage("You're welcome! Have a great day."),
             ],
             validate: (res: string) => {
                 const lowerRes = res.toLowerCase();
-                return lowerRes.includes("resolved") || lowerRes.includes("completed") || lowerRes.includes("submitted");
-            }
-        }
+                return (
+                    lowerRes.includes("resolved") ||
+                    lowerRes.includes("completed") ||
+                    lowerRes.includes("submitted")
+                );
+            },
+        },
     ];
 
     let passed = 0;
     for (const test of testCases) {
         process.stdout.write(`Testing: ${test.name.padEnd(30)} `);
         try {
-            const result = await summarizer.summarize(test.messages, test.existingSummary, test.currentTask);
+            const result = await summarizer.summarize(
+                test.messages,
+                test.existingSummary,
+                test.currentTask,
+            );
             console.log(`\n   Result: ${result}`);
             if (test.validate(result)) {
                 console.log("✅ PASSED");
@@ -68,7 +91,9 @@ async function runTests() {
             console.log("💥 ERROR:", e);
         }
     }
-    console.log(`\n--- TESTS COMPLETED: ${passed}/${testCases.length} PASSED ---`);
+    console.log(
+        `\n--- TESTS COMPLETED: ${passed}/${testCases.length} PASSED ---`,
+    );
 }
 
 runTests();
