@@ -31,6 +31,13 @@ export default class UserSeeder implements Seeder {
                 plainPassword: "User123!",
                 passwordHash: await bcrypt.hash("User123!", SALT_ROUNDS),
             },
+            {
+                id: "9876795f-3317-453e-bbe5-f743d7313f9a",
+                email: "user1@onedelivery.demo",
+                role: Role.User,
+                plainPassword: "User123!",
+                passwordHash: await bcrypt.hash("User123!", SALT_ROUNDS),
+            },
         ];
 
         await repo.insert(users);
