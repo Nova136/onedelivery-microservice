@@ -2,17 +2,24 @@ import { PiiRedactionService } from "../../../src/modules/pii-redaction/pii-reda
 import { Logger } from "@nestjs/common";
 
 jest.mock("ioredis", () => {
-    return jest.fn().mockImplementation(() => {
-        throw new Error(
-            "Simulated Redis connection error to force local memory fallback",
-        );
-    });
+    return {
+        __esModule: true,
+        default: jest.fn().mockImplementation(() => {
+            throw new Error(
+                "Simulated Redis connection error to force local memory fallback",
+            );
+        }),
+    };
 });
 
 describe("PiiRedactionService", () => {
     let service: PiiRedactionService;
 
     beforeEach(() => {
+        // Specific mock for setTimeout to avoid open handles without freezing async/await
+        jest.spyOn(global, "setTimeout").mockReturnValue({
+            unref: jest.fn(),
+        } as any);
         jest.spyOn(Logger.prototype, "warn").mockImplementation(() => {});
         jest.spyOn(Logger.prototype, "log").mockImplementation(() => {});
         service = new PiiRedactionService();
