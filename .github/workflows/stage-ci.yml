@@ -2,6 +2,11 @@ name: Stage - CI
 
 on:
   workflow_call:
+    inputs:
+      full_scan:
+        description: 'Run all scan jobs (OWASP, Semgrep, Sonar, etc.). False = lint + build only.'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -12,7 +17,7 @@ permissions:
 jobs:
   run-tests:
     name: Run tests/checks
-    runs-on: ${{ vars.USE_SELF_HOSTED_RUNNER == 'true' && 'self-hosted' || 'ubuntu-latest' }}
+    runs-on: ${{ inputs.full_scan && vars.USE_SELF_HOSTED_RUNNER == 'true' && 'self-hosted' || 'ubuntu-latest' }}
     defaults:
       run:
         shell: bash
@@ -48,7 +53,7 @@ jobs:
 
   langsmith-eval:
     name: LangSmith — ${{ matrix.evaluation }}
-    if: vars.ENABLE_LANGSMITH_EVALUATOR == 'true'
+    if: inputs.full_scan && vars.ENABLE_LANGSMITH_EVALUATOR == 'true'
     runs-on: ${{ vars.USE_SELF_HOSTED_RUNNER == 'true' && 'self-hosted' || 'ubuntu-latest' }}
     defaults:
       run:
@@ -83,7 +88,7 @@ jobs:
 
   owasp-dependency-check:
     name: OWASP Dependency Check
-    if: vars.ENABLE_OWASP_SCAN != 'false'
+    if: inputs.full_scan && vars.ENABLE_OWASP_SCAN != 'false'
     runs-on: ${{ vars.USE_SELF_HOSTED_RUNNER == 'true' && 'self-hosted' || 'ubuntu-latest' }}
     defaults:
       run:
@@ -117,7 +122,7 @@ jobs:
   # ---------------------------------------------------------------------------
   sast-semgrep:
     name: SAST — Semgrep
-    if: vars.ENABLE_SEMGREP_SCAN != 'false' && github.actor != 'dependabot[bot]'
+    if: inputs.full_scan && vars.ENABLE_SEMGREP_SCAN != 'false' && github.actor != 'dependabot[bot]'
     runs-on: ${{ vars.USE_SELF_HOSTED_RUNNER == 'true' && 'self-hosted' || 'ubuntu-latest' }}
     defaults:
       run:
@@ -179,7 +184,7 @@ jobs:
   # ---------------------------------------------------------------------------
   dast-zap:
     name: DAST — OWASP ZAP Baseline
-    if: vars.ENABLE_DAST_SCAN == 'true' && vars.DAST_TARGET_URL != ''
+    if: inputs.full_scan && vars.ENABLE_DAST_SCAN == 'true' && vars.DAST_TARGET_URL != ''
     runs-on: ${{ vars.USE_SELF_HOSTED_RUNNER == 'true' && 'self-hosted' || 'ubuntu-latest' }}
     defaults:
       run:
@@ -213,7 +218,7 @@ jobs:
   # ---------------------------------------------------------------------------
   sonar-scan:
     name: SonarQube — ${{ matrix.app }}
-    if: vars.ENABLE_SONAR_SCAN != 'false'
+    if: inputs.full_scan && vars.ENABLE_SONAR_SCAN != 'false'
     runs-on: ${{ vars.USE_SELF_HOSTED_RUNNER == 'true' && 'self-hosted' || 'ubuntu-latest' }}
     defaults:
       run:
