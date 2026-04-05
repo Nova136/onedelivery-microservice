@@ -2,9 +2,9 @@
 
 This guide outlines all the scenarios that might occur when interacting with the OneDelivery AI Customer Support Orchestrator. Use these scenarios to manually verify the system's behavior, routing, security, and state management.
 
-## 1. Input Validation & Security Scenarios
+## 1. Security & Privacy (Input Validation & PII Redaction)
 
-These tests verify that the `InputValidatorService` correctly identifies and blocks malicious or out-of-scope inputs before they reach the main processing logic.
+These tests verify that malicious, out-of-scope, or sensitive inputs are handled securely before they reach the main processing logic.
 
 ### Prompt Injection
 
@@ -26,11 +26,26 @@ These tests verify that the `InputValidatorService` correctly identifies and blo
 - **Test Input Example:** [Insert toxic/abusive language]
 - **Expected Behavior:** Rejected with "INVALID: Harmful Content".
 
+### Email Redaction
+
+- **Test Input Example:** "My email is test@example.com."
+- **Expected Behavior:** The LLM sees "My email is REDACTED*EMAIL*...". The actual email is stored in Redis.
+
+### Phone Redaction (International & Singapore)
+
+- **Test Input Example:** "My number +65 9123 4567."
+- **Expected Behavior:** The LLM sees "Call me at REDACTED*PHONE*..., or my Singapore number REDACTED*PHONE*...".
+
+### Credit Card Redaction (Priority over Phone)
+
+- **Test Input Example:** "My card number is 1234-5678-9012-3456."
+- **Expected Behavior:** The LLM sees "My card number is REDACTED*CARD*...". It should NOT be partially redacted as a phone number.
+
 ---
 
-## 2. Intent Classification & Boundary Setting Scenarios
+## 2. Core Routing & Boundary Setting
 
-These tests verify that the `IntentClassifierService` correctly classifies user intents and routes them to the appropriate handler.
+These tests verify that the orchestrator correctly classifies user intents and handles multiple requests.
 
 ### Out-of-Bounds Fallback
 
@@ -52,177 +67,116 @@ These tests verify that the `IntentClassifierService` correctly classifies user 
 - **Test Input Example:** "Thanks for your help, goodbye."
 - **Expected Behavior:** Routed to the End Session handler. Returns a polite closing message.
 
----
-
-## 3. Multi-Intent Handling Scenarios
-
-These tests verify the system's ability to handle multiple requests in a single message.
-
 ### Mixed Intent Request
 
-- **Test Input Example:** "What are your delivery hours? Also, cancel my order FD-0000-000002 right now! It is too slow"
-- **Expected Behavior:** The agent prioritizes the cancellation request over the FAQ, and successfully cancels the order (since FD-0000-000002 is in the CREATED status).
+- **Test Input Example:** "What are your delivery hours? Also, I want to cancel an order."
+- **Expected Behavior:** The agent prioritizes the FAQ, answers it, and then transitions to the cancellation SOP by asking for the Order ID and reason.
 
 ---
 
-## 4. Cancellations & Deterministic State Machine
+## 3. Context Switching (The LLM Bailout)
 
-These tests verify the `SopHandlerNode`'s ability to gather required information, execute tools, and enforce business rules for cancellations.
-
-### Multi-Turn Slot Filling (Step 1)
-
-- **Test Input Example:** "I want to cancel order FD-0000-000004"
-- **Expected Behavior:** The agent asks the user to provide a reason for the cancellation.
-
-### Multi-Turn Slot Filling (Step 2)
-
-- **Test Input Example:** "Because it's taking forever."
-- **Expected Behavior:** The agent successfully cancels the order (validating the late-delivery exception logic).
-
-### Standard Cancellation Rejection
-
-- **Test Input Example:** "I want to cancel order FD-0000-000008 right now. It is too slow."
-- **Expected Behavior:** The agent politely rejects the cancellation because the order is actively out for delivery and does not meet the late delivery exception.
-
-### Cancellation Rejection (Already Cancelled)
-
-- **Test Input Example:** "Cancel order FD-0000-000005 please, I don't want it anymore."
-- **Expected Behavior:** The agent politely rejects the cancellation because the order is already in a CANCELLED state.
-
-### The LLM Bailout (Context Switch - Step 1)
-
-- **Test Input Example:** "I need a refund for my order FD-0000-000009."
-- **Expected Behavior:** The agent asks for the specific issue.
-
-### The LLM Bailout (Context Switch - Step 2)
-
-- **Test Input Example:** "Actually, never mind. How can I pay with cash?"
-- **Expected Behavior:** The agent successfully breaks out of the refund flow and explains that Cash on Delivery is accepted for orders under $50.
+- **Test Input Example:** "I need to cancel an order."
+- **Expected Behavior:** The agent asks for the Order ID.
+- **Follow-up Input:** "Actually, never mind. How can I pay with cash?"
+- **Expected Behavior:** The agent successfully breaks out of the cancellation flow and explains that Cash on Delivery is accepted.
 
 ---
 
-## 5. Refund SOP Validations
+## 4. Refund SOP Validations
 
 These tests verify the specific business logic, calculations, and constraints within the Refund SOP.
 
-### Refund Success (Missing Item)
+### Refund Success (Multi-Turn Slot Filling / Missing Item)
 
-- **Test Input Example:** "I need a refund for FD-0000-000001. 1 Laksa was missing."
-- **Expected Behavior:** The agent successfully calculates the refund for the Laksa, routes it to the Guardian for auto-approval, and confirms the specific refund amount to the user.
+- **Order:** FD-0000-000014 (`status: DELIVERED`)
+- **Step 1 Input:** "I need a refund for FD-0000-000014."
+- **Step 1 Expected Behavior:** The agent acknowledges the order and asks what the issue is and which items were affected.
+- **Step 2 Input:** "The Beef Rendang was missing."
+- **Step 2 Expected Behavior:** The agent asks for final confirmation, then proceeds to process the $8.50 refund.
 
-### Refund Rejection (Already Fully Refunded)
+### Refund Success (Standard / Quality Issue)
 
-- **Test Input Example:** "Can I get a refund for my order FD-0000-000007? The Hainanese Chicken Rice was terrible."
-- **Expected Behavior:** The agent rejects the request, noting that the order has already been fully refunded and is not eligible for further compensation.
-
-### Refund Rejection ($20 Auto-Approval Limit)
-
-- **Test Input Example:** "1 Whole Lobster was missing from order FD-0000-000009. I need a refund."
-- **Expected Behavior:** The agent recognizes that the lobster is $50 (exceeding the $20 limit), informs the user that manual review is required, and asks if they would like to be escalated.
+- **Order:** FD-0000-000001 (`status: DELIVERED`)
+- **Test Input Example:** "I want a refund for my order FD-0000-000001. The Hainanese Chicken Rice was cold and tasted weird."
+- **Expected Behavior:** The agent calculates the refund for the quality issue (20% of $5.50 = $1.10) and successfully processes it.
 
 ### Refund Rejection (Partially Refunded Order Block)
 
-- **Test Input Example:** "I need a refund for 1 Roti Prata in order FD-0000-000006. It smells bad"
-- **Expected Behavior:** The agent rejects the request immediately, noting that the order has a 'PARTIAL' refund status and the SOP restricts further refunds once any refund has been applied to an order.
+- **Order:** FD-0000-000006 (`status: DELIVERED`, `refundStatus: PARTIAL`)
+- **Test Input Example:** "I need a refund for 1 Roti Prata in order FD-0000-000006. It smells bad."
+- **Expected Behavior:** The agent rejects the request immediately, noting that the order has a `PARTIAL` refund status and the SOP restricts further refunds once any refund has been applied.
 
-### Refund Success (Quality Issue Calculation)
+### Refund Rejection (Already Fully Refunded)
 
-- **Test Input Example:** "I want a refund for order FD-0000-000001. 1 Hainanese Chicken Rice was cold and tasted weird."
-- **Expected Behavior:** The agent determines this is a quality issue, calculates exactly 20% of the Hainanese Chicken Rice price ($5.50 \* 0.20 = $1.10), and successfully processes the partial refund.
+- **Order:** FD-0000-000007 (`status: DELIVERED`, `refundStatus: FULL`)
+- **Test Input Example:** "Can I get a refund for my order FD-0000-000007? The chicken rice is missing"
+- **Expected Behavior:** The agent rejects the request, noting that the order has already been fully refunded.
 
-### Refund Success (Late Delivery Flat Fee)
+### Refund Rejection ($20 Auto-Approval Limit)
 
-- **Test Input Example:** "My order FD-0000-000001 arrived very late. I want a refund for the delay."
-- **Expected Behavior:** The agent recognizes the issue category is 'late_delivery', calculates the flat $5 refund as dictated by the SOP, and processes the refund successfully.
-
-### Refund Success (Wrong Item)
-
-- **Order:** FD-0000-000011 (`status: DELIVERED`, Nasi Goreng $7.50 × 1)
-- **Test Input Example:** "The Nasi Goreng in order FD-0000-000011 was completely wrong, it was something else entirely."
-- **Expected Behavior:** The agent classifies the issue as 'wrong_item', calculates the refund as 1 × $7.50 = **$7.50**, routes it to the Guardian for approval, and confirms the refund amount to the user.
-
-### Refund Rejection (Order Not Yet Delivered)
-
-- **Order:** FD-0000-000012 (`status: IN_DELIVERY`, Chicken Satay $12.00 × 1)
-- **Test Input Example:** "I want a refund for FD-0000-000012. The Chicken Satay looks wrong in the tracker photo."
-- **Expected Behavior:** The agent rejects the request, stating the order is not yet eligible for a refund as it has not been delivered. No internal status values should be visible to the user.
+- **Order:** FD-0000-000009 (`status: DELIVERED`, Total: $50)
+- **Test Input Example:** "1 Whole Lobster was missing from order FD-0000-000009. I need a refund."
+- **Expected Behavior:** The agent recognizes the $50 refund exceeds the $20 limit, informs the user that manual review is required, and stops execution.
 
 ### Refund Rejection (Time Window Expired — 2 Hours)
 
-- **Order:** FD-0000-000010 (`status: DELIVERED`, `refundStatus: NONE`, `updatedAt`: 3 hours ago, Mee Goreng $8.00 × 1)
+- **Order:** FD-0000-000010 (`status: DELIVERED`, > 2 hours ago)
 - **Test Input Example:** "My Mee Goreng from order FD-0000-000010 was missing. I'd like a refund."
-- **Expected Behavior:** The agent rejects the request, stating the refund window for the order has expired. The 2-hour window is enforced from the delivery timestamp.
+- **Expected Behavior:** The agent rejects the request, stating the refund window for the order has expired.
+
+### Refund Success (Wrong Item)
+
+- **Order:** FD-0000-000011 (`status: DELIVERED`)
+- **Test Input Example:** "The Nasi Goreng in order FD-0000-000011 was completely wrong."
+- **Expected Behavior:** The agent classifies the issue as `wrong_item`, calculates the full price refund ($7.50), and successfully processes it.
+
+### Refund Rejection (Order Not Yet Delivered)
+
+- **Order:** FD-0000-000012 (`status: IN_DELIVERY`)
+- **Test Input Example:** "I want a refund for FD-0000-000012. The Chicken Satay looks wrong in the tracker photo."
+- **Expected Behavior:** The agent rejects the request, stating the order is not yet eligible for a refund as it has not been delivered.
 
 ### Refund Rejection (Quantity Exceeds Amount Ordered)
 
-- **Order:** FD-0000-000013 (`status: DELIVERED`, Wonton Noodles $5.00 × 1)
+- **Order:** FD-0000-000013 (`status: DELIVERED`, Wonton Noodles × 1)
 - **Test Input Example:** "2 Wonton Noodles were missing from my order FD-0000-000013."
-- **Expected Behavior:** The agent rejects the request, stating the requested quantity (2) exceeds the amount that was ordered and is eligible for a refund (1).
-
-### Multi-Turn Slot Filling — Refund (Step 1)
-
-- **Test Input Example:** "I want to get a refund for my recent order."
-- **Expected Behavior:** The agent asks for the order ID.
-
-### Multi-Turn Slot Filling — Refund (Step 2)
-
-- **Test Input Example:** "It's FD-0000-000014."
-- **Expected Behavior:** The agent asks what the issue is with the order.
-
-### Multi-Turn Slot Filling — Refund (Step 3)
-
-- **Test Input Example:** "The Beef Rendang was missing."
-- **Expected Behavior:** The agent routes to the Resolution Agent and confirms the $8.50 refund for the missing Beef Rendang.
+- **Expected Behavior:** The agent rejects the request, stating the requested quantity (2) exceeds the amount eligible for a refund (1).
 
 ---
 
-## 6. Output Evaluation & Self-Correction Scenarios
+## 5. Order Cancellations (State Machine & Rules)
 
-These tests verify that the `OutputEvaluatorService` catches AI mistakes before the user sees them.
+These tests verify the `SopHandlerNode`'s ability to gather required information, execute tools, and enforce business rules for cancellations.
 
-### Hallucination Catch
+### Cancellation Success (Multi-Turn Slot Filling / Late Delivery Exception)
 
-- **Trigger Condition (Simulated):** AI attempts to say "Your refund is approved" without a successful tool execution in context.
-- **Expected Behavior:** Evaluator flags `HALLUCINATION: YES`. The `SelfCorrectionNode` regenerates a safe response (e.g., "I have submitted your refund request").
+- **Order:** FD-0000-000004 (`status: IN_DELIVERY`, > 3 hours old)
+- **Step 1 Input:** "I want to cancel order FD-0000-000004."
+- **Step 1 Expected Behavior:** The agent acknowledges the request and asks for the reason for cancellation.
+- **Step 2 Input:** "It's taking forever."
+- **Step 2 Expected Behavior:** The agent asks for final confirmation, then successfully cancels the order, calculating that the time difference exceeds the 3-hour late delivery exception.
 
-### Leakage Catch
+### Cancellation Success (Created Status)
 
-- **Trigger Condition (Simulated):** AI attempts to say "I am using the cancel_order_tool."
-- **Expected Behavior:** Evaluator flags `LEAKAGE: YES`. The `SelfCorrectionNode` regenerates a response hiding the internal tool name.
+- **Order:** FD-0000-000002 (`status: CREATED`)
+- **Test Input Example:** "Cancel my order FD-0000-000002 please. I changed my mind."
+- **Expected Behavior:** The agent successfully cancels the order, as it is in the `CREATED` state.
 
----
+### Cancellation Rejection (Preparation Status)
 
-## 7. Asynchronous Agent Callback Scenarios
+- **Order:** FD-0000-000003 (`status: PREPARATION`)
+- **Test Input Example:** "I want to cancel order FD-0000-000003."
+- **Expected Behavior:** The agent rejects the cancellation because the food is already in preparation and it has been less than 3 hours.
 
-These tests verify that the orchestrator correctly handles updates from external backend systems.
+### Cancellation Rejection (Already Cancelled)
 
-### Successful Callback
+- **Order:** FD-0000-000005 (`status: CANCELLED`)
+- **Test Input Example:** "Cancel order FD-0000-000005 please."
+- **Expected Behavior:** The agent rejects the cancellation because the order is already in a `CANCELLED` state.
 
-- **Trigger Condition:** External system pushes a success status for an Order ID.
-- **Expected Behavior:** The orchestrator receives the callback, updates the conversation context, and proactively notifies the user via WebSocket (e.g., "Good news, your refund for order FD-0000-000001 was processed.").
+### Cancellation Rejection (Standard In-Delivery)
 
-### Failed Callback
-
-- **Trigger Condition:** External system pushes a failure status.
-- **Expected Behavior:** The orchestrator notifies the user of the failure and offers next steps or escalation.
-
----
-
-## 8. PII Redaction Scenarios
-
-These tests verify that sensitive information is tokenized.
-
-### Email Redaction
-
-- **Test Input Example:** "My email is test@example.com."
-- **Expected Behavior:** The LLM sees "My email is REDACTED*EMAIL*...". The actual email is stored in Redis.
-
-### Phone Redaction (International & Singapore)
-
-- **Test Input Example:** "My number +65 9123 4567."
-- **Expected Behavior:** The LLM sees "Call me at REDACTED*PHONE*..., or my Singapore number REDACTED*PHONE*...".
-
-### Credit Card Redaction (Priority over Phone)
-
-- **Test Input Example:** "My card number is 1234-5678-9012-3456."
-- **Expected Behavior:** The LLM sees "My card number is REDACTED*CARD*...". It should NOT be partially redacted as a phone number.
+- **Order:** FD-0000-000008 (`status: IN_DELIVERY`, < 3 hours old)
+- **Test Input Example:** "I want to cancel order FD-0000-000008 right now."
+- **Expected Behavior:** The agent politely rejects the cancellation because the order is actively out for delivery and does not meet the late delivery exception.
