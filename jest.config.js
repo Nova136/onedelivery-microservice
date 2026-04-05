@@ -6,7 +6,7 @@ module.exports = {
     displayName: name,
     roots: ["."],
     preset: "ts-jest",
-    testMatch: ["**/+(*.)+(spec|e2e-spec|unit.test|e2e-test).+(ts)"],
+    testMatch: ["**/+(*.)+(spec|unit.test|e2e-spec|e2e-test).+(ts)"],
     coveragePathIgnorePatterns: ["index.ts", "node_modules", "jest.config.js"],
     setupFilesAfterEnv: ["./libs/utils/tests/initialization.ts"],
     globalSetup: "./libs/utils/tests/global-setup.ts",
@@ -20,4 +20,5 @@ module.exports = {
     },
     testEnvironment: "node",
     moduleFileExtensions: ["js", "json", "ts"],
+    transformIgnorePatterns: ["/node_modules/(?!(nanoid)/)"],
 };
