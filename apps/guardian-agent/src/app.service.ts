@@ -425,25 +425,25 @@ ${SELF_PROTECTION_CLAUSE}`;
             toolName === "Execute_Cancellation_And_Refund";
 
         // Session compliance check (deterministic).
-        if (isRefundLike) {
-            const state = this.getSessionState(sessionId);
-            if (state.refundCount >= this.SESSION_REFUND_GATE_LIMIT) {
-                this.logger.warn(
-                    `[${userId}] Guardian SESSION LIMIT — blocked ${toolName} | session=${sessionId}`,
-                );
-                this.auditClient.logEvent({
-                    action: "GUARDIAN_GATE_BLOCKED",
-                    entityType: "tool_call",
-                    entityId: sessionId,
-                    userId,
-                    metadata: {
-                        toolName,
-                        feedbackType: "session_limit_exceeded",
-                    },
-                });
-                return "BLOCKED: Session compliance limit reached. A refund or cancellation has already been approved for this session. Only one financial action is permitted per session.";
-            }
-        }
+        // if (isRefundLike) {
+        //     const state = this.getSessionState(sessionId);
+        //     if (state.refundCount >= this.SESSION_REFUND_GATE_LIMIT) {
+        //         this.logger.warn(
+        //             `[${userId}] Guardian SESSION LIMIT — blocked ${toolName} | session=${sessionId}`,
+        //         );
+        //         this.auditClient.logEvent({
+        //             action: "GUARDIAN_GATE_BLOCKED",
+        //             entityType: "tool_call",
+        //             entityId: sessionId,
+        //             userId,
+        //             metadata: {
+        //                 toolName,
+        //                 feedbackType: "session_limit_exceeded",
+        //             },
+        //         });
+        //         return "BLOCKED: Session compliance limit reached. A refund or cancellation has already been approved for this session. Only one financial action is permitted per session.";
+        //     }
+        // }
 
         // ── Guardrail 4 (gate path): SOP unavailability → fail-closed ────
         const gateIntentCode =
@@ -684,8 +684,8 @@ ${SELF_PROTECTION_CLAUSE}`;
                 "The response contains a factual claim that cannot be verified from context.",
             policy_violation:
                 "The response violates OneDelivery's service policy.",
-            session_limit_exceeded:
-                "This action exceeds the per-session limit for financial operations.",
+            // session_limit_exceeded:
+            //     "This action exceeds the per-session limit for financial operations.",
             prompt_injection:
                 "A prompt injection attempt was detected in the evaluated content.",
         };
