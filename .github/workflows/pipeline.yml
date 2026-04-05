@@ -36,7 +36,7 @@ jobs:
 
   notify:
     name: Notify outcome
-    runs-on: ${{ vars.USE_SELF_HOSTED_RUNNER == 'true' && fromJson('["self-hosted", "Windows"]') || 'ubuntu-latest' }}
+    runs-on: ${{ vars.USE_SELF_HOSTED_RUNNER == 'true' && 'self-hosted' || 'ubuntu-latest' }}
     needs: [ci, build, deploy]
     if: always()
     defaults:
