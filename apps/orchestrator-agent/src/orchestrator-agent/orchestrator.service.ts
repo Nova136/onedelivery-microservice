@@ -84,7 +84,7 @@ export class OrchestratorService {
 
             // 3. Return the pivot message immediately without invoking the graph
             const pivotMessage =
-                "I'm sorry, I'm specialized in assisting with OneDelivery's services and don't have information regarding my internal operations or out-of-scope topics. I'd be happy to help you with your orders or our delivery policies instead. What can I do for you today?";
+                "I'm sorry, but I cannot fulfill that request. I am here to help you with your OneDelivery orders, refunds, and delivery questions. How can I assist you today?";
 
             // Save pivot message to history
             await this.memoryService.saveHistory(
@@ -96,6 +96,7 @@ export class OrchestratorService {
 
             return {
                 sessionId: session.id,
+                input: message,
                 response: pivotMessage,
                 summary: session.summary,
                 current_intent: null,
