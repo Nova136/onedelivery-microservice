@@ -162,7 +162,7 @@ export class LogisticsAgentService {
                                 );
                                 scratchpad.push(
                                     new ToolMessage({
-                                        content: `REJECTED: Guardian blocked this cancellation — ${gateReply.replace("BLOCKED: ", "")}`,
+                                        content: `REJECTED: This cancellation could not be approved — ${gateReply.replace("BLOCKED: ", "")}`,
                                         tool_call_id: toolCall.id,
                                     }),
                                 );
@@ -305,7 +305,7 @@ export class LogisticsAgentService {
                             ) {
                                 scratchpad.push(
                                     new ToolMessage({
-                                        content: `REJECTED: Guardian blocked this cancellation — ${gateReply.replace("BLOCKED: ", "")}`,
+                                        content: `REJECTED: This cancellation could not be approved — ${gateReply.replace("BLOCKED: ", "")}`,
                                         tool_call_id: toolCall.id,
                                     }),
                                 );
@@ -326,7 +326,7 @@ export class LogisticsAgentService {
                     (retryMessage?.content as string)
                         ?.replace(/<thinking>[\s\S]*?<\/thinking>/g, "")
                         .trim() ||
-                    "REJECTED: Agent failed to correct response after Guardian feedback.";
+                    "REJECTED: Unable to process this request after multiple attempts. Please contact support.";
 
                 this.logger.log(
                     `[${payload.userId}] Guardian Retry Result: "${finalResponseString}"`,
@@ -343,7 +343,7 @@ export class LogisticsAgentService {
         );
 
         // 8. Return the string straight back to the Orchestrator. No saving to DB!
-        this.agentsClient.send("orchestrator", {
+        this.agentsClient.notifyOrchestrator({
             userId: payload.userId,
             sessionId: payload.sessionId,
             message: finalResponseString,
