@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
 import { HttpModule } from "@nestjs/axios";
+import { ScheduleModule } from "@nestjs/schedule";
 import { LogisticsAgentController } from "./logistics-agent.controller";
 import { LogisticsAgentService } from "./logistics-agent.service";
 import { AgentsModule } from "./agents/agents.module";
@@ -17,6 +18,7 @@ import { HealthModule } from "@libs/modules/health-check/health-check.module";
         }),
         HttpModule,
         HealthModule,
+        ScheduleModule.forRoot(),
         AgentsModule,
         KnowledgeModule,
         OrderModule,

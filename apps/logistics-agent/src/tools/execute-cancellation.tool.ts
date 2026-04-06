@@ -7,6 +7,9 @@ const executeCancellationSchema = z
         orderId: z
             .string()
             .describe("The unique identifier for the order to be cancelled."),
+        description: z
+            .string()
+            .describe("The customer's reason for cancellation."),
     })
     .describe(
         "Input to execute the cancellation of an order and trigger a refund.",
@@ -16,7 +19,7 @@ export function createExecuteCancellationTool(
     orderClient: OrderClientService,
 ): StructuredTool {
     return tool(
-        async ({ orderId }: { orderId: string }) => {
+        async ({ orderId, description }: { orderId: string; description: string }) => {
             // TODO: Implement the actual cancellation logic. For now, we return a placeholder response.
             try {
                 const result = await orderClient.executeCancellation(orderId);

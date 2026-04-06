@@ -144,7 +144,7 @@ export class LogisticsAgentService {
                         if (
                             toolCall.name === "Execute_Cancellation_And_Refund"
                         ) {
-                            const gateMessage = `${GUARDIAN_GATE_PREFIX} action: Tool=Execute_Cancellation_And_Refund, orderId="${toolCall.args.orderId}". Confirm this cancellation and refund action is SOP-compliant before execution.`;
+                            const gateMessage = `${GUARDIAN_GATE_PREFIX} action: Tool=Execute_Cancellation_And_Refund, orderId="${toolCall.args.orderId}", description="${toolCall.args.description}". Confirm this cancellation and refund action is SOP-compliant before execution.`;
                             const gateReply = await this.agentsClient.send(
                                 "guardian",
                                 {
@@ -290,7 +290,7 @@ export class LogisticsAgentService {
                         if (
                             toolCall.name === "Execute_Cancellation_And_Refund"
                         ) {
-                            const gateMessage = `${GUARDIAN_GATE_PREFIX} action: Tool=Execute_Cancellation_And_Refund, orderId="${toolCall.args.orderId}". Confirm this cancellation and refund action is SOP-compliant before execution.`;
+                            const gateMessage = `${GUARDIAN_GATE_PREFIX} action: Tool=Execute_Cancellation_And_Refund, orderId="${toolCall.args.orderId}", description="${toolCall.args.description}". Confirm this cancellation and refund action is SOP-compliant before execution.`;
                             const gateReply = await this.agentsClient.send(
                                 "guardian",
                                 {

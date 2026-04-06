@@ -264,9 +264,9 @@ export class OrderService {
         });
     }
 
-    async listByCustomer(customerId: string) {
+    async listByCustomer(customerId?: string) {
         return this.orderRepo.find({
-            where: { customerId: customerId },
+            where: customerId ? { customerId } : undefined,
             relations: ["items"],
             order: { createdAt: "DESC" },
         });
@@ -297,8 +297,8 @@ export class OrderService {
                 this.paymentClient,
                 { cmd: "payment.refund" },
                 {
-                    payment: paymentResult.paymentId,
-                    account: paymentResult.amount,
+                    paymentId: paymentResult.paymentId,
+                    amount: paymentResult.amount,
                     reason: "cancel order",
                 },
             );
@@ -313,7 +313,7 @@ export class OrderService {
         order.status = OrderStatus.CANCELLED;
         order.updatedAt = new Date();
         order.totalRefundValue = refundResult.amount;
-        order.refundStatus = refundResult.status;
+        order.refundStatus = RefundStatus.FULL;
         return this.orderRepo.save(order);
     }
 
