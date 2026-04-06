@@ -19,6 +19,8 @@
         "test:pii-redaction": "tsx tests/modules/pii-redaction/pii-redaction.functional.test.ts",
         "test:intent-classifier": "tsx tests/modules/intent-classifier/intent-classifier.functional.test.ts",
         "test:intent-classifier-adversarial": "tsx tests/modules/intent-classifier/intent-classifier.adversarial.test.ts",
+        "test:callback-extraction-security": "tsx tests/orchestrator-agent/callback-extraction.security.test.ts",
+        "test:sop-handler-security": "tsx tests/orchestrator-agent/sop-handler.security.test.ts",
         "test:orchestrator-workflow": "tsx tests/workflows/orchestrator.functional.test.ts",
         "test:refund-cancellation-workflow": "tsx tests/workflows/refund-cancellation.functional.test.ts"
     },
