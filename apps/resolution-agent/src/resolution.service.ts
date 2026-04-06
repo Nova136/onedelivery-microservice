@@ -159,7 +159,7 @@ Before you use a tool or return your final answer, you MUST enclose your interna
                             );
                             scratchpad.push(
                                 new ToolMessage({
-                                    content: `REJECTED: Guardian blocked this refund — ${gateReply.replace("BLOCKED: ", "")}`,
+                                    content: `REJECTED: This refund could not be approved — ${gateReply.replace("BLOCKED: ", "")}`,
                                     tool_call_id: toolCall.id,
                                 }),
                             );
@@ -281,7 +281,7 @@ Before you use a tool or return your final answer, you MUST enclose your interna
                     if (gateReply.startsWith("BLOCKED:")) {
                         scratchpad.push(
                             new ToolMessage({
-                                content: `REJECTED: Guardian blocked this refund — ${gateReply.replace("BLOCKED: ", "")}`,
+                                content: `REJECTED: This refund could not be approved — ${gateReply.replace("BLOCKED: ", "")}`,
                                 tool_call_id: toolCall.id,
                             }),
                         );
