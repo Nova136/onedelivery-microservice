@@ -111,8 +111,9 @@ Before you use a tool or return your final answer, you MUST enclose your interna
 
         let finalMessage: BaseMessage | undefined;
         const scratchpad: BaseMessage[] = [];
+        let refundExecuted = false;
 
-        for (let i = 0; i < 5; i++) {
+        outer: for (let i = 0; i < 5; i++) {
             this.logger.log(
                 `[${userId}] Resolution Loop ${i + 1}: Thinking...`,
             );
@@ -163,7 +164,8 @@ Before you use a tool or return your final answer, you MUST enclose your interna
                                     tool_call_id: toolCall.id,
                                 }),
                             );
-                            continue;
+                            // Guardian rejected — no point retrying; break immediately.
+                            break outer;
                         }
                         this.logger.log(
                             `[${userId}] Guardian approved Execute_Refund.`,
@@ -175,12 +177,36 @@ Before you use a tool or return your final answer, you MUST enclose your interna
                     );
                     const toolOutput = await tool.invoke(toolCall.args);
                     this.logger.log(`[${userId}] Tool Output: "${toolOutput}"`);
+
+                    const toolOutputStr = String(toolOutput);
                     scratchpad.push(
                         new ToolMessage({
-                            content: String(toolOutput),
+                            content: toolOutputStr,
                             tool_call_id: toolCall.id,
                         }),
                     );
+
+                    // Execute_Refund is a one-shot action — break regardless of whether
+                    // the tool succeeded or returned a rejection. Re-entering the loop
+                    // risks a duplicate refund or infinite retry on a permanent error.
+                    if (toolCall.name === "Execute_Refund") {
+                        try {
+                            const parsed = JSON.parse(toolOutputStr) as {
+                                data?: { refundId?: string };
+                                summary?: string;
+                            };
+                            if (parsed?.data?.refundId) {
+                                refundExecuted = true;
+                                finalMessage = { content: parsed.summary ?? toolOutputStr } as BaseMessage;
+                            }
+                        } catch {
+                            /* non-JSON tool output */
+                        }
+                        this.logger.log(
+                            `[${userId}] Execute_Refund invoked — terminating agent loop.`,
+                        );
+                        break outer;
+                    }
                 } else {
                     this.logger.warn(
                         `[${userId}] Agent tried to call unknown tool: ${toolCall.name}`,
@@ -193,6 +219,14 @@ Before you use a tool or return your final answer, you MUST enclose your interna
                     );
                 }
             }
+        }
+
+        // Refund already executed successfully — skip Guardian verify to avoid
+        // the agent being asked to re-reason about an already-completed action.
+        if (refundExecuted) {
+            const successContent = (finalMessage?.content as string) ?? "";
+            this.logger.log(`[${userId}] Final Result (refund executed): "${successContent}"`);
+            return this.finalizeReply(payload, `SUCCESS: ${successContent}`, orderId);
         }
 
         let result =

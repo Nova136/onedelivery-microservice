@@ -168,9 +168,7 @@ export class OrderController {
 
     @MessagePattern({ cmd: "order.list" })
     async listOrders(@Payload() data: { customerId?: string }) {
-        const orders = await this.orderService.listByCustomer(
-            data.customerId ?? "",
-        );
+        const orders = await this.orderService.listByCustomer(data.customerId);
         return {
             orders: orders.map((o) => ({
                 orderId: o.id,
