@@ -86,12 +86,12 @@ describe('IncidentService', () => {
       expect(result).toEqual(incidents);
     });
 
-    it('should use default page 1 and limit 10', async () => {
+    it('should use default page 1 and limit 20', async () => {
       mockIncidentRepo.findAndCount.mockResolvedValue([[], 0]);
 
       await service.getIncidents();
 
-      expect(mockIncidentRepo.findAndCount).toHaveBeenCalledWith({ skip: 0, take: 10 });
+      expect(mockIncidentRepo.findAndCount).toHaveBeenCalledWith({ skip: 0, take: 20 });
     });
 
     it('should calculate correct skip for page 3', async () => {

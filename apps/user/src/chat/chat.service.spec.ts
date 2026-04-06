@@ -33,6 +33,7 @@ describe('ChatService', () => {
 
   const mockChatMessageRepo = {
     save: jest.fn(),
+    countBy: jest.fn().mockResolvedValue(0),
   };
 
   const mockChatSessionRepo = {
