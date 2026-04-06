@@ -147,12 +147,12 @@ jobs:
             echo "semgrep.sarif not found — skipping upload steps"
           fi
 
-      - name: Upload SARIF to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v4
-        if: always() && steps.sarif-check.outputs.exists == 'true'
-        with:
-          sarif_file: semgrep.sarif
-          category: semgrep
+      # - name: Upload SARIF to GitHub Security tab
+      #   uses: github/codeql-action/upload-sarif@v4
+      #   if: always() && steps.sarif-check.outputs.exists == 'true'
+      #   with:
+      #     sarif_file: semgrep.sarif
+      #     category: semgrep
 
       - name: Upload SARIF artifact
         uses: actions/upload-artifact@v4
