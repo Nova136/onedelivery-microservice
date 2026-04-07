@@ -17,6 +17,7 @@ const options: DataSourceOptions & SeederOptions = {
     username: DB_USER,
     password: DB_PASSWORD,
     database: DB_NAME,
+    ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false,
     entities: [(__dirname + "/**/*.entity{.ts,.js}").replace(/\\/g, "/")],
     seeds: [SopSeeder, FaqSeeder],
     namingStrategy: new SnakeNamingStrategy(),
