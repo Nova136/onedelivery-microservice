@@ -8,8 +8,8 @@
 TRUNCATE TABLE knowledge.faq     RESTART IDENTITY CASCADE;
 TRUNCATE TABLE knowledge.sop     RESTART IDENTITY CASCADE;
 
--- ── incidents ───────────────────────────────────────────────
-TRUNCATE TABLE incidents.incidents RESTART IDENTITY CASCADE;
+-- ── incident ────────────────────────────────────────────────
+TRUNCATE TABLE incident.incidents RESTART IDENTITY CASCADE;
 
 -- ── users ───────────────────────────────────────────────────
 TRUNCATE TABLE users.chat_message RESTART IDENTITY CASCADE;

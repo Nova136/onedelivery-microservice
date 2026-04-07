@@ -25,7 +25,7 @@ const options: DataSourceOptions & SeederOptions = {
 const dataSource = new DataSource(options);
 
 dataSource.initialize().then(async () => {
-  await dataSource.query(`CREATE SCHEMA IF NOT EXISTS incidents;`);
+  await dataSource.query(`CREATE SCHEMA IF NOT EXISTS incident;`);
   await dataSource.synchronize(true);
   await runSeeders(dataSource);
   // await setIdNextVal(dataSource, 'incident', 'incidents');
