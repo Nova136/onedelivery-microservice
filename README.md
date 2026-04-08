@@ -333,3 +333,8 @@ Press `Ctrl+C` in the tunnel terminal when done.
 ---
 
 > Credentials are in `.env.cloud`. Replace `<TASK_ID>` with the value from Step 2.
+ Local Postgres:
+  ./scripts/truncate-seeded-tables.sh
+                                     
+  RDS via tunnel (tunnel must already be open via ./scripts/rds-tunnel.sh):                                                                                           
+  ./scripts/truncate-seeded-tables.sh --cloud 

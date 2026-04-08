@@ -46,6 +46,8 @@
         "seed-knowledge": "cd apps/knowledge && npm run seed:run",
         "seed-knowledge-data": "cd apps/knowledge && npm run seed:run",
         "seeding-all-datas-cloud": "concurrently \"npm:seed-cloud-*\"",
+        "truncate-all": "npx ts-node -r tsconfig-paths/register --transpile-only scripts/truncate-seeded-tables.ts",
+        "truncate-all-cloud": "NODE_ENV=production npx ts-node -r tsconfig-paths/register --transpile-only scripts/truncate-seeded-tables.ts",
         "seed-cloud-audit": "cd apps/audit && NODE_ENV=production npm run seed:run",
         "seed-cloud-logistics": "cd apps/logistics && NODE_ENV=production npm run seed:run",
         "seed-cloud-order": "cd apps/order && NODE_ENV=production npm run seed:run",
