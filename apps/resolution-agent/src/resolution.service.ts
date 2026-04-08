@@ -426,7 +426,7 @@ Before you use a tool or return your final answer, you MUST enclose your interna
         const refundStatus =
             (order as { refundStatus?: string }).refundStatus ?? "NONE";
         if (refundStatus !== "NONE") {
-            return `REJECTED: Refunds can only be processed when order refundStatus is NONE. Current refundStatus: ${refundStatus}.`;
+            return "REJECTED: This order has already been refunded and is not eligible for a further refund.";
         }
 
         if (
@@ -451,13 +451,13 @@ Before you use a tool or return your final answer, you MUST enclose your interna
             const remaining = line.quantityOrdered - line.quantityRefunded;
             const requestedQty = Math.max(0, req.quantity);
             if (requestedQty > remaining) {
-                return `REJECTED: Requested refund quantity for "${line.productName}" exceeds eligible quantity. Requested ${requestedQty}, but only ${remaining} unit(s) can be refunded.`;
+                return `REJECTED: The requested quantity for "${line.productName}" exceeds the amount eligible for a refund.`;
             }
             totalCents += Math.round(requestedQty * Number(line.price) * 100);
         }
 
         if (totalCents > AUTO_APPROVAL_LIMIT_USD * 100) {
-            return "REJECTED: Refund amount exceeds the $20 auto-approval limit; this request requires manual review.";
+            return "REJECTED: This refund request requires manual review. Please contact our support team for assistance.";
         }
         return null;
     }
@@ -489,9 +489,9 @@ Before you use a tool or return your final answer, you MUST enclose your interna
     private shouldSkipResolutionGuardianVerification(result: string): boolean {
         if (!result.startsWith("REJECTED:")) return false;
         return (
-            result.includes("auto-approval limit") ||
-            result.includes("refundStatus is NONE") ||
-            result.includes("exceeds eligible quantity")
+            result.includes("requires manual review") ||
+            result.includes("already been refunded") ||
+            result.includes("eligible for a refund")
         );
     }
 }
