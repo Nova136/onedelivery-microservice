@@ -8,7 +8,7 @@ import { AppService } from "../src/app.service";
 
 const BASE_DATASET_NAME = "OneDelivery-QA-Agent-Trend-Dataset";
 
-const monthlyIncidents = [
+const currentMonthIncidents = [
     {
         id: "8b55d125-e7bb-4bea-a6e3-a860c12777bd",
         type: "LATE_DELIVERY",
@@ -52,10 +52,45 @@ const monthlyIncidents = [
     },
 ];
 
+const previousMonthIncidents = [
+    {
+        id: "1a55d125-e7bb-4bea-a6e3-a860c12777bd",
+        type: "LATE_DELIVERY",
+        orderId: "FD-0000-000021",
+        userId: null,
+        summary: "Driver delayed by heavy traffic.",
+        createdAt: "2026-02-01T18:10:00.000Z",
+    },
+    {
+        id: "2a55d125-e7bb-4bea-a6e3-a860c12777bd",
+        type: "WRONG_ORDER",
+        orderId: "FD-0000-000022",
+        userId: null,
+        summary: "Customer received wrong meal.",
+        createdAt: "2026-02-08T12:00:00.000Z",
+    },
+    {
+        id: "3a55d125-e7bb-4bea-a6e3-a860c12777bd",
+        type: "OTHER",
+        orderId: "FD-0000-000023",
+        userId: null,
+        summary: "Unclear issue reported by customer.",
+        createdAt: "2026-02-14T14:00:00.000Z",
+    },
+];
+
 const mockCommonService = {
     sendViaRMQ: async (_client: any, pattern: any, payload: any) => {
         if (pattern.cmd === "incident.getByDateRange") {
-            return monthlyIncidents;
+            const startDate = new Date(payload.startDate);
+            const currentMonth = new Date().getMonth();
+            const previousMonth = (currentMonth + 11) % 12;
+
+            if (startDate.getMonth() === previousMonth) {
+                return previousMonthIncidents;
+            }
+
+            return currentMonthIncidents;
         }
         return { success: true, payload };
     },
@@ -84,11 +119,10 @@ const testCases = [
             fixtureName: "baseline-march-incidents",
         },
         outputs: {
-            expected_tool: "get_incidents_by_date_range",
             expected_total: 5,
             expected_most_common: "LATE_DELIVERY",
             expected_percentage: 60,
-            expected_trend: "NA",
+            expected_trend: "up",
             required_issue_themes: [
                 "late delivery",
                 "weather",
@@ -103,33 +137,16 @@ const testCases = [
 ];
 
 async function target(_inputs: any) {
-    const toolCallsMade: any[] = [];
-    const originalTool = qaService["tools"].get_incidents_by_date_range;
-
-    qaService["tools"].get_incidents_by_date_range = {
-        invoke: async (args: any) => {
-            toolCallsMade.push({ tool: "get_incidents_by_date_range", args });
-            return JSON.stringify({
-                summary: `Fetched ${monthlyIncidents.length} incidents.`,
-                data: monthlyIncidents,
-            });
-        },
-    } as any;
-
     try {
         const result = await qaService.analyzeTrends();
-        return {
-            output: result,
-            toolCalls: toolCallsMade,
-        };
-    } finally {
-        qaService["tools"].get_incidents_by_date_range = originalTool;
+        return { output: result };
+    } catch (error) {
+        return { output: `Error: ${error.message}` };
     }
 }
 
 const trendEvaluator = async ({ run, example }: any) => {
     const output = run.outputs?.output ?? {};
-    const toolCalls = run.outputs?.toolCalls ?? [];
 
     const llm = new ChatOpenAI({ modelName: "gpt-5.4-mini", temperature: 0 });
     const structuredLlm = llm.withStructuredOutput(
@@ -143,25 +160,21 @@ const trendEvaluator = async ({ run, example }: any) => {
 Role: Strict QA evaluator for trend analysis.
 
 Expected behavior:
-- Tool call required: ${example.outputs.expected_tool}
 - Expected totalByThisMonth: ${example.outputs.expected_total}
 - Expected mostCommon: ${example.outputs.expected_most_common}
 - Expected percentage: ${example.outputs.expected_percentage}
 - Expected trend: ${example.outputs.expected_trend}
 
-Actual tool calls:
-${JSON.stringify(toolCalls, null, 2)}
-
 Actual output:
 ${JSON.stringify(output, null, 2)}
 
 Pass criteria:
-1. get_incidents_by_date_range must be called at least once.
-2. Output must be a JSON object with keys totalByThisMonth, mostCommon, percentage, trend, peakTime, issues.
-3. totalByThisMonth must equal expected_total.
-4. mostCommon must equal expected_most_common.
-5. percentage must be correct or very close to expected_percentage.
-6. trend must equal expected_trend unless the output clearly explains insufficient prior-month data.
+1. Output must be a JSON object with keys totalByThisMonth, mostCommon, percentage, trend, peakTime, issues.
+2. totalByThisMonth must equal expected_total.
+3. mostCommon must equal expected_most_common.
+4. percentage must be correct or very close to expected_percentage.
+5. trend must equal expected_trend.
+6. issues must be grounded in the supplied incident summaries and not invent unsupported causes.
 
 Return only whether it passed and a short reason.
 `;
