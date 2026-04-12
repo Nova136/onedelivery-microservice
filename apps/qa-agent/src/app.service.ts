@@ -78,6 +78,7 @@ export class AppService {
         - For example, if a user asks a question about a policy (e.g., "Can I change my address?") and the answer is "No," this is a POLICY INQUIRY, NOT an incident. Do NOT log it.
         - Incident Types MUST be one of: [LATE_DELIVERY, MISSING_ITEMS, WRONG_ORDER, DAMAGED_PACKAGING, PAYMENT_FAILURE, OTHER]
         - If an incident is detected, you MUST use the log_incident tool to record the incident with the appropriate type and summary. The summary should be a concise description of the issue.
+        - If there are multiple distinct service failures in the same chat session, call log_incident once per distinct failure.
         - Always include the user ID and order ID (if mentioned) when logging an incident.
         - If the chat history does not provide enough information to determine the incident type, but it clearly indicates a customer issue, you can use "OTHER" as the incident type and provide the details in the summary.
 
@@ -331,52 +332,94 @@ export class AppService {
         
         CRITICAL CHECK: Is the user reporting a mistake we made, or just asking a question?
         - If they are asking a question (FAQ/Policy): CALL save_sentiment ONLY.
-        - If they are reporting a failure (Late/Wrong/Broken): CALL log_incident AND save_sentiment.
+        - If they are reporting failures (Late/Wrong/Broken): CALL log_incident for EACH distinct failure, then CALL save_sentiment.
+        - Do not merge unrelated failures into a single incident log.
         
         Do not log incidents for address change requests or general inquiries.`,
         });
 
-        // Invoke LLM
-        const response = (await this.agentWithTools.invoke(
-            formattedReview,
-        )) as AIMessage;
+        // Invoke the model in a tool-call loop so it can emit multiple log_incident calls
+        // and continue reasoning after each tool result.
+        const reviewConversation: BaseMessage[] = [...formattedReview];
+        let incidentCount = 0;
+        let sentimentCaptured = false;
+        const maxRounds = 5;
 
-        let incidentLogged = false;
+        for (let round = 0; round < maxRounds; round++) {
+            const response = (await this.agentWithTools.invoke(
+                reviewConversation,
+            )) as AIMessage;
+            reviewConversation.push(response);
 
-        // Handle tool calls
-        if (response.tool_calls && response.tool_calls.length > 0) {
-            for (const toolCall of response.tool_calls) {
+            const toolCalls = response.tool_calls ?? [];
+            if (toolCalls.length === 0) {
+                break;
+            }
+
+            const toolMessages: ToolMessage[] = [];
+            for (const toolCall of toolCalls) {
                 if (toolCall.name === "log_incident") {
                     try {
                         const result = await this.tools["log_incident"].invoke(
                             toolCall.args as any,
                         );
+                        incidentCount += 1;
                         this.logger.log(
-                            `Logged incident for session ${sessionId}: ${result}`,
+                            `Logged incident #${incidentCount} for session ${sessionId}: ${result}`,
                         );
-                        incidentLogged = true;
+                        toolMessages.push(
+                            new ToolMessage({
+                                content: String(result),
+                                tool_call_id: toolCall.id ?? "",
+                            }),
+                        );
                     } catch (error) {
+                        const message =
+                            error instanceof Error ? error.message : String(error);
                         this.logger.error(
-                            `Failed to log incident for session ${sessionId}: ${error}`,
+                            `Failed to log incident for session ${sessionId}: ${message}`,
+                        );
+                        toolMessages.push(
+                            new ToolMessage({
+                                content: `ERROR: ${message}`,
+                                tool_call_id: toolCall.id ?? "",
+                            }),
                         );
                     }
                 } else if (toolCall.name === "save_sentiment") {
                     try {
-                        const result = await this.tools[
-                            "save_sentiment"
-                        ].invoke({
+                        const result = await this.tools["save_sentiment"].invoke({
                             ...toolCall.args,
                             sessionId,
                         } as any);
+                        sentimentCaptured = true;
                         this.logger.log(
                             `Saved sentiment for session ${sessionId}: ${result}`,
                         );
+                        toolMessages.push(
+                            new ToolMessage({
+                                content: String(result),
+                                tool_call_id: toolCall.id ?? "",
+                            }),
+                        );
                     } catch (error) {
+                        const message =
+                            error instanceof Error ? error.message : String(error);
                         this.logger.error(
-                            `Failed to save sentiment for session ${sessionId}: ${error}`,
+                            `Failed to save sentiment for session ${sessionId}: ${message}`,
+                        );
+                        toolMessages.push(
+                            new ToolMessage({
+                                content: `ERROR: ${message}`,
+                                tool_call_id: toolCall.id ?? "",
+                            }),
                         );
                     }
                 }
+            }
+
+            if (toolMessages.length > 0) {
+                reviewConversation.push(...toolMessages);
             }
         }
 
@@ -390,10 +433,12 @@ export class AppService {
         this.logger.log(`Marked session ${sessionId} as reviewed.`);
 
         return JSON.stringify({
-            status: incidentLogged ? "INCIDENT_LOGGED" : "NO_INCIDENT",
-            sentiment_captured: true,
-            message: incidentLogged
-                ? "Logged service failure."
+            status: incidentCount > 0 ? "INCIDENT_LOGGED" : "NO_INCIDENT",
+            incident_count: incidentCount,
+            sentiment_captured: sentimentCaptured,
+            message:
+                incidentCount > 0
+                    ? `Logged ${incidentCount} service failure${incidentCount > 1 ? "s" : ""}.`
                 : "Session reviewed, no failure found.",
         });
     }
