@@ -14,12 +14,19 @@ import {
     ChatMessage,
 } from "@langchain/core/messages";
 import { MemoryService } from "./memory/memory.service";
-import { Cron, CronExpression } from "@nestjs/schedule";
 import { StructuredTool } from "@langchain/core/tools";
 import { CommonService } from "@libs/modules/common/common.service";
 import { createLogIncidentTool } from "./tools/log-Incident.tool";
 import { createSaveSentimentTool } from "./tools/save-sentiment.tool";
 import { createGetIncidentsByDateRangeTool } from "./tools/get-incidents-by-date-range.tool";
+import { z } from "zod";
+import {
+    analyzeIncidentTrends,
+    countIncidentTypes,
+    getFallbackIssueSnippets,
+    TrendAnalysisResult,
+    TrendIncident,
+} from "./trends/trend-analysis.util";
 
 /**
  * QA specialist agent. Invoked by the orchestrator via TCP (agent.chat).
@@ -444,96 +451,147 @@ export class AppService {
     }
 
     /**
-     * Analyze this month's incident trends using the get_incidents_by_date_range tool.
-     * Called by the qa.analyzeTrends MessagePattern (triggered from the incident service).
+     * Analyze current-month incident trends with deterministic aggregation and
+     * AI-assisted issue-theme synthesis.
      */
-    async analyzeTrends(): Promise<any> {
+    async analyzeTrends(): Promise<TrendAnalysisResult> {
         const now = new Date();
-        const startDate = new Date(
+        const currentMonthStart = new Date(
             now.getFullYear(),
             now.getMonth(),
             1,
-        ).toISOString();
-        const endDate = now.toISOString();
+        );
+        const previousMonthStart = new Date(
+            now.getFullYear(),
+            now.getMonth() - 1,
+            1,
+        );
+        const previousMonthEnd = new Date(currentMonthStart.getTime() - 1);
 
-        this.logger.log(`Analyzing trends from ${startDate} to ${endDate}`);
+        this.logger.log(
+            `Analyzing trends from ${currentMonthStart.toISOString()} to ${now.toISOString()}`,
+        );
 
-        const userPrompt = `Please analyze trends in the month's incident data from ${startDate} to ${endDate}. Only current-month incident data is available in this flow, so if previous-month comparison data is unavailable, trend must be NA.`;
+        const currentMonthIncidents = await this.fetchIncidentsByDateRange(
+            currentMonthStart.toISOString(),
+            now.toISOString(),
+        );
 
-        const formatted = await this.prompt.formatMessages({
-            chat_history: [],
-            input: userPrompt,
-        });
-
-        const firstResponse = (await this.agentWithTools.invoke(
-            formatted,
-        )) as AIMessage;
-
-        if (firstResponse.tool_calls && firstResponse.tool_calls.length > 0) {
-            const toolMessages: ToolMessage[] = [];
-            for (const toolCall of firstResponse.tool_calls) {
-                const calledTool = this.tools[toolCall.name];
-                if (calledTool) {
-                    const result = await calledTool.invoke(
-                        toolCall.args as any,
-                    );
-                    toolMessages.push(
-                        new ToolMessage({
-                            content: result,
-                            tool_call_id: toolCall.id ?? "",
-                        }),
-                    );
-                }
-            }
-
-            // Force the model to generate the JSON now that it has data
-            const finalResponse = (await this.agentWithTools.invoke([
-                ...formatted,
-                firstResponse,
-                ...toolMessages,
-                new HumanMessage(
-                    "Now provide the structured JSON trend analysis based on the data above.",
-                ),
-            ])) as AIMessage;
-
-            this.logger.log(
-                `Final response after tool calls: ${finalResponse.content}`,
+        let previousMonthIncidents: TrendIncident[] | null = null;
+        try {
+            previousMonthIncidents = await this.fetchIncidentsByDateRange(
+                previousMonthStart.toISOString(),
+                previousMonthEnd.toISOString(),
             );
-
-            const content =
-                typeof finalResponse.content === "string"
-                    ? finalResponse.content
-                    : JSON.stringify(finalResponse.content);
-
-            // Extract JSON from markdown code block or raw object
-            const jsonMatch = content.match(
-                /```(?:json)?\n?([\s\S]*?)```|({[\s\S]*})/,
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            this.logger.warn(
+                `Unable to fetch previous month incidents for trend comparison: ${message}`,
             );
-            if (jsonMatch) {
-                try {
-                    return this.normalizeTrendAnalysis(
-                        JSON.parse(jsonMatch[1] ?? jsonMatch[2]),
-                    );
-                } catch (_) {}
-            }
-            return { analysis: content };
         }
 
-        const content =
-            typeof firstResponse.content === "string"
-                ? firstResponse.content
-                : JSON.stringify(firstResponse.content);
-        return { analysis: content };
+        const analysis = analyzeIncidentTrends(
+            currentMonthIncidents,
+            previousMonthIncidents,
+        );
+        const issues = await this.summarizeTrendIssues(
+            currentMonthIncidents,
+            analysis,
+        );
+
+        return {
+            ...analysis,
+            issues,
+        };
     }
 
-    private normalizeTrendAnalysis(result: any): any {
-        if (!result || typeof result !== "object" || Array.isArray(result)) {
+    private async fetchIncidentsByDateRange(
+        startDate: string,
+        endDate: string,
+    ): Promise<TrendIncident[]> {
+        const result = await this.commonService.sendViaRMQ<any>(
+            this.incidentClient,
+            { cmd: "incident.getByDateRange" },
+            { startDate, endDate },
+        );
+
+        if (Array.isArray(result)) {
             return result;
         }
 
-        return {
-            ...result,
-            trend: "NA",
-        };
+        if (result && Array.isArray(result.incidents)) {
+            return result.incidents;
+        }
+
+        this.logger.warn(
+            `Unexpected incident.getByDateRange response shape: ${JSON.stringify(result)}`,
+        );
+
+        return [];
     }
+
+    private async summarizeTrendIssues(
+        incidents: TrendIncident[],
+        analysis: Omit<TrendAnalysisResult, "issues">,
+    ): Promise<string[]> {
+        const fallbackIssues = getFallbackIssueSnippets(incidents);
+        if (incidents.length === 0) {
+            return [];
+        }
+        this.logger.log(`incidents :: ${JSON.stringify(incidents)}`);
+        this.logger.log(`Analyzing ${incidents.length} incidents for trend issues.`);
+
+        if (incidents.length < 2) {
+            return fallbackIssues;
+        }
+
+        try {
+            const structuredLlm = this.llm.withStructuredOutput(
+                z.object({
+                    issues: z.array(z.string().min(1)).max(3),
+                }),
+            );
+
+            const issueSynthesisInput = {
+                summaryStats: {
+                    totalByThisMonth: analysis.totalByThisMonth,
+                    mostCommon: analysis.mostCommon,
+                    percentage: analysis.percentage,
+                    trend: analysis.trend,
+                    peakTime: analysis.peakTime,
+                    countsByType: countIncidentTypes(incidents),
+                },
+                incidents: incidents.slice(0, 50).map((incident) => ({
+                    type: incident.type,
+                    summary: incident.summary,
+                })),
+            };
+
+            const result = await structuredLlm.invoke(`You are summarizing operational issue themes from structured incident data.
+
+Rules:
+- Use only the supplied evidence.
+- Return up to 3 short issue themes.
+- Do not invent causes or numbers.
+- Merge duplicate ideas into one theme.
+- If the data does not support clear themes, return an empty array.
+
+Input:
+${JSON.stringify(issueSynthesisInput)}`);
+
+            const issues = result.issues
+                .map((issue) => issue.trim())
+                .filter((issue) => issue.length > 0);
+
+            return issues.length > 0 ? issues : fallbackIssues;
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            this.logger.warn(
+                `Falling back to deterministic issue snippets for trend analysis: ${message}`,
+            );
+
+            return fallbackIssues;
+        }
+    }
+
 }

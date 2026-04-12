@@ -20,14 +20,20 @@ export function createGetIncidentsByDateRangeTool(
     return tool(
         async (payload: { startDate: string; endDate: string }) => {
             try {
-                const result = await commonService.sendViaRMQ<any[]>(
+                const result = await commonService.sendViaRMQ<any>(
                     incidentClient,
                     { cmd: "incident.getByDateRange" },
                     payload,
                 );
+                const incidents = Array.isArray(result)
+                    ? result
+                    : Array.isArray(result?.incidents)
+                      ? result.incidents
+                      : [];
+
                 return JSON.stringify({
-                    summary: `Fetched ${result.length} incidents.`,
-                    data: result,
+                    summary: `Fetched ${incidents.length} incidents.`,
+                    data: incidents,
                 });
             } catch (err) {
                 const msg = err instanceof Error ? err.message : String(err);
