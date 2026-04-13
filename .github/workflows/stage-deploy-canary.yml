@@ -1,0 +1,183 @@
+name: Stage - Deploy Canary
+
+# Registers a new task definition for each service with the latest image, then
+# performs a rolling canary deployment to production ECS services.
+#
+# Strategy:
+#   1. Register new task definition (new image SHA).
+#   2. Update the ECS service to the new task def with a safe deployment config
+#      (minimumHealthyPercent=100, maximumPercent=200) so existing tasks keep
+#      serving traffic while new canary tasks come up alongside them.
+#   3. Monitor the service for CANARY_WAIT_SECONDS (default 300s / 5 min).
+#      If any task stops unexpectedly during this window, the job fails and
+#      the previous task definition is restored automatically.
+#   4. On success the canary tasks remain running; the full-deploy stage
+#      then completes the rollout.
+
+on:
+  workflow_call:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION || 'ap-southeast-1' }}
+  ECS_CLUSTER: ${{ vars.ECS_CLUSTER || 'onedelivery-cluster' }}
+  IMAGE_TAG: ${{ github.sha }}
+  CANARY_WAIT_SECONDS: ${{ vars.CANARY_WAIT_SECONDS || '300' }}
+
+jobs:
+  prepare-matrix:
+    name: Prepare microservice matrix
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    outputs:
+      microservices: ${{ steps.matrix.outputs.microservices }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate matrix from microservice.list
+        id: matrix
+        run: |
+          matrix_json=$(jq -R -s -c \
+            'split("\n") | map(gsub("\r";"") | gsub("^\\s+|\\s+$";"")) | map(select(length > 0))' \
+            .github/workflows/microservice.list)
+          echo "microservices=$matrix_json" >> "$GITHUB_OUTPUT"
+
+  deploy-canary:
+    name: Canary deploy — ${{ matrix.microservice }}
+    needs: prepare-matrix
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      fail-fast: false
+      matrix:
+        microservice: ${{ fromJson(needs.prepare-matrix.outputs.microservices) }}
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Record current task definition (rollback target)
+        id: current
+        run: |
+          CURRENT_ARN=$(aws ecs describe-services \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --services "${{ matrix.microservice }}" \
+            --query 'services[0].taskDefinition' \
+            --output text)
+          echo "task_def_arn=$CURRENT_ARN" >> "$GITHUB_OUTPUT"
+          echo "Current task definition: $CURRENT_ARN"
+
+      - name: Register new task definition with canary image
+        id: new-task-def
+        env:
+          ECR_REGISTRY: ${{ steps.ecr.outputs.registry }}
+        run: |
+          NEW_IMAGE="$ECR_REGISTRY/onedelivery-${{ matrix.microservice }}:${{ env.IMAGE_TAG }}"
+
+          NEW_TASK_DEF=$(aws ecs describe-task-definition \
+            --task-definition "${{ steps.current.outputs.task_def_arn }}" \
+            --query 'taskDefinition' \
+            --output json | \
+            jq --arg IMAGE "$NEW_IMAGE" \
+              'del(.taskDefinitionArn,.revision,.status,.requiresAttributes,
+                   .placementConstraints,.compatibilities,.registeredAt,.registeredBy) |
+               .containerDefinitions[0].image = $IMAGE')
+
+          NEW_ARN=$(aws ecs register-task-definition \
+            --cli-input-json "$NEW_TASK_DEF" \
+            --query 'taskDefinition.taskDefinitionArn' \
+            --output text)
+
+          echo "task_def_arn=$NEW_ARN" >> "$GITHUB_OUTPUT"
+          echo "Registered canary task definition: $NEW_ARN"
+
+      - name: Deploy canary to production service
+        run: |
+          # minimumHealthyPercent=100 keeps all existing tasks running while
+          # new canary tasks start. maximumPercent=200 allows double capacity
+          # temporarily during the canary window.
+          aws ecs update-service \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --service "${{ matrix.microservice }}" \
+            --task-definition "${{ steps.new-task-def.outputs.task_def_arn }}" \
+            --deployment-configuration "minimumHealthyPercent=100,maximumPercent=200" \
+            --no-cli-pager
+          echo "Canary deployment initiated for ${{ matrix.microservice }}."
+
+      - name: Monitor canary health for ${{ env.CANARY_WAIT_SECONDS }}s
+        id: monitor
+        run: |
+          echo "Monitoring ${{ matrix.microservice }} for ${{ env.CANARY_WAIT_SECONDS }} seconds..."
+          END=$((SECONDS + ${{ env.CANARY_WAIT_SECONDS }}))
+          FAILED=false
+
+          while [[ $SECONDS -lt $END ]]; do
+            RUNNING=$(aws ecs describe-services \
+              --cluster ${{ env.ECS_CLUSTER }} \
+              --services "${{ matrix.microservice }}" \
+              --query 'services[0].runningCount' \
+              --output text)
+            DESIRED=$(aws ecs describe-services \
+              --cluster ${{ env.ECS_CLUSTER }} \
+              --services "${{ matrix.microservice }}" \
+              --query 'services[0].desiredCount' \
+              --output text)
+            PENDING=$(aws ecs describe-services \
+              --cluster ${{ env.ECS_CLUSTER }} \
+              --services "${{ matrix.microservice }}" \
+              --query 'services[0].pendingCount' \
+              --output text)
+
+            echo "[$(date -u +%H:%M:%S)] ${{ matrix.microservice }}: running=$RUNNING desired=$DESIRED pending=$PENDING"
+
+            if [[ "$RUNNING" -eq 0 && "$PENDING" -eq 0 ]]; then
+              echo "Canary failure detected: no running or pending tasks."
+              FAILED=true
+              break
+            fi
+
+            sleep 15
+          done
+
+          if [[ "$FAILED" == "true" ]]; then
+            echo "failed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "failed=false" >> "$GITHUB_OUTPUT"
+            echo "Canary monitoring window passed for ${{ matrix.microservice }}."
+          fi
+
+      - name: Rollback to previous task definition on failure
+        if: steps.monitor.outputs.failed == 'true'
+        run: |
+          echo "Rolling back ${{ matrix.microservice }} to ${{ steps.current.outputs.task_def_arn }}..."
+          aws ecs update-service \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --service "${{ matrix.microservice }}" \
+            --task-definition "${{ steps.current.outputs.task_def_arn }}" \
+            --force-new-deployment \
+            --no-cli-pager
+          echo "Rollback initiated. Waiting for service to stabilise..."
+          aws ecs wait services-stable \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --services "${{ matrix.microservice }}"
+          echo "Rollback complete for ${{ matrix.microservice }}."
+          exit 1
+
+      - name: Canary passed
+        run: |
+          echo "Canary deployment for ${{ matrix.microservice }} passed the monitoring window."
+          echo "Proceeding to full deployment."

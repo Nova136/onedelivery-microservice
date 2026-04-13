@@ -1,0 +1,152 @@
+name: Stage - Deploy Shadow
+
+# Deploys the newly built image to isolated shadow ECS services ({service}-shadow).
+# Shadow services receive no production traffic; this stage validates that the new
+# image starts, passes its health check, and stabilises before any canary rollout.
+
+on:
+  workflow_call:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION || 'ap-southeast-1' }}
+  ECS_CLUSTER: ${{ vars.ECS_CLUSTER || 'onedelivery-cluster' }}
+  IMAGE_TAG: ${{ github.sha }}
+
+jobs:
+  prepare-matrix:
+    name: Prepare microservice matrix
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    outputs:
+      microservices: ${{ steps.matrix.outputs.microservices }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate matrix from microservice.list
+        id: matrix
+        run: |
+          matrix_json=$(jq -R -s -c \
+            'split("\n") | map(gsub("\r";"") | gsub("^\\s+|\\s+$";"")) | map(select(length > 0))' \
+            .github/workflows/microservice.list)
+          echo "microservices=$matrix_json" >> "$GITHUB_OUTPUT"
+
+  deploy-shadow:
+    name: Shadow deploy — ${{ matrix.microservice }}
+    needs: prepare-matrix
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      fail-fast: false
+      matrix:
+        microservice: ${{ fromJson(needs.prepare-matrix.outputs.microservices) }}
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Check shadow service exists
+        id: check
+        run: |
+          SHADOW_SERVICE="${{ matrix.microservice }}-shadow"
+          STATUS=$(aws ecs describe-services \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --services "$SHADOW_SERVICE" \
+            --query 'services[0].status' \
+            --output text 2>/dev/null || echo "MISSING")
+
+          if [[ "$STATUS" == "ACTIVE" ]]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "shadow_service=$SHADOW_SERVICE" >> "$GITHUB_OUTPUT"
+            echo "Shadow service $SHADOW_SERVICE found."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "Shadow service $SHADOW_SERVICE not found or inactive — skipping."
+          fi
+
+      - name: Register new task definition with updated image
+        id: task-def
+        if: steps.check.outputs.exists == 'true'
+        env:
+          ECR_REGISTRY: ${{ steps.ecr.outputs.registry }}
+        run: |
+          SHADOW_SERVICE="${{ steps.check.outputs.shadow_service }}"
+          NEW_IMAGE="$ECR_REGISTRY/onedelivery-${{ matrix.microservice }}:${{ env.IMAGE_TAG }}"
+
+          CURRENT_TASK_DEF_ARN=$(aws ecs describe-services \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --services "$SHADOW_SERVICE" \
+            --query 'services[0].taskDefinition' \
+            --output text)
+
+          NEW_TASK_DEF=$(aws ecs describe-task-definition \
+            --task-definition "$CURRENT_TASK_DEF_ARN" \
+            --query 'taskDefinition' \
+            --output json | \
+            jq --arg IMAGE "$NEW_IMAGE" \
+              'del(.taskDefinitionArn,.revision,.status,.requiresAttributes,
+                   .placementConstraints,.compatibilities,.registeredAt,.registeredBy) |
+               .containerDefinitions[0].image = $IMAGE')
+
+          NEW_ARN=$(aws ecs register-task-definition \
+            --cli-input-json "$NEW_TASK_DEF" \
+            --query 'taskDefinition.taskDefinitionArn' \
+            --output text)
+
+          echo "task_def_arn=$NEW_ARN" >> "$GITHUB_OUTPUT"
+          echo "Registered new task definition: $NEW_ARN"
+
+      - name: Deploy to shadow service
+        if: steps.check.outputs.exists == 'true'
+        run: |
+          aws ecs update-service \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --service "${{ steps.check.outputs.shadow_service }}" \
+            --task-definition "${{ steps.task-def.outputs.task_def_arn }}" \
+            --force-new-deployment \
+            --no-cli-pager
+          echo "Shadow deployment initiated for ${{ steps.check.outputs.shadow_service }}."
+
+      - name: Wait for shadow service to stabilise
+        if: steps.check.outputs.exists == 'true'
+        run: |
+          echo "Waiting for ${{ steps.check.outputs.shadow_service }} to stabilise..."
+          aws ecs wait services-stable \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --services "${{ steps.check.outputs.shadow_service }}"
+          echo "Shadow service ${{ steps.check.outputs.shadow_service }} is stable and healthy."
+
+      - name: Verify shadow service health
+        if: steps.check.outputs.exists == 'true'
+        run: |
+          RUNNING=$(aws ecs describe-services \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --services "${{ steps.check.outputs.shadow_service }}" \
+            --query 'services[0].runningCount' \
+            --output text)
+          DESIRED=$(aws ecs describe-services \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --services "${{ steps.check.outputs.shadow_service }}" \
+            --query 'services[0].desiredCount' \
+            --output text)
+
+          echo "Shadow service: running=$RUNNING desired=$DESIRED"
+          if [[ "$RUNNING" -lt "$DESIRED" ]]; then
+            echo "Shadow service ${{ steps.check.outputs.shadow_service }} is unhealthy: $RUNNING/$DESIRED tasks running."
+            exit 1
+          fi
+          echo "Shadow validation passed for ${{ matrix.microservice }}."
