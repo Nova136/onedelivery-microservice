@@ -103,7 +103,7 @@ resource "aws_ssm_parameter" "jwt_secret" {
   name        = "/${local.name}/JWT_SECRET"
   description = "JWT signing secret shared across all services"
   type        = "SecureString"
-  value       = "ffa32c3d40342bec6c1bcfba7b4f8197"
+  value       = "REDACTED_JWT_SECRET"
 
   lifecycle {
     ignore_changes = [value]

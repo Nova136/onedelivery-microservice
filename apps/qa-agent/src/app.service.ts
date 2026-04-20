@@ -14,12 +14,19 @@ import {
     ChatMessage,
 } from "@langchain/core/messages";
 import { MemoryService } from "./memory/memory.service";
-import { Cron, CronExpression } from "@nestjs/schedule";
 import { StructuredTool } from "@langchain/core/tools";
 import { CommonService } from "@libs/modules/common/common.service";
 import { createLogIncidentTool } from "./tools/log-Incident.tool";
 import { createSaveSentimentTool } from "./tools/save-sentiment.tool";
 import { createGetIncidentsByDateRangeTool } from "./tools/get-incidents-by-date-range.tool";
+import { z } from "zod";
+import {
+    analyzeIncidentTrends,
+    countIncidentTypes,
+    getFallbackIssueSnippets,
+    TrendAnalysisResult,
+    TrendIncident,
+} from "./trends/trend-analysis.util";
 
 /**
  * QA specialist agent. Invoked by the orchestrator via TCP (agent.chat).
@@ -78,6 +85,7 @@ export class AppService {
         - For example, if a user asks a question about a policy (e.g., "Can I change my address?") and the answer is "No," this is a POLICY INQUIRY, NOT an incident. Do NOT log it.
         - Incident Types MUST be one of: [LATE_DELIVERY, MISSING_ITEMS, WRONG_ORDER, DAMAGED_PACKAGING, PAYMENT_FAILURE, OTHER]
         - If an incident is detected, you MUST use the log_incident tool to record the incident with the appropriate type and summary. The summary should be a concise description of the issue.
+        - If there are multiple distinct service failures in the same chat session, call log_incident once per distinct failure.
         - Always include the user ID and order ID (if mentioned) when logging an incident.
         - If the chat history does not provide enough information to determine the incident type, but it clearly indicates a customer issue, you can use "OTHER" as the incident type and provide the details in the summary.
 
@@ -331,33 +339,60 @@ export class AppService {
         
         CRITICAL CHECK: Is the user reporting a mistake we made, or just asking a question?
         - If they are asking a question (FAQ/Policy): CALL save_sentiment ONLY.
-        - If they are reporting a failure (Late/Wrong/Broken): CALL log_incident AND save_sentiment.
+        - If they are reporting failures (Late/Wrong/Broken): CALL log_incident for EACH distinct failure, then CALL save_sentiment.
+        - Do not merge unrelated failures into a single incident log.
         
         Do not log incidents for address change requests or general inquiries.`,
         });
 
-        // Invoke LLM
-        const response = (await this.agentWithTools.invoke(
-            formattedReview,
-        )) as AIMessage;
+        // Invoke the model in a tool-call loop so it can emit multiple log_incident calls
+        // and continue reasoning after each tool result.
+        const reviewConversation: BaseMessage[] = [...formattedReview];
+        let incidentCount = 0;
+        let sentimentCaptured = false;
+        const maxRounds = 5;
 
-        let incidentLogged = false;
+        for (let round = 0; round < maxRounds; round++) {
+            const response = (await this.agentWithTools.invoke(
+                reviewConversation,
+            )) as AIMessage;
+            reviewConversation.push(response);
 
-        // Handle tool calls
-        if (response.tool_calls && response.tool_calls.length > 0) {
-            for (const toolCall of response.tool_calls) {
+            const toolCalls = response.tool_calls ?? [];
+            if (toolCalls.length === 0) {
+                break;
+            }
+
+            const toolMessages: ToolMessage[] = [];
+            for (const toolCall of toolCalls) {
                 if (toolCall.name === "log_incident") {
                     try {
                         const result = await this.tools["log_incident"].invoke(
                             toolCall.args as any,
                         );
+                        incidentCount += 1;
                         this.logger.log(
-                            `Logged incident for session ${sessionId}: ${result}`,
+                            `Logged incident #${incidentCount} for session ${sessionId}: ${result}`,
                         );
-                        incidentLogged = true;
+                        toolMessages.push(
+                            new ToolMessage({
+                                content: String(result),
+                                tool_call_id: toolCall.id ?? "",
+                            }),
+                        );
                     } catch (error) {
+                        const message =
+                            error instanceof Error
+                                ? error.message
+                                : String(error);
                         this.logger.error(
-                            `Failed to log incident for session ${sessionId}: ${error}`,
+                            `Failed to log incident for session ${sessionId}: ${message}`,
+                        );
+                        toolMessages.push(
+                            new ToolMessage({
+                                content: `ERROR: ${message}`,
+                                tool_call_id: toolCall.id ?? "",
+                            }),
                         );
                     }
                 } else if (toolCall.name === "save_sentiment") {
@@ -368,15 +403,36 @@ export class AppService {
                             ...toolCall.args,
                             sessionId,
                         } as any);
+                        sentimentCaptured = true;
                         this.logger.log(
                             `Saved sentiment for session ${sessionId}: ${result}`,
                         );
+                        toolMessages.push(
+                            new ToolMessage({
+                                content: String(result),
+                                tool_call_id: toolCall.id ?? "",
+                            }),
+                        );
                     } catch (error) {
+                        const message =
+                            error instanceof Error
+                                ? error.message
+                                : String(error);
                         this.logger.error(
-                            `Failed to save sentiment for session ${sessionId}: ${error}`,
+                            `Failed to save sentiment for session ${sessionId}: ${message}`,
+                        );
+                        toolMessages.push(
+                            new ToolMessage({
+                                content: `ERROR: ${message}`,
+                                tool_call_id: toolCall.id ?? "",
+                            }),
                         );
                     }
                 }
+            }
+
+            if (toolMessages.length > 0) {
+                reviewConversation.push(...toolMessages);
             }
         }
 
@@ -390,105 +446,162 @@ export class AppService {
         this.logger.log(`Marked session ${sessionId} as reviewed.`);
 
         return JSON.stringify({
-            status: incidentLogged ? "INCIDENT_LOGGED" : "NO_INCIDENT",
-            sentiment_captured: true,
-            message: incidentLogged
-                ? "Logged service failure."
-                : "Session reviewed, no failure found.",
+            status: incidentCount > 0 ? "INCIDENT_LOGGED" : "NO_INCIDENT",
+            incident_count: incidentCount,
+            sentiment_captured: sentimentCaptured,
+            message:
+                incidentCount > 0
+                    ? `Logged ${incidentCount} service failure${incidentCount > 1 ? "s" : ""}.`
+                    : "Session reviewed, no failure found.",
         });
     }
 
     /**
-     * Analyze this month's incident trends using the get_incidents_by_date_range tool.
-     * Called by the qa.analyzeTrends MessagePattern (triggered from the incident service).
+     * Analyze current-month incident trends with deterministic aggregation and
+     * AI-assisted issue-theme synthesis.
      */
-    async analyzeTrends(): Promise<any> {
+    async analyzeTrends(): Promise<TrendAnalysisResult> {
         const now = new Date();
-        const startDate = new Date(
+        const currentMonthStart = new Date(
             now.getFullYear(),
             now.getMonth(),
             1,
-        ).toISOString();
-        const endDate = now.toISOString();
+        );
+        const previousMonthStart = new Date(
+            now.getFullYear(),
+            now.getMonth() - 1,
+            1,
+        );
+        const previousMonthEnd = new Date(currentMonthStart.getTime() - 1);
 
-        this.logger.log(`Analyzing trends from ${startDate} to ${endDate}`);
+        this.logger.log(
+            `Analyzing trends from ${currentMonthStart.toISOString()} to ${now.toISOString()}`,
+        );
 
-        const userPrompt = `Please analyze trends in the month's incident data from ${startDate} to ${endDate}. Only current-month incident data is available in this flow, so if previous-month comparison data is unavailable, trend must be NA.`;
+        const currentMonthIncidents = await this.fetchIncidentsByDateRange(
+            currentMonthStart.toISOString(),
+            now.toISOString(),
+        );
 
-        const formatted = await this.prompt.formatMessages({
-            chat_history: [],
-            input: userPrompt,
-        });
-
-        const firstResponse = (await this.agentWithTools.invoke(
-            formatted,
-        )) as AIMessage;
-
-        if (firstResponse.tool_calls && firstResponse.tool_calls.length > 0) {
-            const toolMessages: ToolMessage[] = [];
-            for (const toolCall of firstResponse.tool_calls) {
-                const calledTool = this.tools[toolCall.name];
-                if (calledTool) {
-                    const result = await calledTool.invoke(
-                        toolCall.args as any,
-                    );
-                    toolMessages.push(
-                        new ToolMessage({
-                            content: result,
-                            tool_call_id: toolCall.id ?? "",
-                        }),
-                    );
-                }
-            }
-
-            // Force the model to generate the JSON now that it has data
-            const finalResponse = (await this.agentWithTools.invoke([
-                ...formatted,
-                firstResponse,
-                ...toolMessages,
-                new HumanMessage(
-                    "Now provide the structured JSON trend analysis based on the data above.",
-                ),
-            ])) as AIMessage;
-
-            this.logger.log(
-                `Final response after tool calls: ${finalResponse.content}`,
+        let previousMonthIncidents: TrendIncident[] | null = null;
+        try {
+            previousMonthIncidents = await this.fetchIncidentsByDateRange(
+                previousMonthStart.toISOString(),
+                previousMonthEnd.toISOString(),
             );
-
-            const content =
-                typeof finalResponse.content === "string"
-                    ? finalResponse.content
-                    : JSON.stringify(finalResponse.content);
-
-            // Extract JSON from markdown code block or raw object
-            const jsonMatch = content.match(
-                /```(?:json)?\n?([\s\S]*?)```|({[\s\S]*})/,
+        } catch (error) {
+            const message =
+                error instanceof Error ? error.message : String(error);
+            this.logger.warn(
+                `Unable to fetch previous month incidents for trend comparison: ${message}`,
             );
-            if (jsonMatch) {
-                try {
-                    return this.normalizeTrendAnalysis(
-                        JSON.parse(jsonMatch[1] ?? jsonMatch[2]),
-                    );
-                } catch (_) {}
-            }
-            return { analysis: content };
         }
 
-        const content =
-            typeof firstResponse.content === "string"
-                ? firstResponse.content
-                : JSON.stringify(firstResponse.content);
-        return { analysis: content };
+        const analysis = analyzeIncidentTrends(
+            currentMonthIncidents,
+            previousMonthIncidents,
+        );
+        const issues = await this.summarizeTrendIssues(
+            currentMonthIncidents,
+            analysis,
+        );
+
+        return {
+            ...analysis,
+            issues,
+        };
     }
 
-    private normalizeTrendAnalysis(result: any): any {
-        if (!result || typeof result !== "object" || Array.isArray(result)) {
+    private async fetchIncidentsByDateRange(
+        startDate: string,
+        endDate: string,
+    ): Promise<TrendIncident[]> {
+        const result = await this.commonService.sendViaRMQ<any>(
+            this.incidentClient,
+            { cmd: "incident.getByDateRange" },
+            { startDate, endDate },
+        );
+
+        if (Array.isArray(result)) {
             return result;
         }
 
-        return {
-            ...result,
-            trend: "NA",
-        };
+        if (result && Array.isArray(result.incidents)) {
+            return result.incidents;
+        }
+
+        this.logger.warn(
+            `Unexpected incident.getByDateRange response shape: ${JSON.stringify(result)}`,
+        );
+
+        return [];
+    }
+
+    private async summarizeTrendIssues(
+        incidents: TrendIncident[],
+        analysis: Omit<TrendAnalysisResult, "issues">,
+    ): Promise<string[]> {
+        const fallbackIssues = getFallbackIssueSnippets(incidents);
+        if (incidents.length === 0) {
+            return [];
+        }
+        this.logger.log(`incidents :: ${JSON.stringify(incidents)}`);
+        this.logger.log(
+            `Analyzing ${incidents.length} incidents for trend issues.`,
+        );
+
+        if (incidents.length < 2) {
+            return fallbackIssues;
+        }
+
+        try {
+            const structuredLlm = this.llm.withStructuredOutput(
+                z.object({
+                    issues: z.array(z.string().min(1)).max(3),
+                }),
+            );
+
+            const issueSynthesisInput = {
+                summaryStats: {
+                    totalByThisMonth: analysis.totalByThisMonth,
+                    mostCommon: analysis.mostCommon,
+                    percentage: analysis.percentage,
+                    trend: analysis.trend,
+                    peakTime: analysis.peakTime,
+                    countsByType: countIncidentTypes(incidents),
+                },
+                incidents: incidents.slice(0, 50).map((incident) => ({
+                    type: incident.type,
+                    summary: incident.summary,
+                })),
+            };
+
+            const result =
+                await structuredLlm.invoke(`You are summarizing operational issue themes from structured incident data.
+
+Rules:
+- Use only the supplied evidence.
+- Return up to 3 short issue themes.
+- Do not invent causes or numbers.
+- Merge duplicate ideas into one theme.
+- If the data does not support clear themes, return an empty array.
+
+Input:
+${JSON.stringify(issueSynthesisInput)}`);
+
+            const issues = result.issues
+                .map((issue) => issue.trim())
+                .filter((issue) => issue.length > 0);
+
+            return issues.length > 0 ? issues : fallbackIssues;
+        } catch (error) {
+            const message =
+                error instanceof Error ? error.message : String(error);
+            this.logger.warn(
+                `Falling back to deterministic issue snippets for trend analysis: ${message}`,
+            );
+
+            return fallbackIssues;
+        }
     }
 }

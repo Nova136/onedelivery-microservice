@@ -17,7 +17,7 @@ module.exports = {
         "node_modules/@langchain/core/dist/prompts/index.cjs":
             "@langchain/core/prompts",
     },
-    setupFilesAfterEnv: ["./test/setup-unit.ts"],
+    setupFilesAfterEnv: ["./tests/setup-unit.ts"],
     rootDir: ".",
     transform: {
         "^.+\\.(t|j)s$": ["@swc/jest", { ...swcConfig }],

@@ -43,11 +43,6 @@ export default class FaqSeeder implements Seeder {
                 content:
                     "If your order has missing or incorrect items, quality issues, or is delivered late, you may be eligible for a refund. You must request the refund within 2 hours of the delivery time. Depending on the issue, we offer partial or full refunds for the affected items. To request a refund, please let me know your Order ID and detail the specific issue you encountered.",
             },
-            {
-                title: "What is inside this FAQ?",
-                content:
-                    "This FAQ contains answers to common questions about OneDelivery's services. It covers topics such as accepted payment methods, changing delivery addresses, order cancellation policies, and refund policies for missing, incorrect, or late orders.",
-            },
         ];
 
         // 2. Generate the embeddings in a clean, automated loop

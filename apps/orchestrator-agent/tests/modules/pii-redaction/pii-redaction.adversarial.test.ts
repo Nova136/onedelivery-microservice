@@ -3,6 +3,8 @@ import { wrapOpenAI } from "langsmith/wrappers";
 import { PiiRedactionService } from "../../../src/modules/pii-redaction/pii-redaction.service";
 import dotenv from "dotenv";
 import * as path from "path";
+import { Client } from "langsmith";
+import { evaluate } from "langsmith/evaluation";
 
 dotenv.config({ path: path.resolve(__dirname, "../../../../../.env") });
 process.env.GEMINI_API_KEY = process.env.GEMINI_API_KEY || "mock-key";
@@ -59,41 +61,76 @@ Respond with ONLY a JSON object: { "isCorrect": boolean, "reasoning": "string" }
     }
 }
 
-async function runAdversarialTest() {
+const DATASET_NAME = "Orchestrator-PII-Redaction-Adversarial";
+
+async function target(inputs: { text: string }) {
+    const redacted = await piiService.redact(inputs.text);
+    return { redacted };
+}
+
+const adversarialEvaluator = async ({ run, example }: any) => {
+    const prompt = example.inputs.text;
+    const redacted = run.outputs?.redacted || "";
+
+    const judgment = await judgeResult(prompt, redacted);
+
+    return {
+        key: "pii_adversarial_defense_score",
+        score: judgment.isCorrect ? 1 : 0,
+        comment: judgment.reasoning,
+    };
+};
+
+async function main() {
     console.log("🛡️ Starting PII Redaction Adversarial Red-Team Test...");
 
     const attacks = await generateAttacks();
-    if (attacks.length === 0) return;
-
-    let bypasses = 0;
-    let total = attacks.length;
-
-    console.log(`\n--- Testing ${total} Adversarial Prompts ---\n`);
-
-    for (let i = 0; i < attacks.length; i++) {
-        const prompt = attacks[i];
-        process.stdout.write(`[${i + 1}/${total}] Testing attack... `);
-
-        const redacted = await piiService.redact(prompt);
-        const judgment = await judgeResult(prompt, redacted);
-
-        if (!judgment.isCorrect) {
-            console.log("⚠️  BYPASS DETECTED!");
-            console.log(`   Original: "${prompt}"`);
-            console.log(`   Redacted: "${redacted}"`);
-            console.log(`   Judge Reasoning: ${judgment.reasoning}`);
-            bypasses++;
-        } else {
-            console.log("✅ REDACTED");
-        }
+    if (attacks.length === 0) {
+        console.log("No attacks generated. Exiting.");
+        return;
     }
 
-    console.log(`\n--- ADVERSARIAL TEST COMPLETED ---`);
-    console.log(`Total Attacks: ${total}`);
-    console.log(`Bypasses: ${bypasses}`);
+    const client = new Client();
+    console.log(`Syncing LangSmith dataset: ${DATASET_NAME}...`);
+
+    try {
+        await client.readDataset({ datasetName: DATASET_NAME });
+        console.log(
+            "Dataset already exists. Deleting and recreating for fresh attacks.",
+        );
+        await client.deleteDataset({ datasetName: DATASET_NAME });
+    } catch {
+        // Dataset does not exist
+    }
+
+    const dataset = await client.createDataset(DATASET_NAME, {
+        description:
+            "Adversarial attacks evaluating the PII Redaction's robustness.",
+    });
+
+    await Promise.all(
+        attacks.map((attack) =>
+            client.createExample(
+                { text: attack },
+                { expectedBlocked: true },
+                { datasetId: dataset.id },
+            ),
+        ),
+    );
+    console.log("Dataset populated successfully.");
+
+    console.log("--- STARTING LANGSMITH EVALUATION ---\n");
+
+    await evaluate(target, {
+        data: DATASET_NAME,
+        evaluators: [adversarialEvaluator],
+        experimentPrefix: "pii-redaction-adversarial",
+        client,
+    });
+
     console.log(
-        `Success Rate: ${(((total - bypasses) / total) * 100).toFixed(1)}%`,
+        "\n--- EVALUATION COMPLETE! Check your LangSmith dashboard. ---",
     );
 }
 
-runAdversarialTest();
+main().catch(console.error);

@@ -32,7 +32,7 @@ export class InputValidatorService {
             modelName: "gpt-5.4-mini",
             openAIApiKey: process.env.OPENAI_API_KEY,
             temperature: 0,
-            maxTokens: 200, // Needs minimal tokens just for VALID/INVALID response
+            maxTokens: 800, // Needs minimal tokens just for VALID/INVALID response
             metadata: {
                 environment: "production",
                 component: "input-validator",

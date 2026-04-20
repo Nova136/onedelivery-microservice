@@ -3,6 +3,8 @@ import { wrapOpenAI } from "langsmith/wrappers";
 import { InputValidatorService } from "../../../src/modules/input-validator/input-validator.service";
 import dotenv from "dotenv";
 import * as path from "path";
+import { Client } from "langsmith";
+import { evaluate } from "langsmith/evaluation";
 
 dotenv.config({ path: path.resolve(__dirname, "../../../../../.env") });
 process.env.GEMINI_API_KEY = process.env.GEMINI_API_KEY || "mock-key";
@@ -99,47 +101,77 @@ Respond with ONLY a JSON object: { "isCorrect": boolean, "reasoning": "string" }
     }
 }
 
-async function runAdversarialTest() {
+const DATASET_NAME = "Orchestrator-Input-Validator-Adversarial";
+
+async function target(inputs: { text: string }) {
+    const result = await validator.validateMessage(inputs.text);
+    return { isValid: result.isValid, error: result.error };
+}
+
+const adversarialEvaluator = async ({ run, example }: any) => {
+    const prompt = example.inputs.text;
+    const isValid = run.outputs?.isValid;
+    const error = run.outputs?.error;
+
+    const judgment = await judgeResult(prompt, isValid, error);
+
+    return {
+        key: "adversarial_defense_score",
+        score: judgment.isCorrect ? 1 : 0,
+        comment: judgment.reasoning,
+    };
+};
+
+async function main() {
     console.log("🛡️ Starting Adversarial Red-Team Test...");
 
     const attacks = await generateAttacks();
-    if (attacks.length === 0) return;
-
-    let bypasses = 0;
-    let total = attacks.length;
-
-    console.log(`\n--- Testing ${total} Adversarial Prompts ---\n`);
-
-    for (let i = 0; i < attacks.length; i++) {
-        const prompt = attacks[i];
-        process.stdout.write(`[${i + 1}/${total}] Testing attack... `);
-
-        const result = await validator.validateMessage(prompt);
-        const judgment = await judgeResult(
-            prompt,
-            result.isValid,
-            result.error,
-        );
-
-        if (result.isValid) {
-            console.log("⚠️  BYPASS DETECTED!");
-            console.log(`   Prompt: "${prompt}"`);
-            console.log(`   Judge Reasoning: ${judgment.reasoning}`);
-            bypasses++;
-        } else {
-            console.log("✅ BLOCKED");
-            if (!judgment.isCorrect) {
-                console.log(`   ℹ️  Judge Note: ${judgment.reasoning}`);
-            }
-        }
+    if (attacks.length === 0) {
+        console.log("No attacks generated. Exiting.");
+        return;
     }
 
-    console.log(`\n--- ADVERSARIAL TEST COMPLETED ---`);
-    console.log(`Total Attacks: ${total}`);
-    console.log(`Bypasses: ${bypasses}`);
+    const client = new Client();
+    console.log(`Syncing LangSmith dataset: ${DATASET_NAME}...`);
+
+    try {
+        await client.readDataset({ datasetName: DATASET_NAME });
+        console.log(
+            "Dataset already exists. Deleting and recreating for fresh dynamic attacks.",
+        );
+        await client.deleteDataset({ datasetName: DATASET_NAME });
+    } catch {
+        // Dataset does not exist
+    }
+
+    const dataset = await client.createDataset(DATASET_NAME, {
+        description:
+            "Dynamic adversarial attacks evaluating the Input Validator's robustness.",
+    });
+
+    await Promise.all(
+        attacks.map((attack) =>
+            client.createExample(
+                { text: attack },
+                { expectedBlocked: true },
+                { datasetId: dataset.id },
+            ),
+        ),
+    );
+    console.log("Dataset populated successfully.");
+
+    console.log("--- STARTING LANGSMITH EVALUATION ---\n");
+
+    await evaluate(target, {
+        data: DATASET_NAME,
+        evaluators: [adversarialEvaluator],
+        experimentPrefix: "input-validator-adversarial",
+        client,
+    });
+
     console.log(
-        `Success Rate: ${(((total - bypasses) / total) * 100).toFixed(1)}%`,
+        "\n--- EVALUATION COMPLETE! Check your LangSmith dashboard. ---",
     );
 }
 
-runAdversarialTest();
+main().catch(console.error);

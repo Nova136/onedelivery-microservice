@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { PromptShieldService } from "../../src/modules/prompt-shield/prompt-shield.service";
 import { AuditService } from "../../src/modules/audit/audit.service";
 import { HumanMessage } from "@langchain/core/messages";
@@ -5,16 +6,16 @@ import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { StructuredTool } from "@langchain/core/tools";
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { ChatOpenAI } from "@langchain/openai";
-import dotenv from "dotenv";
 import { z } from "zod";
 import * as path from "path";
 import { createSopHandlerNode } from "../../src/orchestrator-agent/nodes/sop-handler.node";
+import { Client } from "langsmith";
+import { evaluate } from "langsmith/evaluation";
 
-dotenv.config({ path: path.resolve(__dirname, "../../../../.env") });
+require("dotenv").config({ path: path.resolve(__dirname, "../../../../.env") });
 
-/**
- * LLM as a Judge for evaluating conversation outcomes.
- */
+const DATASET_NAME = "Orchestrator-Refund-Cancellation-Workflow";
+
 class LLMJudge {
     private model: BaseChatModel;
 
@@ -61,12 +62,89 @@ class LLMJudge {
     }
 }
 
-async function runWorkflowTests() {
-    console.log(
-        "--- STARTING REFUND & CANCELLATION WORKFLOW TESTS WITH LLM JUDGE ---\n",
-    );
+const testCases = [
+    {
+        inputs: {
+            intent: "REQUEST_REFUND",
+            input: "I want a refund for order #12345.",
+            initialOrderStates: { orderId: "12345" },
+        },
+        outputs: {
+            expectedOutcome:
+                "The agent should identify that issueCategory and description are missing and ask for them.",
+        },
+        metadata: {
+            category: "Refund",
+            description: "Missing Issue Category & Description",
+        },
+    },
+    {
+        inputs: {
+            intent: "REQUEST_REFUND",
+            input: "I want a refund for order #12345 because some items are missing.",
+            initialOrderStates: { orderId: "12345" },
+        },
+        outputs: {
+            expectedOutcome:
+                "The agent should identify the category as 'missing_item' and output a system instruction to ask for confirmation of the gathered details.",
+        },
+        metadata: {
+            category: "Refund",
+            description: "Missing Items for Missing Item Category",
+        },
+    },
+    {
+        inputs: {
+            intent: "REQUEST_REFUND",
+            input: "I want a refund for order #12345. The food was cold and spilled everywhere.",
+            initialOrderStates: {},
+        },
+        outputs: {
+            expectedOutcome:
+                "The agent should extract orderId #12345, category 'quality_issue', and the description, and output a system instruction to ask for confirmation.",
+        },
+        metadata: {
+            category: "Refund",
+            description: "Full Data Provided (Quality Issue)",
+        },
+    },
+    {
+        inputs: {
+            intent: "CANCEL_ORDER",
+            input: "Please cancel my order #9999.",
+            initialOrderStates: { orderId: "9999" },
+        },
+        outputs: {
+            expectedOutcome:
+                "The agent should identify the missing description (reason) and ask why the user wants to cancel.",
+        },
+        metadata: {
+            category: "Cancellation",
+            description: "Missing Description",
+        },
+    },
+    {
+        inputs: {
+            intent: "CANCEL_ORDER",
+            input: "Cancel order #9999. I've been waiting for 2 hours and I'm not hungry anymore.",
+            initialOrderStates: {},
+        },
+        outputs: {
+            expectedOutcome:
+                "The agent should extract orderId #9999 and the description, and output a system instruction to ask for confirmation.",
+        },
+        metadata: {
+            category: "Cancellation",
+            description: "Full Data Provided",
+        },
+    },
+];
 
-    // Initialize Models
+async function target(inputs: {
+    intent: string;
+    input: string;
+    initialOrderStates: any;
+}) {
     const llm = new ChatOpenAI({
         modelName: "gpt-5.4-mini",
         apiKey: process.env.OPENAI_API_KEY,
@@ -82,7 +160,6 @@ async function runWorkflowTests() {
         fallbacks: [geminiFallback],
     });
 
-    // Initialize Services
     const mockKnowledgeClient = {
         searchInternalSop: async (params: any) => {
             if (params.intentCode === "REQUEST_REFUND") {
@@ -132,7 +209,6 @@ async function runWorkflowTests() {
         },
     };
 
-    // Mock Tools
     class MockResolutionTool extends StructuredTool {
         name = "Route_To_Resolution";
         description =
@@ -171,111 +247,86 @@ async function runWorkflowTests() {
         promptShield,
         auditService,
     });
+
+    const state: any = {
+        messages: [new HumanMessage(inputs.input)],
+        user_id: "test-user",
+        session_id: `session-${Date.now()}`,
+        user_orders: [
+            {
+                orderId: "12345",
+                status: "DELIVERED",
+                createdAt: new Date().toISOString(),
+            },
+            {
+                orderId: "9999",
+                status: "IN_TRANSIT",
+                createdAt: new Date().toISOString(),
+            },
+        ],
+        summary: "",
+        current_intent: inputs.intent,
+        decomposed_intents: [{ intent: inputs.intent, query: inputs.input }],
+        order_states: inputs.initialOrderStates,
+        is_awaiting_confirmation: false,
+        multi_intent_acknowledged: true,
+    };
+
+    const result: any = await sopHandler(state);
+    return { response: result.partial_responses?.[0] || "" };
+}
+
+const workflowEvaluator = async ({ run, example }: any) => {
+    const input = example.inputs.input;
+    const expectedOutcome = example.outputs.expectedOutcome;
+    const response = run.outputs?.response || "";
+
     const judge = new LLMJudge();
+    const evaluation = await judge.evaluate(input, response, expectedOutcome);
 
-    const testCases = [
-        {
-            name: "Refund: Missing Issue Category & Description",
-            intent: "REQUEST_REFUND",
-            input: "I want a refund for order #12345.",
-            expectedOutcome:
-                "The agent should identify that issueCategory and description are missing and ask for them.",
-            initialState: { order_states: { orderId: "12345" } },
-        },
-        {
-            name: "Refund: Missing Items for Missing Item Category",
-            intent: "REQUEST_REFUND",
-            input: "I want a refund for order #12345 because some items are missing.",
-            expectedOutcome:
-                "The agent should identify the category as 'missing_item' and output a system instruction to ask for confirmation of the gathered details.",
-            initialState: { order_states: { orderId: "12345" } },
-        },
-        {
-            name: "Refund: Full Data Provided (Quality Issue)",
-            intent: "REQUEST_REFUND",
-            input: "I want a refund for order #12345. The food was cold and spilled everywhere.",
-            expectedOutcome:
-                "The agent should extract orderId #12345, category 'quality_issue', and the description, and output a system instruction to ask for confirmation.",
-            initialState: { order_states: {} },
-        },
-        {
-            name: "Cancellation: Missing Description",
-            intent: "CANCEL_ORDER",
-            input: "Please cancel my order #9999.",
-            expectedOutcome:
-                "The agent should identify the missing description (reason) and ask why the user wants to cancel.",
-            initialState: { order_states: { orderId: "9999" } },
-        },
-        {
-            name: "Cancellation: Full Data Provided",
-            intent: "CANCEL_ORDER",
-            input: "Cancel order #9999. I've been waiting for 2 hours and I'm not hungry anymore.",
-            expectedOutcome:
-                "The agent should extract orderId #9999 and the description, and output a system instruction to ask for confirmation.",
-            initialState: { order_states: {} },
-        },
-    ];
+    return {
+        key: "workflow_logic_accuracy",
+        score: evaluation.score,
+        comment: evaluation.reasoning,
+    };
+};
 
-    let passed = 0;
-    for (const test of testCases) {
-        process.stdout.write(`Testing: ${test.name.padEnd(45)} `);
-        try {
-            const state: any = {
-                messages: [new HumanMessage(test.input)],
-                user_id: "test-user",
-                session_id: `session-${Date.now()}`,
-                user_orders: [
-                    {
-                        orderId: "12345",
-                        status: "DELIVERED",
-                        createdAt: new Date().toISOString(),
-                    },
-                    {
-                        orderId: "9999",
-                        status: "IN_TRANSIT",
-                        createdAt: new Date().toISOString(),
-                    },
-                ],
-                summary: "",
-                current_intent: test.intent,
-                decomposed_intents: [
-                    { intent: test.intent, query: test.input },
-                ],
-                order_states: test.initialState.order_states,
-                is_awaiting_confirmation: false,
-                multi_intent_acknowledged: true,
-            };
-
-            const result: any = await sopHandler(state);
-            const response = result.partial_responses[0];
-
-            const evaluation = await judge.evaluate(
-                test.input,
-                response,
-                test.expectedOutcome,
-            );
-
-            if (evaluation.score >= 0.8) {
-                console.log("✅ PASSED");
-                passed++;
-            } else {
-                console.log(`❌ FAILED (Score: ${evaluation.score})`);
-                console.log(`   Reasoning: ${evaluation.reasoning}`);
-                console.log(`   Response: ${response}`);
-            }
-        } catch (error) {
-            console.log(`💥 ERROR: ${error}`);
-        }
+async function main() {
+    if (!process.env.OPENAI_API_KEY) {
+        console.log("Skipping workflow tests: OPENAI_API_KEY not set.");
+        return;
     }
 
-    console.log(
-        `\n--- WORKFLOW TESTS COMPLETED: ${passed}/${testCases.length} PASSED ---`,
-    );
+    const client = new Client();
+    console.log(`Syncing LangSmith dataset: ${DATASET_NAME}...`);
+
+    try {
+        await client.readDataset({ datasetName: DATASET_NAME });
+        console.log("Dataset already exists. Skipping creation.");
+    } catch {
+        const dataset = await client.createDataset(DATASET_NAME, {
+            description:
+                "Functional tests evaluating the SOP handler's ability to extract missing information and follow logic.",
+        });
+        await Promise.all(
+            testCases.map((tc) =>
+                client.createExample(tc.inputs, tc.outputs, {
+                    datasetId: dataset.id,
+                    metadata: tc.metadata,
+                }),
+            ),
+        );
+        console.log("Dataset populated successfully.");
+    }
+
+    console.log("Running evaluation...");
+    await evaluate(target, {
+        data: DATASET_NAME,
+        evaluators: [workflowEvaluator],
+        experimentPrefix: "refund-cancellation-workflow",
+        client,
+    });
+    console.log("Evaluation complete! Check your LangSmith dashboard.");
 }
 
-// Only run if specific env vars are present or if explicitly called
-if (process.env.OPENAI_API_KEY) {
-    runWorkflowTests();
-} else {
-    console.log("Skipping workflow tests: OPENAI_API_KEY not set.");
-}
+main().catch(console.error);

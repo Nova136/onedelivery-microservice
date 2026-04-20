@@ -122,7 +122,7 @@ services:
     environment:
       WS_PORT: 3015
       DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@database:5432/${DB_NAME:-onedelivery}
-      JWT_SECRET: ${JWT_SECRET:-ffa32c3d40342bec6c1bcfba7b4f8197}
+      JWT_SECRET: ${JWT_SECRET:-REDACTED_JWT_SECRET}
       RABBITMQ_URL: amqp://${RABBITMQ_USER:-rabbit}:${RABBITMQ_PASSWORD:-rabbit}@rabbitmq:5672
       ORCHESTRATOR_QUEUE: ${RABBITMQ_ORCHESTRATOR_AGENT_QUEUE:-orchestrator_agent_queue}
       ALLOWED_ROLES: ${WS_ALLOWED_ROLES:-User,Admin}

@@ -1,125 +1,221 @@
+import "dotenv/config";
 import { PiiRedactionService } from "../../../src/modules/pii-redaction/pii-redaction.service";
-import * as dotenv from "dotenv";
 import * as path from "path";
+import { Client } from "langsmith";
+import { evaluate } from "langsmith/evaluation";
 
-dotenv.config({ path: path.resolve(__dirname, "../../../../../.env") });
+require("dotenv").config({
+    path: path.resolve(__dirname, "../../../../../.env"),
+});
 
-async function runTests() {
-    console.log("🛡️ Starting PII Redaction Functional Tests...");
-    const service = new PiiRedactionService();
+const DATASET_NAME = "Orchestrator-PII-Redaction-Functional-Tests";
+const service = new PiiRedactionService();
 
-    const testCases = [
-        {
-            name: "Email Redaction",
-            input: "My email is john.doe@example.com, please contact me there.",
-            validate: (redacted: string) =>
-                redacted.includes("REDACTED_EMAIL_") &&
-                !redacted.includes("john.doe@example.com"),
+const testCases = [
+    {
+        inputs: {
+            text: "My email is john.doe@example.com, please contact me there.",
         },
-        {
-            name: "Phone Number Redaction (US & International)",
-            input: "Call me at +1 (555) 123-4567 or +65 9123 4567.",
-            validate: (redacted: string) =>
-                redacted.split("REDACTED_PHONE_").length > 2 &&
-                !redacted.includes("555") &&
-                !redacted.includes("9123"),
+        outputs: {
+            expected_tokens: ["REDACTED_EMAIL_"],
+            forbidden_strings: ["john.doe@example.com"],
+            required_strings: [],
         },
-        {
-            name: "Phone Number Redaction (Singapore Local)",
-            input: "My local number is 81234567 or 9123 4567.",
-            validate: (redacted: string) =>
-                redacted.split("REDACTED_PHONE_").length > 2 &&
-                !redacted.includes("81234567") &&
-                !redacted.includes("9123"),
+        metadata: { category: "Email Redaction" },
+    },
+    {
+        inputs: { text: "Call me at +1 (555) 123-4567 or +65 9123 4567." },
+        outputs: {
+            expected_tokens: ["REDACTED_PHONE_", "REDACTED_PHONE_"],
+            forbidden_strings: ["555", "9123"],
+            required_strings: [],
         },
-        {
-            name: "Order Number (No Redaction)",
-            input: "My order number is 12345678.",
-            validate: (redacted: string) =>
-                redacted.includes("12345678") &&
-                !redacted.includes("REDACTED_PHONE_"),
+        metadata: {
+            category: "Phone Redaction",
+            description: "US & International",
         },
-        {
-            name: "Credit Card Redaction (Priority over Phone)",
-            input: "My card number is 1234-5678-9012-3456.",
-            validate: (redacted: string) =>
-                redacted.includes("REDACTED_CARD_") &&
-                !redacted.includes("1234-5678") &&
-                !redacted.includes("REDACTED_PHONE_"),
+    },
+    {
+        inputs: { text: "My local number is 81234567 or 9123 4567." },
+        outputs: {
+            expected_tokens: ["REDACTED_PHONE_", "REDACTED_PHONE_"],
+            forbidden_strings: ["81234567", "9123"],
+            required_strings: [],
         },
-        {
-            name: "Name Redaction (NLP)",
-            input: "Hello, my name is Alice Smith and I live in London.",
-            validate: (redacted: string) =>
-                redacted.includes("REDACTED_NAME_") &&
-                !redacted.includes("Alice") &&
-                redacted.includes("London"), // London should NOT be redacted
+        metadata: {
+            category: "Phone Redaction",
+            description: "Singapore Local",
         },
-        {
-            name: "Company Name (No Redaction)",
-            input: "I am flying with Air Asia today.",
-            validate: (redacted: string) =>
-                redacted.includes("Air Asia") &&
-                !redacted.includes("REDACTED_"),
+    },
+    {
+        inputs: { text: "My order number is 12345678." },
+        outputs: {
+            expected_tokens: [],
+            forbidden_strings: ["REDACTED_PHONE_"],
+            required_strings: ["12345678"],
         },
-        {
-            name: "Mixed PII and Scope",
-            input: "Contact Bob at bob@gmail.com regarding the delivery to New York.",
-            validate: (redacted: string) =>
-                redacted.includes("REDACTED_NAME_") &&
-                redacted.includes("REDACTED_EMAIL_") &&
-                redacted.includes("New York"), // New York should NOT be redacted
+        metadata: {
+            category: "False Positive Check",
+            description: "Order Number",
         },
-        {
-            name: "De-tokenization (Retrieval)",
-            input: "My secret is 'banana'.",
-            // We need to manually mock/test retrieval since redact() uses random tokens
-            customTest: async () => {
-                const text = "My email is test@example.com";
-                const redacted = await service.redact(text);
-                const tokenMatch = redacted.match(/REDACTED_EMAIL_[a-z0-9]+/);
-                if (!tokenMatch) return false;
-                const token = tokenMatch[0];
-                const retrieved = await service.retrieve(token);
-                return retrieved === "test@example.com";
-            },
+    },
+    {
+        inputs: { text: "My card number is 1234-5678-9012-3456." },
+        outputs: {
+            expected_tokens: ["REDACTED_CARD_"],
+            forbidden_strings: ["1234-5678", "REDACTED_PHONE_"],
+            required_strings: [],
         },
-    ];
+        metadata: {
+            category: "Card Redaction",
+            description: "Priority over Phone",
+        },
+    },
+    {
+        inputs: { text: "Hello, my name is Alice Smith and I live in London." },
+        outputs: {
+            expected_tokens: ["REDACTED_NAME_"],
+            forbidden_strings: ["Alice", "Smith"],
+            required_strings: ["London"],
+        },
+        metadata: {
+            category: "Name Redaction",
+            description: "NLP Person Extraction",
+        },
+    },
+    {
+        inputs: { text: "I am flying with Air Asia today." },
+        outputs: {
+            expected_tokens: [],
+            forbidden_strings: ["REDACTED_"],
+            required_strings: ["Air Asia"],
+        },
+        metadata: {
+            category: "False Positive Check",
+            description: "Company Name",
+        },
+    },
+    {
+        inputs: {
+            text: "Contact Bob at bob@gmail.com regarding the delivery to New York.",
+        },
+        outputs: {
+            expected_tokens: ["REDACTED_NAME_", "REDACTED_EMAIL_"],
+            forbidden_strings: ["Bob", "bob@gmail.com"],
+            required_strings: ["New York"],
+        },
+        metadata: { category: "Mixed PII" },
+    },
+    {
+        inputs: { text: "My email is test@example.com", action: "retrieval" },
+        outputs: {
+            expected_tokens: [],
+            forbidden_strings: [],
+            required_strings: ["test@example.com"],
+        },
+        metadata: {
+            category: "De-tokenization",
+            description: "Retrieval check",
+        },
+    },
+];
 
-    let passed = 0;
-    for (const test of testCases) {
-        process.stdout.write(`Testing: ${test.name.padEnd(35)} `);
-        try {
-            let result = false;
-            if (test.customTest) {
-                result = await test.customTest();
-            } else if (test.input && test.validate) {
-                const redacted = await service.redact(test.input);
-                result = test.validate(redacted);
-                if (!result) {
-                    console.log(`\n   Input: ${test.input}`);
-                    console.log(`   Redacted: ${redacted}`);
-                }
-            }
+async function target(inputs: { text: string; action?: string }) {
+    if (inputs.action === "retrieval") {
+        const redacted = await service.redact(inputs.text);
+        const tokenMatch = redacted.match(/REDACTED_EMAIL_[a-z0-9]+/);
+        if (!tokenMatch) return { output: "NO_TOKEN_FOUND" };
+        const retrieved = await service.retrieve(tokenMatch[0]);
+        return { output: retrieved };
+    }
+    const redacted = await service.redact(inputs.text);
+    return { output: redacted };
+}
 
-            if (result) {
-                console.log("✅ PASSED");
-                passed++;
-            } else {
-                console.log("❌ FAILED");
-            }
-        } catch (error) {
-            console.log(`💥 ERROR: ${error}`);
+const piiRulesEvaluator = async ({ run, example }: any) => {
+    const prediction = run.outputs?.output || "";
+    const { expected_tokens, forbidden_strings, required_strings } =
+        example.outputs;
+
+    let passed = true;
+    let reasoning = "Passed all checks.";
+
+    // Validate expected token occurrences
+    const tokenCounts = (expected_tokens || []).reduce(
+        (acc: Record<string, number>, val: string) => {
+            acc[val] = (acc[val] || 0) + 1;
+            return acc;
+        },
+        {},
+    );
+
+    for (const [token, count] of Object.entries(tokenCounts)) {
+        const occurrences = prediction.split(token).length - 1;
+        if (occurrences < (count as number)) {
+            passed = false;
+            reasoning = `Expected at least ${count} of ${token}, found ${occurrences}`;
+            break;
         }
     }
 
-    console.log(
-        `\n--- TESTS COMPLETED: ${passed}/${testCases.length} PASSED ---`,
-    );
-    process.exit(passed === testCases.length ? 0 : 1);
+    if (passed) {
+        for (const forbidden of forbidden_strings || []) {
+            if (prediction.includes(forbidden)) {
+                passed = false;
+                reasoning = `Contains forbidden string: ${forbidden}`;
+                break;
+            }
+        }
+    }
+
+    if (passed) {
+        for (const req of required_strings || []) {
+            if (!prediction.includes(req)) {
+                passed = false;
+                reasoning = `Missing required string: ${req}`;
+                break;
+            }
+        }
+    }
+
+    return {
+        key: "pii_redaction_accuracy",
+        score: passed ? 1 : 0,
+        comment: reasoning,
+    };
+};
+
+async function main() {
+    const client = new Client();
+    console.log(`Syncing LangSmith dataset: ${DATASET_NAME}...`);
+
+    try {
+        await client.readDataset({ datasetName: DATASET_NAME });
+        console.log("Dataset already exists. Skipping creation.");
+    } catch {
+        const dataset = await client.createDataset(DATASET_NAME, {
+            description:
+                "Functional tests evaluating deterministic PII Tokenization & rules.",
+        });
+        await Promise.all(
+            testCases.map((tc) =>
+                client.createExample(tc.inputs, tc.outputs, {
+                    datasetId: dataset.id,
+                    metadata: tc.metadata,
+                }),
+            ),
+        );
+        console.log("Dataset populated successfully.");
+    }
+
+    console.log("Running evaluation...");
+    await evaluate(target, {
+        data: DATASET_NAME,
+        evaluators: [piiRulesEvaluator],
+        experimentPrefix: "pii-redaction-functional",
+        client,
+    });
+    console.log("Evaluation complete! Check your LangSmith dashboard.");
 }
 
-runTests().catch((err) => {
-    console.error(err);
-    process.exit(1);
-});
+main().catch(console.error);

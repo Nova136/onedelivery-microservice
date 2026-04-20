@@ -1,7 +1,7 @@
-/** Shared message pattern for agent chat used by all agents and the orchestrator. */
+/** Shared TCP message pattern for agent chat used by all agents and the orchestrator. */
 export const AGENT_CHAT_PATTERN = { cmd: "agent.chat" as const };
 
-/** Shared message pattern for agent callback to the orchestrator. */
+/** Shared TCP message pattern for agent callback to the orchestrator. */
 export const AGENT_CALLBACK_PATTERN = { cmd: "agent.callback" as const };
 
 /** Prefix that callers must use to trigger Guardian's SOP verification role (post-loop). */

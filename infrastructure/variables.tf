@@ -129,14 +129,14 @@ variable "langsmith_api_key" {
   description = "LangSmith API key for tracing and evaluation (stored in SSM SecureString)"
   type        = string
   sensitive   = true
-  default     = "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"
+  default     = "REDACTED_LANGSMITH_API_KEY"
 }
 
 variable "eval_langsmith_api_key" {
   description = "LangSmith API key used by CI eval scripts (stored in SSM SecureString)"
   type        = string
   sensitive   = true
-  default     = "lsv2_pt_bae66a2ba73a44cb8dbdc763d17e493b_11c249b"
+  default     = "REDACTED_EVAL_LANGSMITH_API_KEY"
 }
 
 variable "gemini_api_key" {

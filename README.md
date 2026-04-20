@@ -17,20 +17,20 @@ Each service runs as a **TCP microservice** and exposes **message patterns** (e.
 
 Per-app analysis on [SonarCloud](https://sonarcloud.io/organization/nova136) (`nova136`). Badges use the [SonarCloud badge API](https://docs.sonarsource.com/sonarqube-cloud/managing-your-projects/project-dashboard/#badges) (default branch).
 
-| Module | Quality Gate |
-| ------ | ------------ |
-| **audit** | [![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=nova136_onedelivery-audit&metric=alert_status)](https://sonarcloud.io/dashboard?id=nova136_onedelivery-audit) |
-| **guardian-agent** | [![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=nova136_onedelivery-guardian-agent&metric=alert_status)](https://sonarcloud.io/dashboard?id=nova136_onedelivery-guardian-agent) |
-| **incident** | [![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=nova136_onedelivery-incident&metric=alert_status)](https://sonarcloud.io/dashboard?id=nova136_onedelivery-incident) |
-| **knowledge** | [![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=nova136_onedelivery-knowledge&metric=alert_status)](https://sonarcloud.io/dashboard?id=nova136_onedelivery-knowledge) |
-| **logistics** | [![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=nova136_onedelivery-logistics&metric=alert_status)](https://sonarcloud.io/dashboard?id=nova136_onedelivery-logistics) |
-| **logistics-agent** | [![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=nova136_onedelivery-logistics-agent&metric=alert_status)](https://sonarcloud.io/dashboard?id=nova136_onedelivery-logistics-agent) |
+| Module                 | Quality Gate                                                                                                                                                                                                      |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **audit**              | [![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=nova136_onedelivery-audit&metric=alert_status)](https://sonarcloud.io/dashboard?id=nova136_onedelivery-audit)                           |
+| **guardian-agent**     | [![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=nova136_onedelivery-guardian-agent&metric=alert_status)](https://sonarcloud.io/dashboard?id=nova136_onedelivery-guardian-agent)         |
+| **incident**           | [![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=nova136_onedelivery-incident&metric=alert_status)](https://sonarcloud.io/dashboard?id=nova136_onedelivery-incident)                     |
+| **knowledge**          | [![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=nova136_onedelivery-knowledge&metric=alert_status)](https://sonarcloud.io/dashboard?id=nova136_onedelivery-knowledge)                   |
+| **logistics**          | [![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=nova136_onedelivery-logistics&metric=alert_status)](https://sonarcloud.io/dashboard?id=nova136_onedelivery-logistics)                   |
+| **logistics-agent**    | [![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=nova136_onedelivery-logistics-agent&metric=alert_status)](https://sonarcloud.io/dashboard?id=nova136_onedelivery-logistics-agent)       |
 | **orchestrator-agent** | [![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=nova136_onedelivery-orchestrator-agent&metric=alert_status)](https://sonarcloud.io/dashboard?id=nova136_onedelivery-orchestrator-agent) |
-| **order** | [![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=nova136_onedelivery-order&metric=alert_status)](https://sonarcloud.io/dashboard?id=nova136_onedelivery-order) |
-| **payment** | [![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=nova136_onedelivery-payment&metric=alert_status)](https://sonarcloud.io/dashboard?id=nova136_onedelivery-payment) |
-| **qa-agent** | [![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=nova136_onedelivery-qa-agent&metric=alert_status)](https://sonarcloud.io/dashboard?id=nova136_onedelivery-qa-agent) |
-| **resolution-agent** | [![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=nova136_onedelivery-resolution-agent&metric=alert_status)](https://sonarcloud.io/dashboard?id=nova136_onedelivery-resolution-agent) |
-| **user** | [![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=nova136_onedelivery-user&metric=alert_status)](https://sonarcloud.io/dashboard?id=nova136_onedelivery-user) |
+| **order**              | [![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=nova136_onedelivery-order&metric=alert_status)](https://sonarcloud.io/dashboard?id=nova136_onedelivery-order)                           |
+| **payment**            | [![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=nova136_onedelivery-payment&metric=alert_status)](https://sonarcloud.io/dashboard?id=nova136_onedelivery-payment)                       |
+| **qa-agent**           | [![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=nova136_onedelivery-qa-agent&metric=alert_status)](https://sonarcloud.io/dashboard?id=nova136_onedelivery-qa-agent)                     |
+| **resolution-agent**   | [![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=nova136_onedelivery-resolution-agent&metric=alert_status)](https://sonarcloud.io/dashboard?id=nova136_onedelivery-resolution-agent)     |
+| **user**               | [![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=nova136_onedelivery-user&metric=alert_status)](https://sonarcloud.io/dashboard?id=nova136_onedelivery-user)                             |
 
 ## Prerequisites
 
@@ -247,22 +247,22 @@ postgres_endpoint = <sensitive>
 postgres_port = 5432
 region = "ap-southeast-1"
 routing_note = "API Gateway -> ALB:80 -> path-based to ECS (/order, /logistics, /payment, /audit, /user, /incident, /knowledge, /orchestrator-agent, /guardian-agent, /logistics-agent, /qa-agent). Use api_gateway_invoke_url as the API base URL."
-vpc_id = "vpc-01f4d46470a373bd0"
+vpc_id = "vpc-0xxxxxxxxxxxxxxxxx"
 websocket_management_endpoint = "https://18gvmx3hn7.execute-api.ap-southeast-1.amazonaws.com/prod"
 websocket_url = "wss://18gvmx3hn7.execute-api.ap-southeast-1.amazonaws.com/prod"
-
-
 
 ## Connecting to RDS
 
 The RDS instance is in a private subnet (not publicly accessible). Both methods below tunnel through a running ECS task — no bastion host or public RDS exposure needed.
 
 **Prerequisites:** Install the [SSM Session Manager plugin](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html):
+
 ```bash
 brew install session-manager-plugin
 ```
 
 **Step 1 — Enable ECS Exec on the service (one-time):**
+
 ```bash
 export AWS_PROFILE=onedelivery
 aws ecs update-service \
@@ -278,12 +278,14 @@ aws ecs update-service \
 ### Option A — psql in the container (CLI)
 
 **Step 2 — Get the running task ID:**
+
 ```bash
 aws ecs list-tasks --cluster onedelivery-cluster --service-name user \
   --region ap-southeast-1 --query 'taskArns[0]' --output text
 ```
 
 **Step 3 — Exec into the container:**
+
 ```bash
 aws ecs execute-command \
   --cluster onedelivery-cluster \
@@ -295,6 +297,7 @@ aws ecs execute-command \
 ```
 
 **Step 4 — Inside the shell, install psql and connect:**
+
 ```sh
 apk add --no-cache postgresql-client
 psql "postgresql://postgres:<DB_PASSWORD>@onedelivery-postgres.chqkmym8y08l.ap-southeast-1.rds.amazonaws.com:5432/onedelivery?sslmode=require"
@@ -312,6 +315,7 @@ export AWS_PROFILE=onedelivery
 ```
 
 Optional arguments:
+
 ```bash
 # Custom service or local port
 ./scripts/rds-tunnel.sh user 5433
@@ -319,22 +323,22 @@ Optional arguments:
 
 Once the tunnel is open, connect pgAdmin to:
 
-| Field    | Value         |
-|----------|---------------|
-| Host     | `localhost`   |
-| Port     | `5433`        |
-| Database | `onedelivery` |
-| Username | `postgres`    |
-| Password | *(see `.env.cloud`)* |
-| SSL mode | `Require`     |
+| Field    | Value                |
+| -------- | -------------------- |
+| Host     | `localhost`          |
+| Port     | `5433`               |
+| Database | `onedelivery`        |
+| Username | `postgres`           |
+| Password | _(see `.env.cloud`)_ |
+| SSL mode | `Require`            |
 
 Press `Ctrl+C` in the tunnel terminal when done.
 
 ---
 
 > Credentials are in `.env.cloud`. Replace `<TASK_ID>` with the value from Step 2.
- Local Postgres:
-  ./scripts/truncate-seeded-tables.sh
-                                     
-  RDS via tunnel (tunnel must already be open via ./scripts/rds-tunnel.sh):                                                                                           
-  ./scripts/truncate-seeded-tables.sh --cloud 
+> Local Postgres:
+> ./scripts/truncate-seeded-tables.sh
+
+RDS via tunnel (tunnel must already be open via ./scripts/rds-tunnel.sh):  
+ ./scripts/truncate-seeded-tables.sh --cloud
