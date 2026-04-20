@@ -382,7 +382,9 @@ export class AppService {
                         );
                     } catch (error) {
                         const message =
-                            error instanceof Error ? error.message : String(error);
+                            error instanceof Error
+                                ? error.message
+                                : String(error);
                         this.logger.error(
                             `Failed to log incident for session ${sessionId}: ${message}`,
                         );
@@ -395,7 +397,9 @@ export class AppService {
                     }
                 } else if (toolCall.name === "save_sentiment") {
                     try {
-                        const result = await this.tools["save_sentiment"].invoke({
+                        const result = await this.tools[
+                            "save_sentiment"
+                        ].invoke({
                             ...toolCall.args,
                             sessionId,
                         } as any);
@@ -411,7 +415,9 @@ export class AppService {
                         );
                     } catch (error) {
                         const message =
-                            error instanceof Error ? error.message : String(error);
+                            error instanceof Error
+                                ? error.message
+                                : String(error);
                         this.logger.error(
                             `Failed to save sentiment for session ${sessionId}: ${message}`,
                         );
@@ -446,7 +452,7 @@ export class AppService {
             message:
                 incidentCount > 0
                     ? `Logged ${incidentCount} service failure${incidentCount > 1 ? "s" : ""}.`
-                : "Session reviewed, no failure found.",
+                    : "Session reviewed, no failure found.",
         });
     }
 
@@ -484,7 +490,8 @@ export class AppService {
                 previousMonthEnd.toISOString(),
             );
         } catch (error) {
-            const message = error instanceof Error ? error.message : String(error);
+            const message =
+                error instanceof Error ? error.message : String(error);
             this.logger.warn(
                 `Unable to fetch previous month incidents for trend comparison: ${message}`,
             );
@@ -539,7 +546,9 @@ export class AppService {
             return [];
         }
         this.logger.log(`incidents :: ${JSON.stringify(incidents)}`);
-        this.logger.log(`Analyzing ${incidents.length} incidents for trend issues.`);
+        this.logger.log(
+            `Analyzing ${incidents.length} incidents for trend issues.`,
+        );
 
         if (incidents.length < 2) {
             return fallbackIssues;
@@ -567,7 +576,8 @@ export class AppService {
                 })),
             };
 
-            const result = await structuredLlm.invoke(`You are summarizing operational issue themes from structured incident data.
+            const result =
+                await structuredLlm.invoke(`You are summarizing operational issue themes from structured incident data.
 
 Rules:
 - Use only the supplied evidence.
@@ -585,7 +595,8 @@ ${JSON.stringify(issueSynthesisInput)}`);
 
             return issues.length > 0 ? issues : fallbackIssues;
         } catch (error) {
-            const message = error instanceof Error ? error.message : String(error);
+            const message =
+                error instanceof Error ? error.message : String(error);
             this.logger.warn(
                 `Falling back to deterministic issue snippets for trend analysis: ${message}`,
             );
@@ -593,5 +604,4 @@ ${JSON.stringify(issueSynthesisInput)}`);
             return fallbackIssues;
         }
     }
-
 }

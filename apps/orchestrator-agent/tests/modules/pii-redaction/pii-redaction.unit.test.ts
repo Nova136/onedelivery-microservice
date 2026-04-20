@@ -14,12 +14,20 @@ jest.mock("ioredis", () => {
 
 describe("PiiRedactionService", () => {
     let service: PiiRedactionService;
+    const originalSetTimeout = setTimeout;
 
     beforeEach(() => {
-        // Specific mock for setTimeout to avoid open handles without freezing async/await
-        jest.spyOn(global, "setTimeout").mockReturnValue({
-            unref: jest.fn(),
-        } as any);
+        // Bypass fake timers entirely to avoid hanging async operations.
+        // Proxy setTimeout to selectively mock ONLY the 1-hour fallback cleanup.
+        jest.spyOn(global, "setTimeout").mockImplementation(
+            (cb: any, ms?: number, ...args: any[]) => {
+                if (ms === 3600000) {
+                    // 3600000ms = 1 hour
+                    return { unref: jest.fn() } as any;
+                }
+                return originalSetTimeout(cb, ms, ...args);
+            },
+        );
         jest.spyOn(Logger.prototype, "warn").mockImplementation(() => {});
         jest.spyOn(Logger.prototype, "log").mockImplementation(() => {});
         service = new PiiRedactionService();

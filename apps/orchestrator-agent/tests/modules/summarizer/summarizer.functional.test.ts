@@ -1,99 +1,156 @@
+import "dotenv/config";
 import { SummarizerService } from "../../../src/modules/summarizer/summarizer.service";
 import { HumanMessage, AIMessage } from "@langchain/core/messages";
-import dotenv from "dotenv";
 import * as path from "path";
+import { Client } from "langsmith";
+import { evaluate } from "langsmith/evaluation";
 
-dotenv.config({ path: path.resolve(__dirname, "../../../../../.env") });
+require("dotenv").config({
+    path: path.resolve(__dirname, "../../../../../.env"),
+});
 
 process.env.GEMINI_API_KEY = process.env.GEMINI_API_KEY || "mock-key";
 process.env.GOOGLE_API_KEY = process.env.GEMINI_API_KEY;
 process.env.OPENAI_API_KEY = process.env.OPENAI_API_KEY || "mock-key";
 
-async function runTests() {
-    console.log("--- STARTING SUMMARIZER FUNCTIONAL TESTS ---\n");
-    const summarizer = new SummarizerService();
+const DATASET_NAME = "Orchestrator-Summarizer-Functional-Tests";
+const summarizer = new SummarizerService();
 
-    const testCases = [
-        {
-            name: "Initial Summary",
+const testCases = [
+    {
+        inputs: {
             existingSummary: "",
             currentTask: "refund_request",
             messages: [
-                new HumanMessage(
-                    "I want a refund for order 12345 because the item was defective.",
-                ),
-                new AIMessage(
-                    "I can help with that. I have submitted your request.",
-                ),
+                {
+                    role: "human",
+                    content:
+                        "I want a refund for order 12345 because the item was defective.",
+                },
+                {
+                    role: "ai",
+                    content:
+                        "I can help with that. I have submitted your request.",
+                },
             ],
-            validate: (res: string) => {
-                const lowerRes = res.toLowerCase();
-                return (
-                    lowerRes.includes("12345") ||
-                    lowerRes.includes("refund") ||
-                    lowerRes.includes("defective")
-                );
-            },
         },
-        {
-            name: "Update Existing Summary",
+        outputs: {
+            match_type: "ANY",
+            keywords: ["12345", "refund", "defective"],
+        },
+        metadata: { category: "Initial Summary" },
+    },
+    {
+        inputs: {
             existingSummary:
                 "Current Goal: Refund request for order 12345.\nKey Facts: Order 12345.\nStatus: Pending reason.",
             currentTask: "refund_request",
             messages: [
-                new HumanMessage("The item was damaged when it arrived."),
-                new AIMessage(
-                    "I'm sorry to hear that. I have submitted your refund request for order 12345 due to damage.",
-                ),
+                {
+                    role: "human",
+                    content: "The item was damaged when it arrived.",
+                },
+                {
+                    role: "ai",
+                    content:
+                        "I'm sorry to hear that. I have submitted your refund request for order 12345 due to damage.",
+                },
             ],
-            validate: (res: string) =>
-                res.toLowerCase().includes("damage") &&
-                res.toLowerCase().includes("submit"),
         },
-        {
-            name: "Task Transition to None",
+        outputs: { match_type: "ALL", keywords: ["damage", "submit"] },
+        metadata: { category: "Update Existing Summary" },
+    },
+    {
+        inputs: {
             existingSummary:
                 "Current Goal: Refund request for order 12345.\nKey Facts: Order 12345, damaged.\nStatus: Submitted.",
             currentTask: "None",
             messages: [
-                new HumanMessage("Thanks, that's all."),
-                new AIMessage("You're welcome! Have a great day."),
+                { role: "human", content: "Thanks, that's all." },
+                { role: "ai", content: "You're welcome! Have a great day." },
             ],
-            validate: (res: string) => {
-                const lowerRes = res.toLowerCase();
-                return (
-                    lowerRes.includes("resolved") ||
-                    lowerRes.includes("completed") ||
-                    lowerRes.includes("submitted")
-                );
-            },
         },
-    ];
+        outputs: {
+            match_type: "ANY",
+            keywords: ["resolved", "completed", "submitted"],
+        },
+        metadata: { category: "Task Transition to None" },
+    },
+];
 
-    let passed = 0;
-    for (const test of testCases) {
-        process.stdout.write(`Testing: ${test.name.padEnd(30)} `);
-        try {
-            const result = await summarizer.summarize(
-                test.messages,
-                test.existingSummary,
-                test.currentTask,
-            );
-            console.log(`\n   Result: ${result}`);
-            if (test.validate(result)) {
-                console.log("✅ PASSED");
-                passed++;
-            } else {
-                console.log("❌ FAILED");
-                console.log("   Result:", result);
-            }
-        } catch (e) {
-            console.log("💥 ERROR:", e);
-        }
-    }
-    console.log(
-        `\n--- TESTS COMPLETED: ${passed}/${testCases.length} PASSED ---`,
+async function target(inputs: {
+    existingSummary: string;
+    currentTask: string;
+    messages: { role: string; content: string }[];
+}) {
+    const lcMessages = inputs.messages.map((m) =>
+        m.role === "human"
+            ? new HumanMessage(m.content)
+            : new AIMessage(m.content),
     );
+    const summary = await summarizer.summarize(
+        lcMessages,
+        inputs.existingSummary,
+        inputs.currentTask,
+    );
+    return { summary };
 }
 
-runTests();
+const summarizerEvaluator = async ({ run, example }: any) => {
+    const prediction = run.outputs?.summary?.toLowerCase() || "";
+    const { match_type, keywords } = example.outputs;
+
+    let passed = false;
+    if (match_type === "ANY") {
+        passed = keywords.some((k: string) =>
+            prediction.includes(k.toLowerCase()),
+        );
+    } else if (match_type === "ALL") {
+        passed = keywords.every((k: string) =>
+            prediction.includes(k.toLowerCase()),
+        );
+    }
+
+    return {
+        key: "summarizer_keyword_match",
+        score: passed ? 1 : 0,
+        comment: passed
+            ? `Matched ${match_type} keywords.`
+            : `Failed to match ${match_type} keywords: ${keywords.join(", ")}. Got: ${run.outputs?.summary}`,
+    };
+};
+
+async function main() {
+    const client = new Client();
+    console.log(`Syncing LangSmith dataset: ${DATASET_NAME}...`);
+
+    try {
+        await client.readDataset({ datasetName: DATASET_NAME });
+        console.log("Dataset already exists. Skipping creation.");
+    } catch {
+        const dataset = await client.createDataset(DATASET_NAME, {
+            description:
+                "Functional tests evaluating the Summarizer Agent's ability to extract key facts and update states.",
+        });
+        await Promise.all(
+            testCases.map((tc) =>
+                client.createExample(tc.inputs, tc.outputs, {
+                    datasetId: dataset.id,
+                    metadata: tc.metadata,
+                }),
+            ),
+        );
+        console.log("Dataset populated successfully.");
+    }
+
+    console.log("Running evaluation...");
+    await evaluate(target, {
+        data: DATASET_NAME,
+        evaluators: [summarizerEvaluator],
+        experimentPrefix: "summarizer-functional",
+        client,
+    });
+    console.log("Evaluation complete! Check your LangSmith dashboard.");
+}
+
+main().catch(console.error);

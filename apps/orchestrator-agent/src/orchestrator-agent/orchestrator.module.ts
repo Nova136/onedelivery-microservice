@@ -66,12 +66,14 @@ import { InputValidatorModule } from "../modules/input-validator/input-validator
                     model: "gemini-3-flash-preview",
                     apiKey: process.env.GEMINI_API_KEY,
                     temperature: 0,
+                    maxOutputTokens: 800, // Short empathetic replies
                 });
 
                 const callbackModel = new ChatOpenAI({
                     modelName: "gpt-5.4-mini",
                     openAIApiKey: process.env.OPENAI_API_KEY,
                     temperature: 0,
+                    maxTokens: 800, // Short empathetic replies
                     metadata: {
                         environment: "production",
                         component: "agent-callback",
@@ -112,18 +114,21 @@ import { InputValidatorModule } from "../modules/input-validator/input-validator
                     model: "gemini-3-flash-preview",
                     apiKey: process.env.GEMINI_API_KEY,
                     temperature: 0,
+                    maxOutputTokens: 800,
                 });
 
                 const geminiPro = new ChatGoogleGenerativeAI({
-                    model: "gemini-3.1-pro-preview",
+                    model: "gemini-3.1-flash-preview",
                     apiKey: process.env.GEMINI_API_KEY,
                     temperature: 0,
+                    maxOutputTokens: 800,
                 });
 
                 const sopModel = new ChatOpenAI({
                     modelName: "gpt-5.4-mini",
                     openAIApiKey: process.env.OPENAI_API_KEY,
                     temperature: 0,
+                    maxTokens: 800, // Leeway for Chain of Thought and JSON schema
                     metadata: {
                         environment: "production",
                         component: "sop-handler",
@@ -134,6 +139,7 @@ import { InputValidatorModule } from "../modules/input-validator/input-validator
                     modelName: "gpt-5.4-mini",
                     openAIApiKey: process.env.OPENAI_API_KEY,
                     temperature: 0,
+                    maxTokens: 800, // RAG summarization
                     metadata: {
                         environment: "production",
                         component: "info-handler",
@@ -144,6 +150,7 @@ import { InputValidatorModule } from "../modules/input-validator/input-validator
                     modelName: "gpt-5.4-mini",
                     openAIApiKey: process.env.OPENAI_API_KEY,
                     temperature: 0,
+                    maxTokens: 800, // Leeway for CoT routing logic
                     metadata: {
                         environment: "production",
                         component: "routing-node",
@@ -154,6 +161,7 @@ import { InputValidatorModule } from "../modules/input-validator/input-validator
                     modelName: "gpt-5.4-mini",
                     openAIApiKey: process.env.OPENAI_API_KEY,
                     temperature: 0,
+                    maxTokens: 800, // Leeway for CoT correction logic
                     metadata: {
                         environment: "production",
                         component: "self-correction",
@@ -164,6 +172,7 @@ import { InputValidatorModule } from "../modules/input-validator/input-validator
                     modelName: "gpt-5.4-mini",
                     openAIApiKey: process.env.OPENAI_API_KEY,
                     temperature: 0,
+                    maxTokens: 800, // Merging partial responses
                     metadata: {
                         environment: "production",
                         component: "post-processing",
