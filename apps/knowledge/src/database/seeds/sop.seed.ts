@@ -14,7 +14,7 @@ export default class SopSeeder implements Seeder {
             {
                 intentCode: "REQUEST_REFUND",
                 agentOwner: "orchestrator",
-                title: "Cancel an order and process its automatic refund. Use this for any request to cancel, even if a refund is mentioned for the same order.",
+                title: "Asking for money back for missing or wrong items or quality issue or late delivery.",
                 requiredData: [
                     {
                         name: "orderId",

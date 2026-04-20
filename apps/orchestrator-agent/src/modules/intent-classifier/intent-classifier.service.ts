@@ -127,6 +127,7 @@ export class IntentClassifierService {
             modelName: "gpt-5.4-mini",
             openAIApiKey: process.env.OPENAI_API_KEY,
             temperature: 0,
+            maxTokens: 800, // Leeway for complex intent reasoning
             metadata: {
                 environment: "production",
                 component: "intent-classifier",
@@ -138,6 +139,7 @@ export class IntentClassifierService {
             model: "gemini-3-flash-preview",
             apiKey: process.env.GEMINI_API_KEY,
             temperature: 0,
+            maxOutputTokens: 800,
         });
 
         const structuredModel = primaryModel.withStructuredOutput(
@@ -218,6 +220,9 @@ export class IntentClassifierService {
                         role: "user",
                         content: userData,
                     },
+                    // We concatenate the chat history into a single user message rather than passing separate
+                    // HumanMessage and AIMessage objects to prevent role confusion. This ensures the LLM evaluates
+                    // the history as input data to be classified, rather than trying to continue the conversation.
                     {
                         role: "user",
                         content: `Conversation History:\n${contextMessages.map((m) => `${m instanceof HumanMessage ? "human" : "ai"}: ${m.content}`).join("\n")}`,

@@ -32,6 +32,7 @@ export class InputValidatorService {
             modelName: "gpt-5.4-mini",
             openAIApiKey: process.env.OPENAI_API_KEY,
             temperature: 0,
+            maxTokens: 200, // Needs minimal tokens just for VALID/INVALID response
             metadata: {
                 environment: "production",
                 component: "input-validator",
@@ -43,6 +44,7 @@ export class InputValidatorService {
             model: "gemini-3-flash-preview",
             apiKey: process.env.GEMINI_API_KEY,
             temperature: 0,
+            maxOutputTokens: 800,
         });
 
         this.model = primaryModel.withFallbacks({

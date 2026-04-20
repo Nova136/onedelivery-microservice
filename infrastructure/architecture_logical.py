@@ -40,36 +40,36 @@ with Diagram(
     # =========================================================================
     with Cluster("Presentation Layer"):
         client   = User("Browser / Mobile")
-        frontend = React("Frontend SPA\nGitHub Pages")
+    frontend = React("Web Application\nSPA")
 
     # =========================================================================
     # Row 2 — Gateway
     # =========================================================================
     with Cluster("Gateway Layer"):
         http_api = APIGateway(
-            "HTTP REST API\n"
-            "CORS · JWT verify\n"
-            "GET POST PUT PATCH DELETE HEAD"
+        "REST API Gateway\n"
+        "Auth & Routing\n"
+        "Standard CRUD"
         )
         ws_api = APIGateway(
-            "WebSocket API  (prod)\n"
-            "$connect · sendMessage · $disconnect\n"
-            "CUSTOM authorizer  JWT + RBAC"
+        "WebSocket Gateway\n"
+        "Connection Management\n"
+        "Stateful Streaming"
         )
 
     # =========================================================================
     # Row 3 — Orchestration
     # =========================================================================
-    with Cluster("AI Orchestration  (orchestrator-agent  :9010)"):
-        orch = NodeJS("Orchestrator\nLangGraph state machine")
+with Cluster("AI Orchestration Layer"):
+    orch = NodeJS("Orchestrator Agent\nState Machine")
 
         with Cluster("Inbound Pipeline"):
             privacy    = TypeScript("Privacy Service\nPII redaction")
             moderation = TypeScript("Moderation Guard\nInput · Output eval")
 
         router = TypeScript(
-            "Semantic Router  (gpt-5.4-mini)\n"
-            "ACTION · FAQ · ESCALATE · END_SESSION"
+        "Semantic Router\n"
+        "Intent Classification"
         )
 
     # =========================================================================
@@ -79,36 +79,36 @@ with Diagram(
         with Cluster("Core Agents"):
             action_agent = NodeJS(
                 "Action Agent\n"
-                "GPT-4o\n"
-                "Routes to specialists"
+            "Complex Routing\n"
+            "Multi-step Planning"
             )
             faq_agent = NodeJS(
                 "FAQ Agent\n"
-                "gpt-5.4-mini\n"
-                "Semantic FAQ / SOP Q&A"
+            "Semantic Q&A\n"
+            "Knowledge Retrieval"
             )
 
         with Cluster("Specialist Agents"):
-            logi_agent = NodeJS("Logistics Agent  :9011\nGPT-4o · ETA & tracking")
-            res_agent  = NodeJS("Resolution Agent  :9012\nGPT-4o · Refund  RMQ-only")
-            guardian   = NodeJS("Guardian Agent  :9013\nSOP compliance gate")
-            qa_agent   = NodeJS("QA Agent  :9014\nSession scoring · cron")
+        logi_agent = NodeJS("Logistics Agent\nETA & Tracking")
+        res_agent  = NodeJS("Resolution Agent\nRefunds & Compensation")
+        guardian   = NodeJS("Guardian Agent\nSOP Compliance Gate")
+        qa_agent   = NodeJS("QA Agent\nSession Scoring")
 
     # =========================================================================
     # Row 5 — Domain Services  +  Event Bus
     # =========================================================================
-    with Cluster("Domain Service Layer  (NestJS · TypeORM · per-schema)"):
+with Cluster("Domain Service Layer"):
         domain = ECS(
-            "order  :9003    logistics  :9002\n"
-            "payment  :9004  audit  :9001\n"
-            "user  :9005     incident  :9006\n"
-            "knowledge  :9007  ← pgvector"
+        "Order · Logistics\n"
+        "Payment · Audit\n"
+        "User · Incident\n"
+        "Knowledge"
         )
 
     event_bus = RabbitMQ(
-        "RabbitMQ  (CloudAMQP  AMQPS)\n"
-        "Async event bus\n"
-        "per-service queues"
+    "Event Bus\n"
+    "Async Message Broker\n"
+    "Decoupled Queues"
     )
 
     # =========================================================================
@@ -116,16 +116,16 @@ with Diagram(
     # =========================================================================
     with Cluster("Data Layer"):
         pg = PostgreSQL(
-            "PostgreSQL 17  +  pgvector\n"
-            "Isolated schemas per service\n"
-            "Vector similarity  threshold 0.25\n"
-            "ws.connections · ws.rate_limit"
+        "Relational Database\n"
+        "+ Vector Store\n"
+        "Isolated Logical Schemas\n"
+        "Semantic Similarity Search"
         )
 
     with Cluster("External AI Services"):
-        gpt4o      = Sagemaker("OpenAI  GPT-4o\nAction · Resolution\nLogistics · Guardian")
-        gpt4o_mini = Sagemaker("OpenAI  gpt-5.4-mini\nSemantic Router · FAQ\nQA Agent")
-        langsmith  = Datadog("LangSmith\nLLM tracing · eval\nCI pipeline")
+    gpt4o      = Sagemaker("Primary Foundation Models\nComplex Reasoning")
+    gpt4o_mini = Sagemaker("Secondary Foundation Models\nFast Classification")
+    langsmith  = Datadog("Observability Platform\nTracing & Evaluation\nCI Pipeline")
 
     # =========================================================================
     # EDGES — no labels except at the very top entry points

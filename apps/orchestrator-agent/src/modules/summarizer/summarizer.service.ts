@@ -13,6 +13,7 @@ export class SummarizerService {
             modelName: "gpt-5.4-mini",
             openAIApiKey: process.env.OPENAI_API_KEY,
             temperature: 0,
+            maxTokens: 1500, // Large context for dense conversational summarisation
             metadata: { environment: "production", component: "summarizer" },
             tags: ["production", "guardrail"],
         });
@@ -21,6 +22,7 @@ export class SummarizerService {
             model: "gemini-3-flash-preview",
             apiKey: process.env.GEMINI_API_KEY,
             temperature: 0,
+            maxOutputTokens: 1500,
         });
 
         this.model = primaryModel.withFallbacks({

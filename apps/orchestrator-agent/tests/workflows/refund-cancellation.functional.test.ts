@@ -68,13 +68,13 @@ async function runWorkflowTests() {
 
     // Initialize Models
     const llm = new ChatOpenAI({
-        modelName: "gpt-4o",
+        modelName: "gpt-5.4-mini",
         apiKey: process.env.OPENAI_API_KEY,
         temperature: 0,
     });
 
     const geminiFallback = new ChatGoogleGenerativeAI({
-        model: "gemini-3.1-pro-preview",
+        model: "gemini-3.1-flash-preview",
         apiKey: process.env.GEMINI_API_KEY || "mock-key",
     });
 

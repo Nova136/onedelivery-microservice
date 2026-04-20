@@ -95,6 +95,7 @@ export class OutputEvaluatorService {
             modelName: "gpt-5.4-mini",
             openAIApiKey: process.env.OPENAI_API_KEY,
             temperature: 0,
+            maxTokens: 800,
             metadata: {
                 environment: "production",
                 component: "output-evaluator",
@@ -103,9 +104,10 @@ export class OutputEvaluatorService {
         });
 
         this.fallbackModel = new ChatGoogleGenerativeAI({
-            model: "gemini-3.1-pro-preview",
+            model: "gemini-3.1-flash-preview",
             apiKey: process.env.GEMINI_API_KEY,
             temperature: 0,
+            maxOutputTokens: 800,
         });
     }
 
